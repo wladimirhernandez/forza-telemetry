@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ForzaTelemetry.Core/ForzaTelemetry.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ForzaTelemetry.Core.Tests/ForzaTelemetry.Core.Tests.csproj" />
+  </Folder>
+</Solution>

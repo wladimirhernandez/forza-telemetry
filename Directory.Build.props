@@ -1,0 +1,26 @@
+<Project>
+
+  <!--
+    Shared MSBuild settings for every project in this repository.
+    Centralizing them here means each .csproj only needs to declare what makes it different
+    (its SDK type, package references, project references), not repeat these defaults.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+
+    <!-- Nullable reference types: the compiler tracks null-ability and warns on unsafe dereferences.
+         For a UDP telemetry parser this catches "did I forget to handle a missing value" bugs at compile time. -->
+    <Nullable>enable</Nullable>
+
+    <!-- Implicit usings: brings in common namespaces (System, System.Linq, etc.) without a top-of-file
+         using block for every file. Keeps the didactic code focused on the telemetry logic. -->
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Warnings are treated as errors so a mistake (like an unused variable or a missed null check)
+         is caught during `dotnet build` instead of silently shipping. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+</Project>
