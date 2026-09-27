@@ -31,8 +31,11 @@ internal static partial class Log
         Message = "Discarded a {Length}-byte datagram from {Remote}: expected exactly {ExpectedSize} bytes (discarded so far: {DiscardedCount}).")]
     public static partial void WrongSizeDatagram(ILogger logger, int length, IPEndPoint? remote, int expectedSize, long discardedCount);
 
-    [LoggerMessage(EventId = 4, Level = LogLevel.Warning, Message = "Socket error on receive: {SocketErrorCode} ({Message}). Still listening.")]
-    public static partial void SocketReceiveError(ILogger logger, SocketError socketErrorCode, string message);
+    [LoggerMessage(
+        EventId = 4,
+        Level = LogLevel.Warning,
+        Message = "Socket error on receive: {SocketErrorCode} ({Message}). Still listening (errors so far: {ErrorCount}).")]
+    public static partial void SocketReceiveError(ILogger logger, SocketError socketErrorCode, string message, long errorCount);
 
     [LoggerMessage(
         EventId = 5,

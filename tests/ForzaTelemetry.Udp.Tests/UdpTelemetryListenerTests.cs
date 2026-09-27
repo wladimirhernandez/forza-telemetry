@@ -97,6 +97,78 @@ public sealed class UdpTelemetryListenerTests
         Assert.False(threw); // documented behavior: cancellation ends the loop, it does not throw
     }
 
+    [Fact]
+    public async Task ReadPacketsAsync_ReEnumerateAfterCancellationWhileReceivePending_StillReceivesLaterDatagram()
+    {
+        // Regression test for T5 review finding #1: a receive that is still pending when its
+        // enumeration's token is cancelled used to leave a stale, now-cancelled-token-bound task
+        // behind for the NEXT enumeration on the same listener, which then ended immediately
+        // instead of ever reading a real datagram.
+        //
+        // The bug only manifests when the heartbeat delay - not the receive - is the task that
+        // wins Task.WhenAny at the moment of cancellation. Racing that deterministically against a
+        // REAL socket receive would make this test timing-dependent, so instead the very first
+        // receive call across the listener's whole lifetime is replaced with one that deliberately
+        // never completes and never observes its token: that guarantees the heartbeat delay is the
+        // only one of the two race participants that can ever become canceled, so it always "wins".
+        var receiveCallCount = 0;
+        var firstReceiveNeverCompletes = new TaskCompletionSource<UdpReceiveResult>();
+
+        await using var listener = new UdpTelemetryListener(
+            0,
+            IPAddress.Loopback,
+            logger: null,
+            heartbeatOptions: null,
+            wrapReceive: realReceive => ct =>
+            {
+                if (Interlocked.Increment(ref receiveCallCount) == 1)
+                {
+                    return new ValueTask<UdpReceiveResult>(firstReceiveNeverCompletes.Task);
+                }
+
+                return realReceive(ct);
+            });
+        var listenerEndpoint = new IPEndPoint(IPAddress.Loopback, listener.LocalPort);
+
+        // First enumeration: starts the receive that never completes above, then gets cancelled
+        // while it is still pending.
+        using (var firstEnumerationCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100)))
+        {
+            await foreach (var _ in listener.ReadPacketsAsync(firstEnumerationCts.Token))
+            {
+                Assert.Fail("No datagram was ever sent during the first enumeration.");
+            }
+        }
+
+        // Second enumeration on the SAME listener with a brand-new token. Before the T5 fix, the
+        // stale pending receive from above would be reused here (bound to the first, now-cancelled
+        // token) and immediately fault with OperationCanceledException, ending this enumeration
+        // before the datagram sent below is ever read.
+        using var secondEnumerationCts = new CancellationTokenSource(TestTimeout);
+        using var sender = new UdpClient(0);
+        var datagram = BuildValidPacket(currentEngineRpm: 4242f, gear: 2);
+
+        TelemetryPacket? received = null;
+        var secondEnumeration = Task.Run(async () =>
+        {
+            await foreach (var packet in listener.ReadPacketsAsync(secondEnumerationCts.Token))
+            {
+                received = packet;
+                break;
+            }
+        });
+
+        // Give the second enumeration's receive a moment to actually start before sending, so the
+        // datagram below is not sent before anything is listening for it.
+        await Task.Delay(TimeSpan.FromMilliseconds(50));
+        await sender.SendAsync(datagram, listenerEndpoint);
+        await secondEnumeration;
+
+        Assert.NotNull(received);
+        Assert.Equal(4242f, received!.CurrentEngineRpm);
+        Assert.Equal((byte)2, received.Gear);
+    }
+
     /// <summary>
     /// Builds a 324-byte fake telemetry packet, writing only the two fields these tests care
     /// about at their spec offsets (CurrentEngineRpm: float at offset 16, Gear: byte at offset

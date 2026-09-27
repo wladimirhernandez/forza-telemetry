@@ -49,6 +49,13 @@ public sealed class UdpTelemetryListener : IAsyncDisposable
     private readonly HeartbeatOptions _heartbeatOptions;
 
     /// <summary>
+    /// How a single datagram is actually received. Always <c>_udpClient.ReceiveAsync</c> in
+    /// production; a test can wrap it (see the internal constructor below) to inject a faulting or
+    /// otherwise fake receive without touching the real socket handling around it.
+    /// </summary>
+    private readonly Func<CancellationToken, ValueTask<UdpReceiveResult>> _receive;
+
+    /// <summary>
     /// Remote endpoints a datagram has already been seen from, used only to log "first datagram
     /// from {Remote}" exactly once per sender — this is how the user discovers the Xbox's actual IP
     /// address the first time a real packet arrives from it.
@@ -65,11 +72,13 @@ public sealed class UdpTelemetryListener : IAsyncDisposable
     private long _discardedCount;
 
     /// <summary>
-    /// The in-flight <see cref="UdpClient.ReceiveAsync(CancellationToken)"/> task, if one is
-    /// currently pending. Reused across heartbeat timeouts (see <see cref="TryReceiveAsync"/>) so a
-    /// datagram that eventually arrives is never abandoned or double-awaited.
+    /// Running count of <see cref="SocketException"/>s seen on receive, used only to rate-limit
+    /// <see cref="Log.SocketReceiveError"/> the same way <see cref="_discardedCount"/> rate-limits
+    /// the wrong-size warning (see <see cref="TryReceiveAsync"/>'s catch block). Plain, not
+    /// <see cref="Interlocked"/>: unlike <see cref="DiscardedCount"/>, nothing reads this from
+    /// outside the single enumerator this type supports.
     /// </summary>
-    private Task<UdpReceiveResult>? _pendingReceive;
+    private long _socketErrorCount;
 
     /// <summary>How far into the current silence streak the next heartbeat log should fire.</summary>
     private TimeSpan _nextHeartbeatThreshold;
@@ -129,8 +138,35 @@ public sealed class UdpTelemetryListener : IAsyncDisposable
         _logger = logger ?? NullLogger<UdpTelemetryListener>.Instance;
         _heartbeatOptions = heartbeatOptions ?? HeartbeatOptions.Default;
         _nextHeartbeatThreshold = _heartbeatOptions.InitialSilence;
+        _receive = ct => _udpClient.ReceiveAsync(ct);
 
         Log.ListenerBound(_logger, (IPEndPoint)_udpClient.Client.LocalEndPoint!);
+    }
+
+    /// <summary>
+    /// Test-only seam, reachable from <c>ForzaTelemetry.Udp.Tests</c> via this assembly's
+    /// <c>InternalsVisibleTo</c> (see <c>AssemblyInfo.cs</c>): builds a listener exactly like the
+    /// public constructor, then lets <paramref name="wrapReceive"/> replace <see cref="_receive"/>
+    /// with a wrapper around the real one.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="wrapReceive"/> takes the REAL receive delegate (already bound to this
+    /// instance's socket) and returns whatever delegate <see cref="TryReceiveAsync"/> should
+    /// actually call - typically one that fails a few times (e.g. throws a
+    /// <see cref="SocketException"/> to simulate <c>WSAECONNRESET</c> on demand) and then forwards
+    /// to the real delegate it was given. Threading the real delegate through like this, instead of
+    /// exposing the underlying <see cref="UdpClient"/> itself, means a test never has to duplicate
+    /// this type's own binding/disposal logic just to get a working fallback receive.
+    /// </remarks>
+    internal UdpTelemetryListener(
+        int port,
+        IPAddress? bindAddress,
+        ILogger<UdpTelemetryListener>? logger,
+        HeartbeatOptions? heartbeatOptions,
+        Func<Func<CancellationToken, ValueTask<UdpReceiveResult>>, Func<CancellationToken, ValueTask<UdpReceiveResult>>> wrapReceive)
+        : this(port, bindAddress, logger, heartbeatOptions)
+    {
+        _receive = wrapReceive(_receive);
     }
 
     /// <summary>
@@ -227,6 +263,18 @@ public sealed class UdpTelemetryListener : IAsyncDisposable
 
     private async Task<ReadOnlyMemory<byte>?> TryReceiveAsync(CancellationToken ct)
     {
+        // Declared once per CALL (i.e. once per datagram this method ends up returning,
+        // cancellation, or dispose) rather than as an instance field. It used to be a field, which
+        // was a bug (T5 review finding #1): if this method returned null because the heartbeat
+        // delay below won its race against a still-pending receive - which can happen exactly when
+        // `ct` is cancelled, since both tasks are watching the same token - a field would leave that
+        // pending receive, bound to this now-cancelled `ct`, sitting around for the NEXT call. A
+        // later enumeration (with a fresh token) would then reuse it via `??=`, immediately observe
+        // the old cancellation, and end right away without ever issuing a real receive. Scoping it
+        // as a local guarantees every call starts clean, while still surviving the `continue`
+        // statements below within THIS call, which is the only place it ever needed to survive.
+        Task<UdpReceiveResult>? pendingReceive = null;
+
         while (true)
         {
             if (ct.IsCancellationRequested)
@@ -239,7 +287,7 @@ public sealed class UdpTelemetryListener : IAsyncDisposable
             // must keep awaiting this exact task next time instead of starting a second
             // ReceiveAsync — otherwise we would either abandon the first datagram that eventually
             // arrives on it, or end up with two receives racing on one socket.
-            var receiveTask = _pendingReceive ??= _udpClient.ReceiveAsync(ct).AsTask();
+            var receiveTask = pendingReceive ??= _receive(ct).AsTask();
 
             var remainingUntilHeartbeat = _nextHeartbeatThreshold - _silenceStopwatch.Elapsed;
             if (remainingUntilHeartbeat < TimeSpan.Zero)
@@ -247,12 +295,21 @@ public sealed class UdpTelemetryListener : IAsyncDisposable
                 remainingUntilHeartbeat = TimeSpan.Zero;
             }
 
+            // Linked (not just `ct` directly) so the delay itself can be cancelled the moment the
+            // receive wins below (T5 review finding #4): `using` disposes this every iteration, but
+            // disposing alone does not stop Task.Delay's own internal timer early, only explicitly
+            // cancelling it does. Without this, every iteration where the receive wins would leave
+            // its heartbeat delay (up to the full InitialSilence/RepeatInterval duration) still
+            // ticking away uselessly - and at 60 Hz, that is hundreds of live, pointless timers at
+            // any given moment.
+            using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
             // Racing the pending receive against a delay — rather than spinning up a second
             // thread or a System.Threading.Timer — is what lets one await point notice "no
             // datagram AND no cancellation yet, but the heartbeat threshold passed". Recomputing
             // this delay fresh every loop pass is cheap and always correct; only the receive
             // itself must never be recreated (see above).
-            var heartbeatDelayTask = Task.Delay(remainingUntilHeartbeat, ct);
+            var heartbeatDelayTask = Task.Delay(remainingUntilHeartbeat, heartbeatCts.Token);
 
             var completedTask = await Task.WhenAny(receiveTask, heartbeatDelayTask).ConfigureAwait(false);
 
@@ -270,7 +327,11 @@ public sealed class UdpTelemetryListener : IAsyncDisposable
                 continue; // receiveTask is still pending; loop back and keep waiting on it.
             }
 
-            _pendingReceive = null; // Consumed; the next iteration (if any) starts a fresh receive.
+            // The receive won: release the still-pending delay's timer right now instead of
+            // leaving it to elapse on its own (see the WHY-comment on heartbeatCts above).
+            heartbeatCts.Cancel();
+
+            pendingReceive = null; // Consumed; the next iteration (if any) starts a fresh receive.
 
             UdpReceiveResult result;
             try
@@ -301,7 +362,15 @@ public sealed class UdpTelemetryListener : IAsyncDisposable
                 // the console app would just stop receiving telemetry with no obvious reason why.
                 // Now it is logged and the loop keeps listening, which is what "keep receiving
                 // telemetry for the whole play session" should mean.
-                Log.SocketReceiveError(_logger, ex.SocketErrorCode, ex.Message);
+                var socketErrorCount = ++_socketErrorCount;
+
+                // Rate-limited the same way the wrong-size warning is (see ReadPacketsAsync): a
+                // socket that keeps faulting (e.g. a flaky VPN adapter) must not flood the log file
+                // with an identical warning on every single retry.
+                if (socketErrorCount <= 5 || socketErrorCount % 100 == 0)
+                {
+                    Log.SocketReceiveError(_logger, ex.SocketErrorCode, ex.Message, socketErrorCount);
+                }
 
                 try
                 {
