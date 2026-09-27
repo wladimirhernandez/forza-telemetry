@@ -16,7 +16,8 @@
       logging implementation; ForzaTelemetry.Console wires up the real backend (Serilog) and just
       hands this library an ILogger<T> instance to write into.
     -->
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
+    <!-- Version is centrally managed in the root Directory.Packages.props. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
 </Project>

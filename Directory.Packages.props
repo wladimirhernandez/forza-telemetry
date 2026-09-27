@@ -1,0 +1,50 @@
+<Project>
+
+  <!--
+    Central Package Management (CPM): https://learn.microsoft.com/en-us/nuget/consume-packages/central-package-management
+    Every package version for the whole repo lives here, in one place, instead of scattered across
+    each .csproj's <PackageReference Version="..."/>. Two reasons this repo adopts it:
+      1. One place to bump a version - e.g. bumping xunit for every test project is a single edit here.
+      2. The Avalonia packages below MUST stay on the exact same version as each other (Avalonia,
+         Avalonia.Desktop, Avalonia.Android, ...); CPM makes that constraint visible and easy to keep,
+         instead of hunting through every .csproj to check they still match.
+    Each .csproj now only lists <PackageReference Include="..."/> (no Version attribute).
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ForzaTelemetry.Udp: logging abstractions only (the library never chooses a logging backend). -->
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
+
+    <!-- ForzaTelemetry.Console: composition root, wires the concrete Serilog backend. -->
+    <PackageVersion Include="Serilog.Extensions.Logging" Version="10.0.0" />
+    <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
+    <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
+
+    <!-- Test projects (xunit + Microsoft.NET.Test.Sdk). -->
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+
+    <!--
+      Avalonia packages (from the `dotnet new avalonia.xplat` template) - keep version in sync!
+      Mixing Avalonia package versions across heads (App/Desktop/Android) is a common source of
+      hard-to-diagnose runtime crashes, so all of these are bumped together, never individually.
+    -->
+    <PackageVersion Include="Avalonia" Version="12.1.3" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.1.3" />
+    <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.1.3" />
+    <PackageVersion Include="Avalonia.Desktop" Version="12.1.3" />
+    <PackageVersion Include="Avalonia.Android" Version="12.1.3" />
+    <PackageVersion Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3" />
+
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+
+    <!-- Android-only splash screen support library used by the Avalonia Android head. -->
+    <PackageVersion Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.0.1.15" />
+  </ItemGroup>
+
+</Project>

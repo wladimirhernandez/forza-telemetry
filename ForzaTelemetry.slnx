@@ -3,6 +3,14 @@
     <Project Path="src/ForzaTelemetry.Core/ForzaTelemetry.Core.csproj" />
     <Project Path="src/ForzaTelemetry.Udp/ForzaTelemetry.Udp.csproj" />
     <Project Path="src/ForzaTelemetry.Console/ForzaTelemetry.Console.csproj" />
+    <Project Path="src/ForzaTelemetry.App/ForzaTelemetry.App.csproj" />
+    <Project Path="src/ForzaTelemetry.App.Desktop/ForzaTelemetry.App.Desktop.csproj" />
+    <!-- Android workload is not installed yet, so this project is excluded from the default build/test.
+         Once installed (`dotnet workload install android`), remove the <Build Project="false" />
+         override, or build it directly: dotnet build src/ForzaTelemetry.App.Android. -->
+    <Project Path="src/ForzaTelemetry.App.Android/ForzaTelemetry.App.Android.csproj">
+      <Build Project="false" />
+    </Project>
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ForzaTelemetry.Core.Tests/ForzaTelemetry.Core.Tests.csproj" />

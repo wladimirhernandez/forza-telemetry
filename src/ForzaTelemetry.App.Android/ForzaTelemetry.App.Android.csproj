@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The Android workload (`dotnet workload install android`) is NOT installed in this repo yet, so
+    this project is deliberately excluded from the default `dotnet build ForzaTelemetry.slnx` / the
+    slnx's build (see the <Build Project="false" /> entry in ForzaTelemetry.slnx). To build this head:
+      1. dotnet workload install android
+      2. dotnet build src/ForzaTelemetry.App.Android
+    Nullable/ImplicitUsings/TreatWarningsAsErrors come from Directory.Build.props; TargetFramework
+    is overridden below because it must be the Android-specific TFM, not the repo default net10.0.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-android</TargetFramework>
+    <SupportedOSPlatformVersion>23</SupportedOSPlatformVersion>
+    <ApplicationId>com.forzatelemetry.app</ApplicationId>
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <AndroidPackageFormat>apk</AndroidPackageFormat>
+    <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AndroidResource Include="Icon.png">
+      <Link>Resources\drawable\Icon.png</Link>
+    </AndroidResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Versions are centrally managed in the root Directory.Packages.props. -->
+    <PackageReference Include="Avalonia.Android" />
+    <PackageReference Include="Xamarin.AndroidX.Core.SplashScreen" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ForzaTelemetry.App\ForzaTelemetry.App.csproj" />
+  </ItemGroup>
+
+</Project>
