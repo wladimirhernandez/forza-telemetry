@@ -5,7 +5,7 @@ namespace ForzaTelemetry.App.Tests;
 public class GearFormatterTests
 {
     [Theory]
-    [InlineData(0, "R")] // Reverse — ASSUMED, see GearFormatter's remarks.
+    [InlineData(0, "R")] // Reverse — confirmed on live telemetry.
     [InlineData(11, "N")] // Neutral — CONFIRMED on real FH6 traffic.
     [InlineData(3, "3")] // An ordinary forward gear is shown as its plain number.
     [InlineData(1, "1")]

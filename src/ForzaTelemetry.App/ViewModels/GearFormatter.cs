@@ -9,16 +9,14 @@ namespace ForzaTelemetry.App.ViewModels;
 /// Gear byte meaning, from this project's own observations of real FH6 traffic (not just the spec):
 /// <list type="bullet">
 /// <item><description>11 = neutral. CONFIRMED — observed directly on real Xbox telemetry.</description></item>
-/// <item><description>0 = reverse. ASSUMED, NOT yet observed — this follows the convention documented
-/// for Forza Motorsport's own "Data Out" spec (which FH6's format is based on), but this project has
-/// not yet captured a real reverse-gear packet to confirm FH6 uses the same value. If a real reverse
-/// packet turns out to report something else, fix this constant and this comment.</description></item>
+/// <item><description>0 = reverse. CONFIRMED — observed directly on real Xbox telemetry (the dashboard
+/// showed "R" while reversing).</description></item>
 /// <item><description>Anything else = the forward gear number, shown as-is (e.g. 3 = third gear).</description></item>
 /// </list>
 /// </remarks>
 public static class GearFormatter
 {
-    private const byte ReverseGear = 0; // ASSUMED — see remarks above.
+    private const byte ReverseGear = 0; // CONFIRMED — see remarks above.
     private const byte NeutralGear = 11; // CONFIRMED — see remarks above.
 
     public static string Format(byte gear) => gear switch
