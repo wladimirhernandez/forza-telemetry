@@ -79,6 +79,31 @@ public class TelemetryServiceTests
     }
 
     [Fact]
+    public async Task StartAsync_after_a_mid_stream_fault_releases_the_old_source_and_recovers()
+    {
+        var firstSource = new FakeTelemetrySource();
+        var secondSource = new FakeTelemetrySource();
+        var sourcesToHandOut = new Queue<ITelemetrySource>([firstSource, secondSource]);
+        var service = new TelemetryService(() => sourcesToHandOut.Dequeue());
+
+        await service.StartAsync();
+        firstSource.FailNextReadWith(new InvalidOperationException("simulated mid-stream failure"));
+        firstSource.Publish(TestPackets.Sample());
+        Assert.True(await Wait.UntilAsync(() => service.Fault is not null && !service.IsRunning));
+
+        // No StopAsync in between: the UI disables Stop once the loop has faulted, so Start must
+        // clean up the leftovers itself. With the real UDP adapter, a leaked source keeps the port.
+        await service.StartAsync();
+
+        Assert.True(firstSource.IsDisposed);
+        Assert.Null(service.Fault);
+        secondSource.Publish(TestPackets.Sample(gear: 4));
+        Assert.True(await Wait.UntilAsync(() => service.Latest?.Gear == 4));
+
+        await service.StopAsync();
+    }
+
+    [Fact]
     public async Task StopAsync_before_any_Start_is_a_safe_no_op()
     {
         var service = new TelemetryService(() => new FakeTelemetrySource());

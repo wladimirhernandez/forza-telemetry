@@ -43,8 +43,12 @@ internal sealed class FakeTelemetrySource : ITelemetrySource
         }
     }
 
+    /// <summary>True once <see cref="DisposeAsync"/> ran — lets a test prove a source was released.</summary>
+    public bool IsDisposed { get; private set; }
+
     public ValueTask DisposeAsync()
     {
+        IsDisposed = true;
         _channel.Writer.TryComplete();
         return ValueTask.CompletedTask;
     }

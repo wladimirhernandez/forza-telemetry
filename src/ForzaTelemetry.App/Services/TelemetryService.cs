@@ -88,12 +88,18 @@ public sealed class TelemetryService : IAsyncDisposable
     /// already running. Safe to call again after <see cref="StopAsync"/> — every call builds a
     /// brand-new source, so e.g. a freed UDP port can be rebound.
     /// </summary>
-    public Task StartAsync()
+    public async Task StartAsync()
     {
         if (IsRunning)
         {
-            return Task.CompletedTask;
+            return;
         }
+
+        // A loop that ended on its own (a mid-stream fault) leaves its source, CTS and task behind:
+        // RunLoopAsync only flips IsRunning. Release them before building a new source — for the
+        // real UDP adapter the old socket still holds the port, so the new listener would otherwise
+        // fail with "address already in use" and the user could never recover without a restart.
+        await StopAsync().ConfigureAwait(false);
 
         Volatile.Write(ref _fault, null);
 
@@ -111,7 +117,7 @@ public sealed class TelemetryService : IAsyncDisposable
         catch (Exception ex)
         {
             Volatile.Write(ref _fault, ex);
-            return Task.CompletedTask;
+            return;
         }
 
         _source = source;
@@ -120,8 +126,6 @@ public sealed class TelemetryService : IAsyncDisposable
 
         // See the class remarks for why this loop must run off the calling thread.
         _loopTask = Task.Run(() => RunLoopAsync(source, _cts.Token));
-
-        return Task.CompletedTask;
     }
 
     private async Task RunLoopAsync(ITelemetrySource source, CancellationToken ct)
