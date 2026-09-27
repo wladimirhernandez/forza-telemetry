@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- TargetFramework, Nullable, ImplicitUsings, TreatWarningsAsErrors come from Directory.Build.props. -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Versions are centrally managed in the root Directory.Packages.props. -->
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Referencing ForzaTelemetry.App (not just Core/Udp) is deliberate: these tests exercise
+      TelemetryService and MainViewModel, which live in that project. This does pull in Avalonia's
+      packages transitively, but none of these tests need a live UI/Dispatcher — MainViewModel is
+      driven directly by calling Refresh(), and DispatcherTimerTicker (the only class that touches
+      Avalonia's real dispatcher) is never instantiated here; see ManualTicker for its test double.
+    -->
+    <ProjectReference Include="..\..\src\ForzaTelemetry.App\ForzaTelemetry.App.csproj" />
+  </ItemGroup>
+
+</Project>

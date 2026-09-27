@@ -29,6 +29,10 @@
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
 
+    <!-- ForzaTelemetry.App.Tests only: a fake, deterministic TimeProvider so MainViewModelTests can
+         assert an EXACT PacketsPerSecond instead of one that depends on real wall-clock timing. -->
+    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.10.0" />
+
     <!--
       Avalonia packages (from the `dotnet new avalonia.xplat` template) - keep version in sync!
       Mixing Avalonia package versions across heads (App/Desktop/Android) is a common source of

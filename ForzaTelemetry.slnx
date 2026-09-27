@@ -15,5 +15,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/ForzaTelemetry.Core.Tests/ForzaTelemetry.Core.Tests.csproj" />
     <Project Path="tests/ForzaTelemetry.Udp.Tests/ForzaTelemetry.Udp.Tests.csproj" />
+    <Project Path="tests/ForzaTelemetry.App.Tests/ForzaTelemetry.App.Tests.csproj" />
   </Folder>
 </Solution>

@@ -13,10 +13,16 @@ namespace ForzaTelemetry.Udp;
 /// async stream of parsed <see cref="TelemetryPacket"/> values.
 /// </summary>
 /// <remarks>
-/// This type lives in its own project, not inside the console app, because it will be reused
-/// as-is by an Avalonia UI later: a view model only needs to `await foreach` over
-/// <see cref="ReadPacketsAsync"/> and push each packet into bound properties, exactly like the
-/// console app does today. Keeping it here means the UI never has to know about sockets.
+/// This type lives in its own project, not inside the console app, because it is reused as-is by
+/// the Avalonia UI (<c>ForzaTelemetry.App</c>'s <c>TelemetryService</c>) exactly like the console
+/// app does today. Keeping it here means the UI never has to know about sockets.
+///
+/// This is the concrete ADAPTER side of a hexagonal port/adapter split: <see cref="ITelemetrySource"/>
+/// (in <c>ForzaTelemetry.Core</c>) is the PORT the rest of the app depends on — "some live stream of
+/// telemetry packets" — and this class is one way of implementing it, using a real UDP socket.
+/// Depending on the port instead of this concrete type is what lets tests substitute a fake,
+/// in-memory source with no socket involved at all (see <c>ForzaTelemetry.App.Tests</c>'s
+/// <c>FakeTelemetrySource</c>).
 ///
 /// Why <see cref="IAsyncDisposable"/> instead of plain <see cref="IDisposable"/>: every other
 /// public member of this type is async (the two ReadXAsync streams), so a caller — especially a
@@ -31,7 +37,7 @@ namespace ForzaTelemetry.Udp;
 /// this changes the shape of the async streams themselves: a caller that never passes a logger
 /// gets exactly the same packets/behavior as before, just with logging silently disabled.
 /// </remarks>
-public sealed class UdpTelemetryListener : IAsyncDisposable
+public sealed class UdpTelemetryListener : ITelemetrySource
 {
     /// <summary>Default UDP port Forza Horizon 6's "Data Out" feature sends to.</summary>
     public const int DefaultPort = 5300;
