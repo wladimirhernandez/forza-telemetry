@@ -1,7 +1,10 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using ForzaTelemetry.Core;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ForzaTelemetry.Udp;
 
@@ -21,14 +24,68 @@ namespace ForzaTelemetry.Udp;
 /// stay consistent with the rest of the type's shape. The underlying <see cref="UdpClient"/>'s
 /// own Dispose() is actually synchronous (there is no real async cleanup to do), so
 /// <see cref="DisposeAsync"/> just wraps it in an already-completed <see cref="ValueTask"/>.
+///
+/// This type also logs diagnostics (bound endpoint, first datagram per sender, wrong-size
+/// datagrams, socket errors, and a "no datagrams" heartbeat) through an injected
+/// <see cref="ILogger{TCategoryName}"/> — see the constructor's <c>logger</c> parameter. None of
+/// this changes the shape of the async streams themselves: a caller that never passes a logger
+/// gets exactly the same packets/behavior as before, just with logging silently disabled.
 /// </remarks>
 public sealed class UdpTelemetryListener : IAsyncDisposable
 {
     /// <summary>Default UDP port Forza Horizon 6's "Data Out" feature sends to.</summary>
     public const int DefaultPort = 5300;
 
+    /// <summary>
+    /// How long to wait after a socket error before retrying the receive. This is not about
+    /// recovering the socket (nothing special is done to it) — it exists purely to guard against a
+    /// hot loop: if the socket keeps immediately faulting with the same error, this backoff stops
+    /// the receive loop from spinning at 100% CPU retrying instantly, forever.
+    /// </summary>
+    private static readonly TimeSpan SocketErrorBackoff = TimeSpan.FromMilliseconds(100);
+
     private readonly UdpClient _udpClient;
+    private readonly ILogger<UdpTelemetryListener> _logger;
+    private readonly HeartbeatOptions _heartbeatOptions;
+
+    /// <summary>
+    /// Remote endpoints a datagram has already been seen from, used only to log "first datagram
+    /// from {Remote}" exactly once per sender — this is how the user discovers the Xbox's actual IP
+    /// address the first time a real packet arrives from it.
+    /// </summary>
+    private readonly HashSet<IPEndPoint> _seenRemoteEndPoints = new();
+
+    /// <summary>
+    /// Tracks how long it has been since the last datagram arrived (or since this listener was
+    /// constructed, if none ever has). Restarted every time a datagram is received; read by the
+    /// heartbeat check to decide whether it is time to log another "no datagrams" message.
+    /// </summary>
+    private readonly Stopwatch _silenceStopwatch = Stopwatch.StartNew();
+
     private long _discardedCount;
+
+    /// <summary>
+    /// The in-flight <see cref="UdpClient.ReceiveAsync(CancellationToken)"/> task, if one is
+    /// currently pending. Reused across heartbeat timeouts (see <see cref="TryReceiveAsync"/>) so a
+    /// datagram that eventually arrives is never abandoned or double-awaited.
+    /// </summary>
+    private Task<UdpReceiveResult>? _pendingReceive;
+
+    /// <summary>How far into the current silence streak the next heartbeat log should fire.</summary>
+    private TimeSpan _nextHeartbeatThreshold;
+
+    /// <summary>Whether a "no datagrams" message has already been logged during the current silence streak (so the next successful receive knows to log "flowing again").</summary>
+    private bool _heartbeatLogged;
+
+    /// <summary>
+    /// The remote endpoint of the most recently received datagram. Used only so the wrong-size
+    /// warning (logged one layer up, in <see cref="ReadPacketsAsync"/>, which only sees raw bytes)
+    /// can still report which sender it came from. Safe to keep as a single field — not a
+    /// per-datagram value threaded through return types — because this type supports only one
+    /// concurrent enumerator: the next datagram is never received until the current one has been
+    /// fully processed (see the class remarks on <see cref="DiscardedCount"/>).
+    /// </summary>
+    private IPEndPoint? _lastRemoteEndPoint;
 
     /// <summary>
     /// Creates a listener bound to <paramref name="port"/> and starts listening immediately
@@ -47,9 +104,33 @@ public sealed class UdpTelemetryListener : IAsyncDisposable
     /// the same LAN and send its "Data Out" packets to this machine's network address — only
     /// <see cref="IPAddress.Any"/> can receive those.
     /// </param>
-    public UdpTelemetryListener(int port = DefaultPort, IPAddress? bindAddress = null)
+    /// <param name="logger">
+    /// Where diagnostic messages go. Optional and defaults to <see cref="NullLogger{T}"/> (i.e. no
+    /// logging at all) so every existing caller — including this project's own tests — keeps
+    /// working unchanged; the console app passes a real <see cref="ILogger{TCategoryName}"/> backed
+    /// by Serilog.
+    /// </param>
+    /// <param name="heartbeatOptions">
+    /// Thresholds for the "no datagrams received" heartbeat. Defaults to
+    /// <see cref="HeartbeatOptions.Default"/> (5 s, then every further 10 s); tests pass short
+    /// values here instead of waiting on the real production thresholds.
+    /// </param>
+    public UdpTelemetryListener(
+        int port = DefaultPort,
+        IPAddress? bindAddress = null,
+        ILogger<UdpTelemetryListener>? logger = null,
+        HeartbeatOptions? heartbeatOptions = null)
     {
+        // Bind first: if the port is already in use, this throws SocketException before anything
+        // else (like the logger) is touched — the caller (the console app) is expected to catch
+        // that and print/log a friendly "port already in use" message instead of a raw exception.
         _udpClient = new UdpClient(new IPEndPoint(bindAddress ?? IPAddress.Any, port));
+
+        _logger = logger ?? NullLogger<UdpTelemetryListener>.Instance;
+        _heartbeatOptions = heartbeatOptions ?? HeartbeatOptions.Default;
+        _nextHeartbeatThreshold = _heartbeatOptions.InitialSilence;
+
+        Log.ListenerBound(_logger, (IPEndPoint)_udpClient.Client.LocalEndPoint!);
     }
 
     /// <summary>
@@ -85,6 +166,9 @@ public sealed class UdpTelemetryListener : IAsyncDisposable
     /// simply finishes, it does not throw <see cref="OperationCanceledException"/>. This mirrors
     /// ordinary C# stream-ending semantics (like reaching end-of-file) so every caller doesn't
     /// have to wrap its loop in a try/catch just to handle an expected shutdown request.
+    /// A <see cref="SocketException"/> from the underlying receive (e.g. Windows' spurious
+    /// WSAECONNRESET on a UDP socket) does NOT end the enumeration either: it is logged as a
+    /// warning and the loop keeps listening — see <see cref="TryReceiveAsync"/> for why.
     /// </param>
     public async IAsyncEnumerable<ReadOnlyMemory<byte>> ReadDatagramsAsync(
         [EnumeratorCancellation] CancellationToken ct = default)
@@ -127,31 +211,145 @@ public sealed class UdpTelemetryListener : IAsyncDisposable
             }
             else
             {
-                Interlocked.Increment(ref _discardedCount);
+                var discardedCount = Interlocked.Increment(ref _discardedCount);
+
+                // Rate-limited so a burst of garbage on the port cannot flood the log file: the
+                // first few are useful (they immediately tell the user SOMETHING wrong-sized is
+                // arriving), after that only every 100th is logged so a sustained flood does not
+                // turn into gigabytes of near-identical log lines.
+                if (discardedCount <= 5 || discardedCount % 100 == 0)
+                {
+                    Log.WrongSizeDatagram(_logger, datagram.Length, _lastRemoteEndPoint, TelemetryParser.PacketSize, discardedCount);
+                }
             }
         }
     }
 
     private async Task<ReadOnlyMemory<byte>?> TryReceiveAsync(CancellationToken ct)
     {
-        try
+        while (true)
         {
-            var result = await _udpClient.ReceiveAsync(ct).ConfigureAwait(false);
+            if (ct.IsCancellationRequested)
+            {
+                return null;
+            }
+
+            // Reuse the SAME pending receive across heartbeat timeouts: if a previous loop
+            // iteration below timed out waiting for the heartbeat check (not for a datagram), we
+            // must keep awaiting this exact task next time instead of starting a second
+            // ReceiveAsync — otherwise we would either abandon the first datagram that eventually
+            // arrives on it, or end up with two receives racing on one socket.
+            var receiveTask = _pendingReceive ??= _udpClient.ReceiveAsync(ct).AsTask();
+
+            var remainingUntilHeartbeat = _nextHeartbeatThreshold - _silenceStopwatch.Elapsed;
+            if (remainingUntilHeartbeat < TimeSpan.Zero)
+            {
+                remainingUntilHeartbeat = TimeSpan.Zero;
+            }
+
+            // Racing the pending receive against a delay — rather than spinning up a second
+            // thread or a System.Threading.Timer — is what lets one await point notice "no
+            // datagram AND no cancellation yet, but the heartbeat threshold passed". Recomputing
+            // this delay fresh every loop pass is cheap and always correct; only the receive
+            // itself must never be recreated (see above).
+            var heartbeatDelayTask = Task.Delay(remainingUntilHeartbeat, ct);
+
+            var completedTask = await Task.WhenAny(receiveTask, heartbeatDelayTask).ConfigureAwait(false);
+
+            if (completedTask != receiveTask)
+            {
+                // Task.Delay(..., ct) also completes (canceled) when ct fires, so a real
+                // cancellation can look exactly like a heartbeat timeout here — check explicitly
+                // instead of misreporting a shutdown as "still silent".
+                if (ct.IsCancellationRequested)
+                {
+                    return null;
+                }
+
+                ReportSilenceTick();
+                continue; // receiveTask is still pending; loop back and keep waiting on it.
+            }
+
+            _pendingReceive = null; // Consumed; the next iteration (if any) starts a fresh receive.
+
+            UdpReceiveResult result;
+            try
+            {
+                result = await receiveTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Chosen cancellation behavior: end the enumeration cleanly instead of throwing —
+                // see the ReadDatagramsAsync doc comment above.
+                return null;
+            }
+            catch (ObjectDisposedException)
+            {
+                // The listener was disposed while a receive was in flight (e.g. the app is
+                // shutting down and disposed the listener before the pending ReceiveAsync
+                // completed). Treat it the same as cancellation rather than surfacing a confusing
+                // exception from an already-closed socket.
+                return null;
+            }
+            catch (SocketException ex)
+            {
+                // On Windows, a UDP socket can surface a PREVIOUS datagram's ICMP "port
+                // unreachable" response as WSAECONNRESET (SocketError.ConnectionReset) on the
+                // NEXT unrelated ReceiveAsync call — a well-known, documented quirk of UDP on
+                // Windows, not a fatal condition. Before this change, that exception propagated
+                // out of ReadDatagramsAsync and silently ended the whole enumeration, which meant
+                // the console app would just stop receiving telemetry with no obvious reason why.
+                // Now it is logged and the loop keeps listening, which is what "keep receiving
+                // telemetry for the whole play session" should mean.
+                Log.SocketReceiveError(_logger, ex.SocketErrorCode, ex.Message);
+
+                try
+                {
+                    await Task.Delay(SocketErrorBackoff, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return null;
+                }
+
+                continue;
+            }
+
+            ReportDatagramReceived(result.RemoteEndPoint, result.Buffer.Length);
             return result.Buffer;
         }
-        catch (OperationCanceledException)
+    }
+
+    /// <summary>Logs the "no datagrams received for Ns" heartbeat and schedules the next one.</summary>
+    private void ReportSilenceTick()
+    {
+        Log.NoDatagramsReceived(_logger, (int)_silenceStopwatch.Elapsed.TotalSeconds);
+        _heartbeatLogged = true;
+        _nextHeartbeatThreshold += _heartbeatOptions.RepeatInterval;
+    }
+
+    /// <summary>
+    /// Records bookkeeping for a successfully received datagram: resets the silence tracking,
+    /// logs "flowing again" if we had gone quiet, and logs "first datagram" the first time this
+    /// particular sender is seen.
+    /// </summary>
+    private void ReportDatagramReceived(IPEndPoint remote, int length)
+    {
+        if (_heartbeatLogged)
         {
-            // Chosen cancellation behavior: end the enumeration cleanly instead of throwing —
-            // see the ReadDatagramsAsync doc comment above.
-            return null;
+            Log.DatagramsFlowingAgain(_logger);
+            _heartbeatLogged = false;
         }
-        catch (ObjectDisposedException)
+
+        _silenceStopwatch.Restart();
+        _nextHeartbeatThreshold = _heartbeatOptions.InitialSilence;
+        _lastRemoteEndPoint = remote;
+
+        if (_seenRemoteEndPoints.Add(remote))
         {
-            // The listener was disposed while a receive was in flight (e.g. the app is shutting
-            // down and disposed the listener before the pending ReceiveAsync completed). Treat it
-            // the same as cancellation rather than surfacing a confusing exception from an
-            // already-closed socket.
-            return null;
+            // This is how the user discovers the Xbox's actual IP address: the very first
+            // datagram from a sender that has never been seen before on this listener.
+            Log.FirstDatagramFromSender(_logger, remote, length);
         }
     }
 

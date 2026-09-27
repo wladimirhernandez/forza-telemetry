@@ -1,10 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- TargetFramework, Nullable, ImplicitUsings, TreatWarningsAsErrors come from Directory.Build.props. -->
-  <!-- No NuGet dependencies: this classlib only wraps the BCL's UdpClient plus ForzaTelemetry.Core. -->
 
   <ItemGroup>
     <ProjectReference Include="..\ForzaTelemetry.Core\ForzaTelemetry.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Only the ABSTRACTIONS package, deliberately: this classlib is reused by both the console app
+      today and an Avalonia UI later, and a reusable library must never choose a logging backend
+      (Serilog, Console, NLog, ...) for its consumers - that choice belongs to the application at
+      the composition root. Depending only on Microsoft.Extensions.Logging.Abstractions gives this
+      project the ILogger<T> interface and NullLogger<T> fallback without dragging in any concrete
+      logging implementation; ForzaTelemetry.Console wires up the real backend (Serilog) and just
+      hands this library an ILogger<T> instance to write into.
+    -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
   </ItemGroup>
 
 </Project>

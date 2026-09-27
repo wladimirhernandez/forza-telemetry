@@ -10,4 +10,17 @@
     <ProjectReference Include="..\ForzaTelemetry.Udp\ForzaTelemetry.Udp.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      This is the composition root: unlike ForzaTelemetry.Udp (abstractions only), the console app
+      is where a concrete logging backend actually gets chosen and wired up. Serilog.Sinks.Console
+      + Serilog.Sinks.File give the user both a live view and a shareable log file; Serilog.Extensions.Logging
+      is the bridge that lets a Serilog logger be exposed as an ordinary Microsoft.Extensions.Logging
+      ILoggerFactory/ILogger<T>, which is the type ForzaTelemetry.Udp's public API expects.
+    -->
+    <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+  </ItemGroup>
+
 </Project>
