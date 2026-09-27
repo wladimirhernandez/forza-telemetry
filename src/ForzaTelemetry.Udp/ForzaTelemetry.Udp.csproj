@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- TargetFramework, Nullable, ImplicitUsings, TreatWarningsAsErrors come from Directory.Build.props. -->
+  <!-- No NuGet dependencies: this classlib only wraps the BCL's UdpClient plus ForzaTelemetry.Core. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\ForzaTelemetry.Core\ForzaTelemetry.Core.csproj" />
+  </ItemGroup>
+
+</Project>

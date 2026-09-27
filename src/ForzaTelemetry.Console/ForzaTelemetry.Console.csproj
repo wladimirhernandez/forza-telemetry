@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- TargetFramework, Nullable, ImplicitUsings, TreatWarningsAsErrors come from Directory.Build.props. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ForzaTelemetry.Core\ForzaTelemetry.Core.csproj" />
+    <ProjectReference Include="..\ForzaTelemetry.Udp\ForzaTelemetry.Udp.csproj" />
+  </ItemGroup>
+
+</Project>
