@@ -160,6 +160,8 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     /// <summary>Engine power in kW, never negative (off-throttle engine braking reports negative watts).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PowerReadout))]
+    [NotifyPropertyChangedFor(nameof(AltPowerReadout))]
     private double _powerKw;
 
     /// <summary>The same power in mechanical horsepower.</summary>
@@ -172,6 +174,7 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     /// <summary>Turbo/supercharger boost in psi (the unit FH sends). Vacuum on a naturally aspirated engine shows as 0.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BoostReadout))]
     private double _boostPsi;
 
     /// <summary>Fuel left, 0..100.</summary>
@@ -254,14 +257,27 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     private void OnUnitsChanged(object? sender, PropertyChangedEventArgs e)
     {
-        // Only a speed-unit change matters here (the temperature unit is the tires' business).
-        if (!UnitsService.AffectsSpeed(e.PropertyName))
+        // Only a unit that this screen shows matters here (the temperature unit is the tires' business). Each family is checked on its
+        // own, so changing the boost unit does not re-render the speed.
+        if (UnitsService.AffectsSpeed(e.PropertyName))
         {
-            return;
+            OnPropertyChanged(nameof(SpeedReadout));
+            OnPropertyChanged(nameof(SpeedUnitLabel));
         }
 
-        OnPropertyChanged(nameof(SpeedReadout));
-        OnPropertyChanged(nameof(SpeedUnitLabel));
+        if (UnitsService.AffectsPower(e.PropertyName))
+        {
+            OnPropertyChanged(nameof(PowerReadout));
+            OnPropertyChanged(nameof(PowerUnitLabel));
+            OnPropertyChanged(nameof(AltPowerReadout));
+            OnPropertyChanged(nameof(AltPowerUnitLabel));
+        }
+
+        if (UnitsService.AffectsBoost(e.PropertyName))
+        {
+            OnPropertyChanged(nameof(BoostReadout));
+            OnPropertyChanged(nameof(BoostUnitLabel));
+        }
     }
 
     public TireViewModel FrontLeft { get; }
@@ -277,6 +293,24 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     /// <summary>The unit label under the speed: <c>km/h</c> or <c>mph</c>.</summary>
     public string SpeedUnitLabel => _units.SpeedLabel;
+
+    /// <summary>The power as whole-number text in the chosen unit (kW or hp).</summary>
+    public string PowerReadout => _units.FormatPower(PowerKw);
+
+    /// <summary>The unit label of <see cref="PowerReadout"/>.</summary>
+    public string PowerUnitLabel => _units.PowerLabel;
+
+    /// <summary>The same power in the OTHER unit, shown smaller beside the main reading.</summary>
+    public string AltPowerReadout => _units.FormatAltPower(PowerKw);
+
+    /// <summary>The unit label of <see cref="AltPowerReadout"/>.</summary>
+    public string AltPowerUnitLabel => _units.AltPowerLabel;
+
+    /// <summary>The boost as text in the chosen unit (psi with one decimal, bar with two).</summary>
+    public string BoostReadout => _units.FormatBoost(BoostPsi);
+
+    /// <summary>The unit label of <see cref="BoostReadout"/>.</summary>
+    public string BoostUnitLabel => _units.BoostLabel;
 
     /// <summary>Current and maximum RPM as one readout, for example <c>7 439 / 9 000</c>.</summary>
     public string RpmReadout => string.Create(SpacedNumbers, $"{Rpm:N0} / {MaxRpm:N0}");

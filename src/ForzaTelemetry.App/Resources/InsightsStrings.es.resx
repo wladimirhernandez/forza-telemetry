@@ -147,6 +147,12 @@
   <data name="DynoPowerAxis" xml:space="preserve">
     <value>kW</value>
   </data>
+  <data name="DynoPowerAxisHp" xml:space="preserve">
+    <value>hp</value>
+  </data>
+  <data name="DynoPeakPowerHpFormat" xml:space="preserve">
+    <value>{0} hp ({1} kW)</value>
+  </data>
   <data name="DynoTorqueAxis" xml:space="preserve">
     <value>Nm</value>
   </data>

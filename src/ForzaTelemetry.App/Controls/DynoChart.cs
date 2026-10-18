@@ -12,11 +12,11 @@ namespace ForzaTelemetry.App.Controls;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Units.</b> There is no power-unit setting in the app, so the chart is honest about both: the axis is in kW (the
-/// unit the telemetry reports, after watts / 1000) and every peak label also shows mechanical horsepower, the number
-/// players know from the game's UI. Putting kW and hp ticks on one axis would need either two scales fighting for the
-/// same grid or labels like "250 / 335" on every line; a single metric axis plus the peak label in both units stays
-/// readable. Torque has its own axis on the right. Both axes start at zero and have the same number of divisions
+/// <b>Units.</b> The power axis follows the Power unit setting (<see cref="PowerUnit"/>: kW, or mechanical horsepower), and the
+/// peak chip names the chosen unit first with the other in parentheses, so the number the player knows from either source is
+/// on screen. Putting kW and hp ticks on one axis would need either two scales fighting for the same grid or labels like
+/// "250 / 335" on every line, so only the chosen unit is on the axis; the parenthesis lives on the peak chip, where it fits
+/// cleanly. Torque has its own axis on the right. Both axes start at zero and have the same number of divisions
 /// (<see cref="ChartMath.FitSharedAxes"/>), so the horizontal gridlines serve both curves.
 /// </para>
 /// <para>
@@ -41,6 +41,11 @@ public sealed class DynoChart : FrameworkElement
     public static readonly DependencyProperty CurveVersionProperty = DependencyProperty.Register(
         nameof(CurveVersion), typeof(int), typeof(DynoChart),
         new FrameworkPropertyMetadata(0, FrameworkPropertyMetadataOptions.AffectsRender, OnCurveChanged));
+
+    /// <summary>The unit of the power axis, curve and peak chip. A change rebuilds the geometry (the scale changes with the unit).</summary>
+    public static readonly DependencyProperty PowerUnitProperty = DependencyProperty.Register(
+        nameof(PowerUnit), typeof(Services.PowerUnit), typeof(DynoChart),
+        new FrameworkPropertyMetadata(Services.PowerUnit.Kw, FrameworkPropertyMetadataOptions.AffectsRender, OnCurveChanged));
 
     private static readonly Pen GridPen = ChartPalette.Pen(ChartPalette.Solid(ChartPalette.Hairline, 0.6), 1);
     private static readonly Pen AxisPen = ChartPalette.Pen(ChartPalette.HairlineBrush, 1);
@@ -82,6 +87,16 @@ public sealed class DynoChart : FrameworkElement
         set => SetValue(CurveVersionProperty, value);
     }
 
+    public Services.PowerUnit PowerUnit
+    {
+        get => (Services.PowerUnit)GetValue(PowerUnitProperty);
+        set => SetValue(PowerUnitProperty, value);
+    }
+
+    // Watts to the unit of the axis. Kilowatts are the base (watts / 1000); hp goes through the one shared constant.
+    private double PowerValue(double watts) =>
+        PowerUnit == Services.PowerUnit.Hp ? DynoMath.ToHorsepower(watts) : watts / 1000.0;
+
     private static void OnCurveChanged(DependencyObject d, DependencyPropertyChangedEventArgs e) => ((DynoChart)d)._dirty = true;
 
     private static Pen CreateGuidePen()
@@ -122,7 +137,7 @@ public sealed class DynoChart : FrameworkElement
         // Raw bins as dots: honest about coverage, and shows where smoothing was applied.
         for (var i = 0; i < _raw.Count; i++)
         {
-            dc.DrawEllipse(PowerDot, null, new Point(X(_raw[i].Rpm), PowerY(_raw[i].PowerWatts / 1000.0)), 1.6, 1.6);
+            dc.DrawEllipse(PowerDot, null, new Point(X(_raw[i].Rpm), PowerY(PowerValue(_raw[i].PowerWatts))), 1.6, 1.6);
             dc.DrawEllipse(TorqueDot, null, new Point(X(_raw[i].Rpm), TorqueY(_raw[i].TorqueNewtonMeters)), 1.6, 1.6);
         }
 
@@ -148,7 +163,7 @@ public sealed class DynoChart : FrameworkElement
         _smooth = DynoMath.Smooth(curve);
         (_powerPeak, _torquePeak) = DynoMath.FindPeaks(_smooth);
 
-        var peakKw = _smooth[_powerPeak].PowerWatts / 1000.0;
+        var peakKw = PowerValue(_smooth[_powerPeak].PowerWatts); // in the chosen unit (the name predates the unit setting)
         var peakNm = _smooth[_torquePeak].TorqueNewtonMeters;
         (_divisions, _powerStep, _torqueStep) = ChartMath.FitSharedAxes(peakKw * 1.06, peakNm * 1.06);
         _powerMax = _powerStep * _divisions;
@@ -197,7 +212,7 @@ public sealed class DynoChart : FrameworkElement
         var torquePoints = new List<Point>(to - from);
         for (var i = from; i < to; i++)
         {
-            powerPoints.Add(new Point(X(_smooth[i].Rpm), PowerY(_smooth[i].PowerWatts / 1000.0)));
+            powerPoints.Add(new Point(X(_smooth[i].Rpm), PowerY(PowerValue(_smooth[i].PowerWatts))));
             torquePoints.Add(new Point(X(_smooth[i].Rpm), TorqueY(_smooth[i].TorqueNewtonMeters)));
         }
 
@@ -230,7 +245,7 @@ public sealed class DynoChart : FrameworkElement
             _text.DrawCentered(dc, rpm.ToString("#,0", CultureInfo.CurrentCulture), x, _bottom + 8, 11, ChartPalette.MutedBrush, dpi, numeral: true);
         }
 
-        _text.DrawRight(dc, InsightsStrings.DynoPowerAxis, _left - 10, _top - 26, 12, ChartPalette.WarmBrush, dpi, bold: true);
+        _text.DrawRight(dc, PowerUnit == Services.PowerUnit.Hp ? InsightsStrings.DynoPowerAxisHp : InsightsStrings.DynoPowerAxis, _left - 10, _top - 26, 12, ChartPalette.WarmBrush, dpi, bold: true);
         _text.Draw(dc, InsightsStrings.DynoTorqueAxis, _right + 10, _top - 26, 12, ChartPalette.ColdBrush, dpi, bold: true);
         _text.DrawRight(dc, InsightsStrings.DynoRpmAxis, _right + 34, _bottom + 8, 11, ChartPalette.MutedBrush, dpi);
     }
@@ -239,7 +254,7 @@ public sealed class DynoChart : FrameworkElement
     {
         var power = _smooth[_powerPeak];
         var torque = _smooth[_torquePeak];
-        var powerPoint = new Point(X(power.Rpm), PowerY(power.PowerWatts / 1000.0));
+        var powerPoint = new Point(X(power.Rpm), PowerY(PowerValue(power.PowerWatts)));
         var torquePoint = new Point(X(torque.Rpm), TorqueY(torque.TorqueNewtonMeters));
 
         // A guide from each peak down to the rpm axis shows WHERE in the rev range it happens.
@@ -248,10 +263,11 @@ public sealed class DynoChart : FrameworkElement
         dc.DrawEllipse(ChartPalette.WarmBrush, MarkerRing, powerPoint, 5, 5);
         dc.DrawEllipse(ChartPalette.ColdBrush, MarkerRing, torquePoint, 5, 5);
 
-        var powerText = string.Format(
-            CultureInfo.CurrentCulture, InsightsStrings.DynoPeakPowerFormat,
-            (power.PowerWatts / 1000.0).ToString("0", CultureInfo.CurrentCulture),
-            DynoMath.ToHorsepower(power.PowerWatts).ToString("0", CultureInfo.CurrentCulture));
+        var kilowatts = (power.PowerWatts / 1000.0).ToString("0", CultureInfo.CurrentCulture);
+        var horsepower = DynoMath.ToHorsepower(power.PowerWatts).ToString("0", CultureInfo.CurrentCulture);
+        var powerText = PowerUnit == Services.PowerUnit.Hp
+            ? string.Format(CultureInfo.CurrentCulture, InsightsStrings.DynoPeakPowerHpFormat, horsepower, kilowatts)
+            : string.Format(CultureInfo.CurrentCulture, InsightsStrings.DynoPeakPowerFormat, kilowatts, horsepower);
         var torqueText = string.Format(
             CultureInfo.CurrentCulture, InsightsStrings.DynoPeakTorqueFormat,
             torque.TorqueNewtonMeters.ToString("0", CultureInfo.CurrentCulture));

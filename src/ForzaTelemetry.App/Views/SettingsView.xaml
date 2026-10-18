@@ -212,6 +212,14 @@
                         <ListBox Style="{StaticResource SegmentedListBox}" ItemsSource="{Binding TemperatureUnitOptions}"
                                  SelectedValue="{Binding TemperatureUnit, Mode=TwoWay}"
                                  AutomationProperties.Name="{x:Static res:Strings.UnitsTemperatureLabel}" />
+                        <TextBlock Text="{x:Static res:Strings.PowerLabel}" Style="{StaticResource FieldLabel}" />
+                        <ListBox Style="{StaticResource SegmentedListBox}" ItemsSource="{Binding PowerUnitOptions}"
+                                 SelectedValue="{Binding PowerUnit, Mode=TwoWay}"
+                                 AutomationProperties.Name="{x:Static res:Strings.PowerLabel}" />
+                        <TextBlock Text="{x:Static res:Strings.BoostLabel}" Style="{StaticResource FieldLabel}" />
+                        <ListBox Style="{StaticResource SegmentedListBox}" ItemsSource="{Binding BoostUnitOptions}"
+                                 SelectedValue="{Binding BoostUnit, Mode=TwoWay}"
+                                 AutomationProperties.Name="{x:Static res:Strings.BoostLabel}" />
                     </StackPanel>
                 </Border>
 

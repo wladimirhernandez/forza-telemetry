@@ -71,6 +71,16 @@ internal static class AppSettingsReader
                     settings = accepted ? settings with { TemperatureUnit = temperatureUnit } : settings;
                     break;
 
+                case "powerunit":
+                    accepted = TryReadEnum(value, out PowerUnit powerUnit);
+                    settings = accepted ? settings with { PowerUnit = powerUnit } : settings;
+                    break;
+
+                case "boostunit":
+                    accepted = TryReadEnum(value, out BoostUnit boostUnit);
+                    settings = accepted ? settings with { BoostUnit = boostUnit } : settings;
+                    break;
+
                 case "language":
                     accepted = TryReadEnum(value, out AppLanguage language);
                     settings = accepted ? settings with { Language = language } : settings;

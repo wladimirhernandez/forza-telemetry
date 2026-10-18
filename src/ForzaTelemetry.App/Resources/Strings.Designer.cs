@@ -427,6 +427,15 @@ namespace ForzaTelemetry.App.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to bar.
+        /// </summary>
+        public static string BoostUnitBar {
+            get {
+                return ResourceManager.GetString("BoostUnitBar", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to %.
         /// </summary>
         public static string PercentUnit {

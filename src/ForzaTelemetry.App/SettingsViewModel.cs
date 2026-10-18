@@ -66,6 +66,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         _portText = current.UdpPort.ToString(CultureInfo.InvariantCulture);
         _speedUnit = current.SpeedUnit;
         _temperatureUnit = current.TemperatureUnit;
+        _powerUnit = current.PowerUnit;
+        _boostUnit = current.BoostUnit;
         _language = current.Language;
         _startListeningOnLaunch = current.StartListeningOnLaunch;
         _hideMainWindowInMiniMode = current.HideMainWindowInMiniMode;
@@ -152,6 +154,18 @@ public sealed partial class SettingsViewModel : ObservableObject
         new(TemperatureUnit.Fahrenheit, Strings.TemperatureUnitFahrenheit)
     ];
 
+    public IReadOnlyList<ChoiceOption<PowerUnit>> PowerUnitOptions { get; } =
+    [
+        new(PowerUnit.Kw, Strings.PowerUnitKw),
+        new(PowerUnit.Hp, Strings.PowerUnitHp)
+    ];
+
+    public IReadOnlyList<ChoiceOption<BoostUnit>> BoostUnitOptions { get; } =
+    [
+        new(BoostUnit.Psi, Strings.BoostUnit),
+        new(BoostUnit.Bar, Strings.BoostUnitBar)
+    ];
+
     [ObservableProperty]
     private SpeedUnit _speedUnit;
 
@@ -163,6 +177,16 @@ public sealed partial class SettingsViewModel : ObservableObject
     private TemperatureUnit _temperatureUnit;
 
     partial void OnTemperatureUnitChanged(TemperatureUnit value) => _settings.Update(s => s with { TemperatureUnit = value });
+
+    [ObservableProperty]
+    private PowerUnit _powerUnit;
+
+    partial void OnPowerUnitChanged(PowerUnit value) => _settings.Update(s => s with { PowerUnit = value });
+
+    [ObservableProperty]
+    private BoostUnit _boostUnit;
+
+    partial void OnBoostUnitChanged(BoostUnit value) => _settings.Update(s => s with { BoostUnit = value });
 
     // ---- Settings file that could not be read --------------------------------------------------
 

@@ -41,6 +41,15 @@ public sealed partial class UnitsService : ObservableObject
     [NotifyPropertyChangedFor(nameof(TemperatureLabel))]
     private TemperatureUnit _temperatureUnit = TemperatureUnit.Celsius;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PowerLabel))]
+    [NotifyPropertyChangedFor(nameof(AltPowerLabel))]
+    private PowerUnit _powerUnit = PowerUnit.Kw;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BoostLabel))]
+    private BoostUnit _boostUnit = BoostUnit.Psi;
+
     /// <summary>Localized label of the speed unit: <c>km/h</c> or <c>mph</c>.</summary>
     public string SpeedLabel => SpeedUnit == SpeedUnit.Mph ? Strings.SpeedUnitMph : Strings.SpeedUnit;
 
@@ -54,6 +63,15 @@ public sealed partial class UnitsService : ObservableObject
     public string TemperatureLabel =>
         TemperatureUnit == TemperatureUnit.Fahrenheit ? Strings.TemperatureUnitFahrenheit : Strings.TemperatureUnit;
 
+    /// <summary>Localized label of the power unit: <c>kW</c> or <c>hp</c>.</summary>
+    public string PowerLabel => PowerUnit == PowerUnit.Hp ? Strings.PowerUnitHp : Strings.PowerUnitKw;
+
+    /// <summary>Label of the OTHER power unit, the one shown beside the chosen one as a secondary reading.</summary>
+    public string AltPowerLabel => PowerUnit == PowerUnit.Hp ? Strings.PowerUnitKw : Strings.PowerUnitHp;
+
+    /// <summary>Localized label of the boost unit: <c>psi</c> or <c>bar</c>.</summary>
+    public string BoostLabel => BoostUnit == BoostUnit.Bar ? Strings.BoostUnitBar : Strings.BoostUnit;
+
     /// <summary>
     /// True when a <see cref="System.ComponentModel.INotifyPropertyChanged.PropertyChanged"/> from this service can change a
     /// speed readout or label. Listeners filter with it instead of re-announcing everything on every notification (a
@@ -66,6 +84,24 @@ public sealed partial class UnitsService : ObservableObject
     /// <summary>The temperature counterpart of <see cref="AffectsSpeed"/>.</summary>
     public static bool AffectsTemperature(string? propertyName) =>
         string.IsNullOrEmpty(propertyName) || propertyName is nameof(TemperatureUnit) or nameof(TemperatureLabel);
+
+    /// <summary>The power counterpart of <see cref="AffectsSpeed"/> (covers the secondary reading and its label too).</summary>
+    public static bool AffectsPower(string? propertyName) =>
+        string.IsNullOrEmpty(propertyName) || propertyName is nameof(PowerUnit) or nameof(PowerLabel) or nameof(AltPowerLabel);
+
+    /// <summary>The boost counterpart of <see cref="AffectsSpeed"/>.</summary>
+    public static bool AffectsBoost(string? propertyName) =>
+        string.IsNullOrEmpty(propertyName) || propertyName is nameof(BoostUnit) or nameof(BoostLabel);
+
+    /// <summary>Psi in one bar (1 bar = 100 kPa; 1 psi = 6894.757 Pa).</summary>
+    public const double PsiPerBar = 14.5037738;
+
+    /// <summary>Mechanical horsepower in one kilowatt: the same constant the dashboard uses, so there is one definition.</summary>
+    public const double HorsepowerPerKilowatt = DashboardMath.HorsepowerPerKilowatt;
+
+    public static double PsiToBar(double psi) => psi / PsiPerBar;
+
+    public static double KilowattsToHorsepower(double kilowatts) => kilowatts * HorsepowerPerKilowatt;
 
     /// <summary>Feet in one meter (exact: a foot is 0.3048 m by definition).</summary>
     public const double FeetPerMeter = 1 / 0.3048;
@@ -84,6 +120,28 @@ public sealed partial class UnitsService : ObservableObject
     public double ConvertTemperature(double celsius) =>
         TemperatureUnit == TemperatureUnit.Fahrenheit ? CelsiusToFahrenheit(celsius) : celsius;
 
+    /// <summary>A power in kilowatts expressed in the chosen unit.</summary>
+    public double ConvertPower(double kilowatts) => PowerUnit == PowerUnit.Hp ? KilowattsToHorsepower(kilowatts) : kilowatts;
+
+    /// <summary>A power in kilowatts expressed in the OTHER unit (hp when kW is chosen, kW when hp is).</summary>
+    public double ConvertAltPower(double kilowatts) => PowerUnit == PowerUnit.Hp ? kilowatts : KilowattsToHorsepower(kilowatts);
+
+    /// <summary>A boost in psi (the unit the game sends) expressed in the chosen unit.</summary>
+    public double ConvertBoost(double psi) => BoostUnit == BoostUnit.Bar ? PsiToBar(psi) : psi;
+
+    /// <summary>The converted power as whole-number text.</summary>
+    public string FormatPower(double kilowatts) => ConvertPower(kilowatts).ToString("F0", CultureInfo.CurrentCulture);
+
+    /// <summary>The power in the other unit as whole-number text.</summary>
+    public string FormatAltPower(double kilowatts) => ConvertAltPower(kilowatts).ToString("F0", CultureInfo.CurrentCulture);
+
+    /// <summary>
+    /// The converted boost as text: one decimal in psi (a turbo moves in tenths), two in bar (0.95 bar and 1.0 bar are visibly different, a
+    /// single decimal would round a whole psi of boost away).
+    /// </summary>
+    public string FormatBoost(double psi) =>
+        ConvertBoost(psi).ToString(BoostUnit == BoostUnit.Bar ? "F2" : "F1", CultureInfo.CurrentCulture);
+
     /// <summary>The converted speed as whole-number text (the dashboard shows no decimals).</summary>
     public string FormatSpeed(double kmh) => ConvertSpeed(kmh).ToString("F0", CultureInfo.CurrentCulture);
 
@@ -101,5 +159,7 @@ public sealed partial class UnitsService : ObservableObject
     {
         SpeedUnit = settings.SpeedUnit;
         TemperatureUnit = settings.TemperatureUnit;
+        PowerUnit = settings.PowerUnit;
+        BoostUnit = settings.BoostUnit;
     }
 }

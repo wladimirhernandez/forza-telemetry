@@ -18,6 +18,20 @@ public enum TemperatureUnit
     Fahrenheit
 }
 
+/// <summary>Unit shown for engine power.</summary>
+public enum PowerUnit
+{
+    Kw = 0,
+    Hp
+}
+
+/// <summary>Unit shown for turbo/supercharger boost.</summary>
+public enum BoostUnit
+{
+    Psi = 0,
+    Bar
+}
+
 /// <summary>Display language: follow Windows, or force one of the languages the app ships.</summary>
 public enum AppLanguage
 {
@@ -60,6 +74,8 @@ public sealed record MiniWindowPlacement(string Setup, double Left, double Top, 
 /// <param name="UdpPort">The UDP port the game's Data Out sends to (1..65535).</param>
 /// <param name="SpeedUnit">Unit of every speed readout.</param>
 /// <param name="TemperatureUnit">Unit of every tire temperature readout.</param>
+/// <param name="PowerUnit">Unit of every engine power readout (kilowatts, or mechanical horsepower).</param>
+/// <param name="BoostUnit">Unit of every boost readout (psi, or bar).</param>
 /// <param name="Language">Display language, applied at startup.</param>
 /// <param name="StartListeningOnLaunch">Start the UDP listener as soon as the app opens (default off: the user presses Start).</param>
 /// <param name="HasCompletedSetup">
@@ -98,7 +114,9 @@ public sealed record AppSettings(
     bool HideMainWindowInMiniMode = true,
     bool MiniAlwaysOnTop = true,
     double MiniOpacity = AppSettings.MaxMiniOpacity,
-    IReadOnlyList<MiniWindowPlacement>? MiniPlacements = null)
+    IReadOnlyList<MiniWindowPlacement>? MiniPlacements = null,
+    PowerUnit PowerUnit = PowerUnit.Kw,
+    BoostUnit BoostUnit = BoostUnit.Psi)
 {
     /// <summary>Properties found in the file that this build does not know (written by a newer version); kept so a save does not drop them.</summary>
     [JsonIgnore]
@@ -140,6 +158,8 @@ public sealed record AppSettings(
         SpeedUnit = Enum.IsDefined(SpeedUnit) ? SpeedUnit : Default.SpeedUnit,
         TemperatureUnit = Enum.IsDefined(TemperatureUnit) ? TemperatureUnit : Default.TemperatureUnit,
         Language = Enum.IsDefined(Language) ? Language : Default.Language,
+        PowerUnit = Enum.IsDefined(PowerUnit) ? PowerUnit : Default.PowerUnit,
+        BoostUnit = Enum.IsDefined(BoostUnit) ? BoostUnit : Default.BoostUnit,
         MiniOpacity = IsValidMiniOpacity(MiniOpacity) ? MiniOpacity : Default.MiniOpacity,
         MiniPlacements = SanitizedPlacements(MiniPlacements)
     };

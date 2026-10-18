@@ -156,6 +156,12 @@ public static class InsightsStrings
     /// <summary>"kW"</summary>
     public static string DynoPowerAxis => ResourceManager.GetString("DynoPowerAxis", Culture)!;
 
+    /// <summary>"hp"</summary>
+    public static string DynoPowerAxisHp => ResourceManager.GetString("DynoPowerAxisHp", Culture)!;
+
+    /// <summary>"{0} hp ({1} kW)"</summary>
+    public static string DynoPeakPowerHpFormat => ResourceManager.GetString("DynoPeakPowerHpFormat", Culture)!;
+
     /// <summary>"Nm"</summary>
     public static string DynoTorqueAxis => ResourceManager.GetString("DynoTorqueAxis", Culture)!;
 

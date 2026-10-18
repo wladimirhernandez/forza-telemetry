@@ -122,7 +122,7 @@
                 </DockPanel>
 
                 <Grid Grid.Row="1" Margin="0,8,0,0">
-                    <controls:DynoChart Curve="{Binding Curve}" CurveVersion="{Binding CurveVersion}"
+                    <controls:DynoChart Curve="{Binding Curve}" CurveVersion="{Binding CurveVersion}" PowerUnit="{Binding PowerUnit}"
                                         Visibility="{Binding HasCurve, Converter={StaticResource BoolToVisibility}}" />
                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="400"
                                 Visibility="{Binding HasNoCurve, Converter={StaticResource BoolToVisibility}}">

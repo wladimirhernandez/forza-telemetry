@@ -136,6 +136,9 @@
   <data name="BoostUnit" xml:space="preserve">
     <value>psi</value>
   </data>
+  <data name="BoostUnitBar" xml:space="preserve">
+    <value>bar</value>
+  </data>
   <data name="PercentUnit" xml:space="preserve">
     <value>%</value>
   </data>

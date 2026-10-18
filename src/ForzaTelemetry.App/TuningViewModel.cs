@@ -82,6 +82,16 @@ public sealed partial class TuningViewModel : ObservableObject, IRefreshablePage
         _history = history;
         _bottoming = bottoming;
         _units = units;
+
+        // The power unit can change while the page is showing: the dyno chart redraws its axis, curve and peak chip in the new unit.
+        units.PropertyChanged += (_, e) =>
+        {
+            if (UnitsService.AffectsPower(e.PropertyName))
+            {
+                OnPropertyChanged(nameof(PowerUnit));
+            }
+        };
+
         _carText = InsightsStrings.NoCarYet;
         _piText = string.Empty;
         _balanceAdvice = InsightText.BalanceAdvice(BalanceState.Unknown);
@@ -93,6 +103,9 @@ public sealed partial class TuningViewModel : ObservableObject, IRefreshablePage
 
     [ObservableProperty]
     private IReadOnlyList<DynoPoint> _curve = [];
+
+    /// <summary>The unit of the dyno's power axis, from the Power setting.</summary>
+    public PowerUnit PowerUnit => _units.PowerUnit;
 
     /// <summary>Changes when the curve content changed (the chart's rebuild signal).</summary>
     [ObservableProperty]

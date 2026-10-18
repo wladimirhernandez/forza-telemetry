@@ -27,6 +27,8 @@ namespace ForzaTelemetry.App.Services;
     [
         typeof(CamelCaseEnumConverter<SpeedUnit>),
         typeof(CamelCaseEnumConverter<TemperatureUnit>),
+        typeof(CamelCaseEnumConverter<PowerUnit>),
+        typeof(CamelCaseEnumConverter<BoostUnit>),
         typeof(CamelCaseEnumConverter<AppLanguage>)
     ])]
 [JsonSerializable(typeof(AppSettings))]

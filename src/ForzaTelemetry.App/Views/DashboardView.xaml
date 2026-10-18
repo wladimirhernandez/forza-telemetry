@@ -317,10 +317,10 @@
                         <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center">
                             <TextBlock Text="{x:Static res:Strings.PowerLabel}" Style="{StaticResource MutedLabel}" FontSize="11" />
                             <TextBlock Style="{StaticResource NumeralText}" FontSize="20">
-                                <Run Text="{Binding PowerKw, Mode=OneWay, StringFormat={}{0:F0}}" />
-                                <Run Text="{x:Static res:Strings.PowerUnitKw}" FontSize="12" Foreground="{StaticResource MutedBrush}" />
-                                <Run Text="{Binding PowerHp, Mode=OneWay, StringFormat={}{0:F0}}" FontSize="14" Foreground="{StaticResource MutedBrush}" />
-                                <Run Text="{x:Static res:Strings.PowerUnitHp}" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                                <Run Text="{Binding PowerReadout, Mode=OneWay}" />
+                                <Run Text="{Binding PowerUnitLabel, Mode=OneWay}" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                                <Run Text="{Binding AltPowerReadout, Mode=OneWay}" FontSize="14" Foreground="{StaticResource MutedBrush}" />
+                                <Run Text="{Binding AltPowerUnitLabel, Mode=OneWay}" FontSize="12" Foreground="{StaticResource MutedBrush}" />
                             </TextBlock>
                             <controls:TickGauge Height="8" Margin="0,3,0,0" Value="{Binding PowerRatio}" />
                         </StackPanel>
@@ -337,8 +337,8 @@
                         <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center">
                             <TextBlock Text="{x:Static res:Strings.BoostLabel}" Style="{StaticResource MutedLabel}" FontSize="11" />
                             <TextBlock Style="{StaticResource NumeralText}" FontSize="20">
-                                <Run Text="{Binding BoostPsi, Mode=OneWay, StringFormat={}{0:F1}}" />
-                                <Run Text="{x:Static res:Strings.BoostUnit}" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                                <Run Text="{Binding BoostReadout, Mode=OneWay}" />
+                                <Run Text="{Binding BoostUnitLabel, Mode=OneWay}" FontSize="12" Foreground="{StaticResource MutedBrush}" />
                             </TextBlock>
                             <controls:TickGauge Height="8" Margin="0,3,0,0" Value="{Binding BoostRatio}" />
                         </StackPanel>
