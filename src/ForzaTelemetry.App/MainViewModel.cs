@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Sockets;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -42,13 +43,20 @@ public sealed partial class MainViewModel : ObservableObject
     // own — see that class's remarks) so a test can make time "pass" deterministically for both.
     private DateTimeOffset _lastPacketArrivalAt;
 
+    // Telemetry numbers read best with a space as thousands separator ("7 439"), regardless of the user's culture.
+    private static readonly NumberFormatInfo SpacedNumbers = new() { NumberGroupSeparator = " ", NumberDecimalDigits = 0 };
+
+    // [NotifyPropertyChangedFor]: RpmReadout is computed from Rpm and MaxRpm, so it must raise its own change
+    // notification whenever either input changes, or the bound TextBlock would keep showing stale text.
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RpmReadout))]
     private float _rpm;
 
     // 9000 is a placeholder redline shown before the first packet arrives (so the RPM bar has SOME
     // scale instead of Maximum=0); the real value is overwritten from EngineMaxRpm on first refresh,
     // since different cars in FH6 have very different actual redlines.
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RpmReadout))]
     private float _maxRpm = 9000f;
 
     [ObservableProperty]
@@ -60,8 +68,14 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private double _packetsPerSecond;
 
+    // TODO(localization): the status sentences below are still English literals produced by the view model;
+    // the view's own text already comes from Resources/Strings.resx.
     [ObservableProperty]
     private string _status = "Stopped";
+
+    /// <summary>Closed-set version of <see cref="Status"/> that the view maps to the status dot colour.</summary>
+    [ObservableProperty]
+    private ConnectionState _connectionState = ConnectionState.Stopped;
 
     // [NotifyCanExecuteChangedFor]: whenever IsRunning changes, CommunityToolkit.Mvvm's source
     // generator re-checks StartCommand/StopCommand's CanExecute automatically (calling
@@ -92,6 +106,7 @@ public sealed partial class MainViewModel : ObservableObject
         PacketsPerSecond = 29.7;
         Status = "Receiving";
         IsRunning = true;
+        ConnectionState = ConnectionState.Receiving;
     }
 
     /// <summary>
@@ -111,6 +126,9 @@ public sealed partial class MainViewModel : ObservableObject
         _lastPacketArrivalAt = _lastRefreshAt;
     }
 
+    /// <summary>Current and maximum RPM as one readout, for example <c>7 439 / 9 000</c>.</summary>
+    public string RpmReadout => string.Create(SpacedNumbers, $"{Rpm:N0} / {MaxRpm:N0}");
+
     /// <summary>
     /// Pulls the CURRENT state out of <see cref="TelemetryService"/> and pushes it into this view
     /// model's bound properties. Called ~20 times/sec, on the UI thread, by whatever <c>IUiTicker</c>
@@ -123,6 +141,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (fault is not null)
         {
             IsRunning = false;
+            ConnectionState = ConnectionState.Error;
             Status = DescribeFault(fault);
             return;
         }
@@ -147,7 +166,8 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         var silenceSoFar = _timeProvider.GetUtcNow() - _lastPacketArrivalAt;
-        Status = DescribeStatus(IsRunning, latest, silenceSoFar);
+        ConnectionState = DetermineState(IsRunning, latest, silenceSoFar);
+        Status = DescribeStatus(ConnectionState, silenceSoFar);
     }
 
     private void UpdatePacketsPerSecond()
@@ -173,25 +193,28 @@ public sealed partial class MainViewModel : ObservableObject
         _lastRefreshAt = now;
     }
 
-    private static string DescribeStatus(bool isRunning, TelemetryPacket? latest, TimeSpan silenceSoFar)
+    private static ConnectionState DetermineState(bool isRunning, TelemetryPacket? latest, TimeSpan silenceSoFar)
     {
         if (!isRunning)
         {
-            return "Stopped";
+            return ConnectionState.Stopped;
         }
 
         if (latest is null)
         {
-            return $"Listening on UDP {UdpTelemetryListener.DefaultPort} — waiting for data (drive in-game)";
+            return ConnectionState.Listening;
         }
 
-        if (silenceSoFar > NoDataThreshold)
-        {
-            return $"No data for {silenceSoFar.TotalSeconds:F0}s";
-        }
-
-        return "Receiving";
+        return silenceSoFar > NoDataThreshold ? ConnectionState.NoData : ConnectionState.Receiving;
     }
+
+    private static string DescribeStatus(ConnectionState state, TimeSpan silenceSoFar) => state switch
+    {
+        ConnectionState.Listening => $"Listening on UDP {UdpTelemetryListener.DefaultPort} — waiting for data (drive in-game)",
+        ConnectionState.NoData => $"No data for {silenceSoFar.TotalSeconds:F0}s",
+        ConnectionState.Receiving => "Receiving",
+        _ => "Stopped"
+    };
 
     private static string DescribeFault(Exception fault) => fault switch
     {

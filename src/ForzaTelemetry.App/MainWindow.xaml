@@ -4,47 +4,213 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:ForzaTelemetry.App"
+        xmlns:res="clr-namespace:ForzaTelemetry.App.Resources"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance local:MainViewModel, IsDesignTimeCreatable=True}"
-        Title="Forza Telemetry" Width="420" Height="720" MinWidth="360" MinHeight="560">
+        Title="{x:Static res:Strings.AppTitle}"
+        Width="1440" Height="900" MinWidth="1280" MinHeight="800"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        WindowStartupLocation="CenterScreen"
+        UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Display">
     <!--
-      Star-sized rows share the leftover height equally; Auto rows take only what their content needs.
-      Every {Binding ...} below reads a property of MainViewModel (the DataContext set in MainWindow's constructor).
-      StringFormat lives here in the view: the view model exposes plain numbers and the view decides how to show them.
+      Borderless window technique:
+      - WindowStyle=None removes the OS title bar; AllowsTransparency + Background=Transparent let the rounded
+        Border below show through with real rounded corners and a soft shadow (the 12 px transparent margin around
+        it is where the shadow is drawn).
+      - With the OS frame gone the window loses its resize edges, so WindowChrome gives them back: CaptionHeight=0
+        (our own title bar handles dragging) and ResizeBorderThickness=12 (exactly the transparent margin).
     -->
-    <Grid Margin="24">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="2*" />
-            <RowDefinition Height="1*" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="12" GlassFrameThickness="0"
+                            CornerRadius="0" UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
 
-        <!-- Gear: the biggest thing on screen, readable at a glance while driving. -->
-        <TextBlock Grid.Row="0" Text="{Binding GearLabel}" FontSize="140" FontWeight="Bold"
-                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+    <Border x:Name="Chrome" Margin="12" CornerRadius="{StaticResource WindowRadius}"
+            Background="{StaticResource CanvasBrush}" BorderBrush="{StaticResource HairlineBrush}" BorderThickness="1"
+            TextElement.Foreground="{StaticResource TextBrush}"
+            TextElement.FontFamily="{StaticResource LabelFont}"
+            TextElement.FontSize="14">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.6" Color="Black" />
+        </Border.Effect>
 
-        <TextBlock Grid.Row="1" Text="{Binding SpeedKmh, StringFormat={}{0:F0} km/h}" FontSize="64"
-                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+        <!--
+          Star-sized rows share the leftover height (the hero takes everything the title bar, top bar and bottom
+          row do not); Auto rows take only what their content needs.
+          Every {Binding ...} reads a property of MainViewModel (the DataContext set in MainWindow's constructor).
+          {x:Static res:Strings.Key} reads UI text from Resources/Strings.resx (en) or Strings.es.resx at load time.
+        -->
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="52" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-        <!-- Maximum is bound to MaxRpm: FH6 cars have very different redlines, so a fixed scale would be meaningless. -->
-        <StackPanel Grid.Row="2" Margin="0,8,0,16">
-            <ProgressBar Minimum="0" Maximum="{Binding MaxRpm}" Value="{Binding Rpm, Mode=OneWay}" Height="24" />
-            <TextBlock Text="{Binding Rpm, StringFormat={}{0:F0} RPM}" HorizontalAlignment="Center" Margin="0,4,0,0" />
-        </StackPanel>
+            <!-- Title bar: the transparent-background Grid is what receives the mouse for dragging. -->
+            <Grid Grid.Row="0" Background="Transparent" MouseLeftButtonDown="OnDragAreaMouseDown">
+                <TextBlock Text="{x:Static res:Strings.AppTitle}" Style="{StaticResource MutedLabel}"
+                           VerticalAlignment="Center" Margin="28,0,0,0" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"
+                            Margin="0,0,14,0">
+                    <Button Style="{StaticResource WindowGlyphButton}" Click="OnMinimizeClick"
+                            ToolTip="{x:Static res:Strings.MinimizeTooltip}"
+                            AutomationProperties.Name="{x:Static res:Strings.MinimizeTooltip}">
+                        <Path Data="{StaticResource MinimizeIcon}"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                    </Button>
+                    <Button Margin="4,0,0,0" Style="{StaticResource WindowGlyphButton}" Click="OnMaximizeClick"
+                            ToolTip="{x:Static res:Strings.MaximizeTooltip}"
+                            AutomationProperties.Name="{x:Static res:Strings.MaximizeTooltip}">
+                        <Path Data="{StaticResource MaximizeIcon}"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.5" StrokeLineJoin="Round" />
+                    </Button>
+                    <Button Margin="4,0,0,0" Style="{StaticResource WindowGlyphButton}" Click="OnCloseClick"
+                            ToolTip="{x:Static res:Strings.CloseTooltip}"
+                            AutomationProperties.Name="{x:Static res:Strings.CloseTooltip}">
+                        <Path Data="{StaticResource CloseIcon}"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                    </Button>
+                </StackPanel>
+            </Grid>
 
-        <TextBlock Grid.Row="3" Text="{Binding PacketsPerSecond, StringFormat={}{0:F1} pkt/s}"
-                   HorizontalAlignment="Center" Margin="0,0,0,8" />
+            <!-- Top bar: status pills on the left, actions on the right. -->
+            <Grid Grid.Row="1" Margin="28,4,28,0">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                    <!--
+                      Connection pill. The dot color comes from a DataTrigger per ConnectionState: the view model
+                      exposes a closed enum, the view decides which color means what. The base Setter keeps the dot
+                      muted (Stopped); each trigger overrides it while its condition holds.
+                    -->
+                    <ContentControl Content="{Binding Status}" MaxWidth="560">
+                        <ContentControl.Style>
+                            <Style TargetType="ContentControl" BasedOn="{StaticResource StatusPill}">
+                                <Setter Property="Tag" Value="{StaticResource MutedBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ConnectionState}" Value="Receiving">
+                                        <Setter Property="Tag" Value="{StaticResource ThrottleBrush}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding ConnectionState}" Value="Listening">
+                                        <Setter Property="Tag" Value="{StaticResource WarmBrush}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding ConnectionState}" Value="NoData">
+                                        <Setter Property="Tag" Value="{StaticResource WarmBrush}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding ConnectionState}" Value="Error">
+                                        <Setter Property="Tag" Value="{StaticResource BrakeBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ContentControl.Style>
+                    </ContentControl>
+                    <ContentControl Style="{StaticResource StatusPill}" Margin="10,0,0,0" Tag="{x:Null}"
+                                    Content="{Binding PacketsPerSecond}"
+                                    ContentStringFormat="{x:Static res:Strings.PacketsPerSecondPill}" />
+                    <!-- Placeholder: the car info pill (class, PI, drivetrain) is filled in a later step. -->
+                    <ContentControl Style="{StaticResource StatusPill}" Margin="10,0,0,0" Tag="{x:Null}"
+                                    Content="{x:Static res:Strings.CarInfoPill}" />
+                </StackPanel>
 
-        <TextBlock Grid.Row="4" Text="{Binding Status}" HorizontalAlignment="Center" TextWrapping="Wrap"
-                   Margin="0,0,0,16" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Style="{StaticResource PrimaryButton}" Command="{Binding StartCommand}"
+                            Content="{x:Static res:Strings.StartButton}" />
+                    <Button Style="{StaticResource GhostButton}" Command="{Binding StopCommand}" Margin="10,0,0,0"
+                            Content="{x:Static res:Strings.StopButton}" />
+                </StackPanel>
+            </Grid>
 
-        <!-- Two buttons, each bound to one command: WPF enables/disables them from the command's CanExecute. -->
-        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Center">
-            <Button Content="Start" Command="{Binding StartCommand}" MinWidth="80" Margin="0,0,12,0" />
-            <Button Content="Stop" Command="{Binding StopCommand}" MinWidth="80" />
-        </StackPanel>
-    </Grid>
+            <!-- Hero area: reserves the largest region for the car view; a quiet placeholder until then. -->
+            <Border Grid.Row="2" Style="{StaticResource CardStyle}" Margin="28,18,28,18">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="{x:Static res:Strings.HeroPlaceholderTitle}" Style="{StaticResource ValueText}"
+                               HorizontalAlignment="Center" />
+                    <TextBlock Text="{x:Static res:Strings.HeroPlaceholderBody}" Style="{StaticResource MutedLabel}"
+                               HorizontalAlignment="Center" Margin="0,8,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- Bottom row: three equal cards. -->
+            <Grid Grid.Row="3" Margin="28,0,28,28">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Gear and speed -->
+                <Border Grid.Column="0" Style="{StaticResource CardStyle}" Margin="0,0,9,0"
+                        AutomationProperties.Name="{x:Static res:Strings.GearSpeedTitle}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Bottom">
+                            <TextBlock Text="{x:Static res:Strings.GearLabel}" Style="{StaticResource MutedLabel}" />
+                            <TextBlock Text="{Binding GearLabel}" Style="{StaticResource NumeralText}" FontSize="96" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Bottom" Margin="0,0,0,10">
+                            <TextBlock Text="{x:Static res:Strings.SpeedLabel}" Style="{StaticResource MutedLabel}" />
+                            <TextBlock Text="{Binding SpeedKmh, StringFormat={}{0:F0}}" Style="{StaticResource NumeralText}"
+                                       FontSize="72" />
+                            <TextBlock Text="{x:Static res:Strings.SpeedUnit}" Style="{StaticResource MutedLabel}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Engine: MaxRpm is the bar's scale because FH6 cars have very different redlines. -->
+                <Border Grid.Column="1" Style="{StaticResource CardStyle}" Margin="9,0,9,0"
+                        AutomationProperties.Name="{x:Static res:Strings.EngineTitle}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="{x:Static res:Strings.EngineTitle}" Style="{StaticResource MutedLabel}" />
+                        <TextBlock Grid.Row="1" Text="{Binding RpmReadout}" Style="{StaticResource NumeralText}"
+                                   FontSize="40" VerticalAlignment="Center" />
+                        <ProgressBar Grid.Row="2" Style="{StaticResource ThinProgressBar}" Minimum="0"
+                                     Maximum="{Binding MaxRpm}" Value="{Binding Rpm, Mode=OneWay}"
+                                     AutomationProperties.Name="{x:Static res:Strings.RpmLabel}" />
+                        <TextBlock Grid.Row="3" Text="{x:Static res:Strings.RpmLabel}" Style="{StaticResource MutedLabel}"
+                                   Margin="0,8,0,0" />
+                    </Grid>
+                </Border>
+
+                <!-- Session -->
+                <Border Grid.Column="2" Style="{StaticResource CardStyle}" Margin="9,0,0,0"
+                        AutomationProperties.Name="{x:Static res:Strings.SessionTitle}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="{x:Static res:Strings.SessionTitle}" Style="{StaticResource MutedLabel}" />
+                        <StackPanel Grid.Row="1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding PacketsPerSecond, StringFormat={}{0:F1}}"
+                                       Style="{StaticResource NumeralText}" FontSize="40" />
+                            <TextBlock Text="{x:Static res:Strings.PacketsPerSecondLabel}"
+                                       Style="{StaticResource MutedLabel}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="2" Margin="0,12,0,0">
+                            <TextBlock Text="{x:Static res:Strings.StatusLabel}" Style="{StaticResource MutedLabel}" />
+                            <TextBlock Text="{Binding Status}" Style="{StaticResource ValueText}" FontSize="15"
+                                       TextWrapping="Wrap" MinHeight="40" Margin="0,2,0,0" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+    </Border>
 </Window>

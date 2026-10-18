@@ -2,5 +2,251 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <!-- No StartupUri: the composition root in App.xaml.cs (OnStartup) builds the services and creates the window. -->
-    <Application.Resources />
+    <!--
+      Application.Resources is the app-wide resource dictionary: anything declared here is visible to every window.
+      Everything below uses {StaticResource}: the lookup happens ONCE when the XAML loads, which is cheaper and
+      catches typos at startup. {DynamicResource} re-resolves whenever the resource is replaced; we never swap the
+      palette at runtime, so we do not pay for it.
+      Order matters for StaticResource: a resource must be declared BEFORE the first thing that references it.
+    -->
+    <Application.Resources>
+        <!-- Palette tokens. Controls reference the brushes below, never literal colors, so color only carries meaning. -->
+        <Color x:Key="CanvasColor">#08090B</Color>
+        <Color x:Key="CardColor">#16181C</Color>
+        <Color x:Key="CardRaisedColor">#1E2126</Color>
+        <Color x:Key="HairlineColor">#2A2E34</Color>
+        <Color x:Key="TextColor">#E8EAED</Color>
+        <Color x:Key="MutedColor">#8A9099</Color>
+        <!-- Throttle doubles as "ideal / healthy"; Brake as "hot / redline / error". -->
+        <Color x:Key="ThrottleColor">#3DDC84</Color>
+        <Color x:Key="BrakeColor">#FF4D4F</Color>
+        <Color x:Key="ColdColor">#3AA0FF</Color>
+        <Color x:Key="WarmColor">#FFB020</Color>
+
+        <SolidColorBrush x:Key="CanvasBrush" Color="{StaticResource CanvasColor}" />
+        <SolidColorBrush x:Key="CardBrush" Color="{StaticResource CardColor}" />
+        <SolidColorBrush x:Key="CardRaisedBrush" Color="{StaticResource CardRaisedColor}" />
+        <SolidColorBrush x:Key="HairlineBrush" Color="{StaticResource HairlineColor}" />
+        <SolidColorBrush x:Key="TextBrush" Color="{StaticResource TextColor}" />
+        <SolidColorBrush x:Key="MutedBrush" Color="{StaticResource MutedColor}" />
+        <SolidColorBrush x:Key="ThrottleBrush" Color="{StaticResource ThrottleColor}" />
+        <SolidColorBrush x:Key="BrakeBrush" Color="{StaticResource BrakeColor}" />
+        <SolidColorBrush x:Key="ColdBrush" Color="{StaticResource ColdColor}" />
+        <SolidColorBrush x:Key="WarmBrush" Color="{StaticResource WarmColor}" />
+
+        <!-- Fonts: a comma list is a fallback chain. Bahnschrift (DIN-based) ships with Windows 10+. -->
+        <FontFamily x:Key="NumeralFont">Bahnschrift Light, Bahnschrift</FontFamily>
+        <FontFamily x:Key="LabelFont">Segoe UI Variable Text, Segoe UI</FontFamily>
+
+        <!-- Corner radius hierarchy: window 16, cards 14, buttons 10, pills fully rounded. -->
+        <CornerRadius x:Key="WindowRadius">16</CornerRadius>
+        <CornerRadius x:Key="CardRadius">14</CornerRadius>
+        <CornerRadius x:Key="ButtonRadius">10</CornerRadius>
+        <CornerRadius x:Key="PillRadius">999</CornerRadius>
+
+        <!-- Window glyphs as vector geometry: crisp at any DPI and they take the button foreground color. -->
+        <Geometry x:Key="MinimizeIcon">M 0,6 H 12</Geometry>
+        <Geometry x:Key="MaximizeIcon">M 1,1 H 11 V 11 H 1 Z</Geometry>
+        <Geometry x:Key="CloseIcon">M 1,1 L 11,11 M 11,1 L 1,11</Geometry>
+
+        <!-- Card surface: a dark rounded panel with a hairline border. -->
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource CardBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource HairlineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource CardRadius}" />
+            <Setter Property="Padding" Value="22" />
+        </Style>
+
+        <!-- Text roles. A keyed TextBlock style must be applied explicitly with Style="{StaticResource ...}". -->
+        <Style x:Key="MutedLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+            <Setter Property="FontFamily" Value="{StaticResource LabelFont}" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+
+        <Style x:Key="ValueText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="FontFamily" Value="{StaticResource LabelFont}" />
+            <Setter Property="FontSize" Value="20" />
+        </Style>
+
+        <!-- Big thin numerals. Override FontSize at the use site: ~96 gear, ~72 speed, ~40 panel numerals. -->
+        <Style x:Key="NumeralText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="FontFamily" Value="{StaticResource NumeralFont}" />
+            <Setter Property="FontWeight" Value="Light" />
+            <Setter Property="FontSize" Value="40" />
+        </Style>
+
+        <!--
+          Status pill: a ContentControl with a custom ControlTemplate. A ControlTemplate replaces a control's whole
+          visual tree while keeping its behavior; the template is where "Border + dot + text" is defined once.
+          {TemplateBinding Tag} feeds the dot color from the use site (Tag is a general-purpose slot on every
+          element), so a pill needs no code and no new control class. Tag = null hides the dot.
+        -->
+        <Style x:Key="StatusPill" TargetType="ContentControl">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="FontFamily" Value="{StaticResource LabelFont}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContentControl">
+                        <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource HairlineBrush}"
+                                BorderThickness="1" CornerRadius="{StaticResource PillRadius}" Padding="14,7">
+                            <StackPanel Orientation="Horizontal">
+                                <Ellipse x:Name="Dot" Width="8" Height="8" Margin="0,1,8,0" VerticalAlignment="Center"
+                                         Fill="{TemplateBinding Tag}" />
+                                <ContentPresenter VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <!-- Triggers apply a set of Setters while a condition holds, and undo them when it stops. -->
+                            <Trigger Property="Tag" Value="{x:Null}">
+                                <Setter TargetName="Dot" Property="Visibility" Value="Collapsed" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Filled green action. Keyboard focus draws a ring outside the face (the default dotted focus rect is off). -->
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource CanvasBrush}" />
+            <Setter Property="FontFamily" Value="{StaticResource LabelFont}" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="22,9" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border x:Name="Ring" Margin="-3" BorderThickness="2" BorderBrush="Transparent"
+                                    CornerRadius="13" />
+                            <Border x:Name="Face" Background="{StaticResource ThrottleBrush}"
+                                    CornerRadius="{StaticResource ButtonRadius}" Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  TextElement.Foreground="{TemplateBinding Foreground}" />
+                            </Border>
+                            <Border x:Name="Glow" Background="White" Opacity="0" IsHitTestVisible="False"
+                                    CornerRadius="{StaticResource ButtonRadius}" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Glow" Property="Opacity" Value="0.16" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Glow" Property="Opacity" Value="0.06" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Ring" Property="BorderBrush" Value="{StaticResource TextBrush}" />
+                            </Trigger>
+                            <!-- IsEnabled follows the bound command's CanExecute, so Start/Stop dim themselves. -->
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4" />
+                                <Setter Property="Cursor" Value="Arrow" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Outlined secondary action. -->
+        <Style x:Key="GhostButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="FontFamily" Value="{StaticResource LabelFont}" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="22,9" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border x:Name="Ring" Margin="-3" BorderThickness="2" BorderBrush="Transparent"
+                                    CornerRadius="13" />
+                            <Border x:Name="Face" Background="Transparent" BorderBrush="{StaticResource HairlineBrush}"
+                                    BorderThickness="1" CornerRadius="{StaticResource ButtonRadius}"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  TextElement.Foreground="{TemplateBinding Foreground}" />
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Face" Property="Background" Value="{StaticResource CardRaisedBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Face" Property="Background" Value="{StaticResource CardBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Ring" Property="BorderBrush" Value="{StaticResource TextBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4" />
+                                <Setter Property="Cursor" Value="Arrow" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Title bar glyph button (minimize, maximize, close). The glyph Path reads the button's Foreground. -->
+        <Style x:Key="WindowGlyphButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+            <Setter Property="Width" Value="38" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Face" Background="Transparent" BorderBrush="Transparent" BorderThickness="1.5"
+                                CornerRadius="{StaticResource ButtonRadius}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Face" Property="Background" Value="{StaticResource CardRaisedBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Face" Property="BorderBrush" Value="{StaticResource TextBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!--
+          Thin progress bar. ProgressBar's template must contain elements named PART_Track and PART_Indicator:
+          the control resizes PART_Indicator to (Value / Maximum) of PART_Track's width by itself.
+        -->
+        <Style x:Key="ThinProgressBar" TargetType="ProgressBar">
+            <Setter Property="Height" Value="6" />
+            <Setter Property="Foreground" Value="{StaticResource ThrottleBrush}" />
+            <Setter Property="Background" Value="{StaticResource HairlineBrush}" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ProgressBar">
+                        <Grid x:Name="PART_Track">
+                            <Border Background="{TemplateBinding Background}" CornerRadius="3" />
+                            <Border x:Name="PART_Indicator" HorizontalAlignment="Left"
+                                    Background="{TemplateBinding Foreground}" CornerRadius="3" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Application.Resources>
 </Application>

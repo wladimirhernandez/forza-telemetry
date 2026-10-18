@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="AppTitle" xml:space="preserve">
+    <value>Forza Telemetry</value>
+  </data>
+  <data name="MinimizeTooltip" xml:space="preserve">
+    <value>Minimizar</value>
+  </data>
+  <data name="MaximizeTooltip" xml:space="preserve">
+    <value>Maximizar o restaurar</value>
+  </data>
+  <data name="CloseTooltip" xml:space="preserve">
+    <value>Cerrar</value>
+  </data>
+  <data name="StartButton" xml:space="preserve">
+    <value>Iniciar</value>
+  </data>
+  <data name="StopButton" xml:space="preserve">
+    <value>Detener</value>
+  </data>
+  <data name="PacketsPerSecondPill" xml:space="preserve">
+    <value>{0:F0} paquetes/s</value>
+  </data>
+  <data name="CarInfoPill" xml:space="preserve">
+    <value>Datos del coche</value>
+  </data>
+  <data name="HeroPlaceholderTitle" xml:space="preserve">
+    <value>La vista del coche llega pronto</value>
+  </data>
+  <data name="HeroPlaceholderBody" xml:space="preserve">
+    <value>Aquí aparecerá el coche visto desde arriba con los datos de los neumáticos en vivo.</value>
+  </data>
+  <data name="GearSpeedTitle" xml:space="preserve">
+    <value>Marcha y velocidad</value>
+  </data>
+  <data name="GearLabel" xml:space="preserve">
+    <value>Marcha</value>
+  </data>
+  <data name="SpeedLabel" xml:space="preserve">
+    <value>Velocidad</value>
+  </data>
+  <data name="SpeedUnit" xml:space="preserve">
+    <value>km/h</value>
+  </data>
+  <data name="EngineTitle" xml:space="preserve">
+    <value>Motor</value>
+  </data>
+  <data name="RpmLabel" xml:space="preserve">
+    <value>Régimen del motor (rpm)</value>
+  </data>
+  <data name="SessionTitle" xml:space="preserve">
+    <value>Sesión</value>
+  </data>
+  <data name="PacketsPerSecondLabel" xml:space="preserve">
+    <value>Paquetes por segundo</value>
+  </data>
+  <data name="StatusLabel" xml:space="preserve">
+    <value>Estado</value>
+  </data>
+</root>

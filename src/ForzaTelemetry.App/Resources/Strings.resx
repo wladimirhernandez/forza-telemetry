@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="AppTitle" xml:space="preserve">
+    <value>Forza Telemetry</value>
+  </data>
+  <data name="MinimizeTooltip" xml:space="preserve">
+    <value>Minimize</value>
+  </data>
+  <data name="MaximizeTooltip" xml:space="preserve">
+    <value>Maximize or restore</value>
+  </data>
+  <data name="CloseTooltip" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="StartButton" xml:space="preserve">
+    <value>Start</value>
+  </data>
+  <data name="StopButton" xml:space="preserve">
+    <value>Stop</value>
+  </data>
+  <data name="PacketsPerSecondPill" xml:space="preserve">
+    <value>{0:F0} packets/s</value>
+  </data>
+  <data name="CarInfoPill" xml:space="preserve">
+    <value>Car info</value>
+  </data>
+  <data name="HeroPlaceholderTitle" xml:space="preserve">
+    <value>Car view coming next</value>
+  </data>
+  <data name="HeroPlaceholderBody" xml:space="preserve">
+    <value>The top-down car with live tire data will appear here.</value>
+  </data>
+  <data name="GearSpeedTitle" xml:space="preserve">
+    <value>Gear and speed</value>
+  </data>
+  <data name="GearLabel" xml:space="preserve">
+    <value>Gear</value>
+  </data>
+  <data name="SpeedLabel" xml:space="preserve">
+    <value>Speed</value>
+  </data>
+  <data name="SpeedUnit" xml:space="preserve">
+    <value>km/h</value>
+  </data>
+  <data name="EngineTitle" xml:space="preserve">
+    <value>Engine</value>
+  </data>
+  <data name="RpmLabel" xml:space="preserve">
+    <value>Engine speed (rpm)</value>
+  </data>
+  <data name="SessionTitle" xml:space="preserve">
+    <value>Session</value>
+  </data>
+  <data name="PacketsPerSecondLabel" xml:space="preserve">
+    <value>Packets per second</value>
+  </data>
+  <data name="StatusLabel" xml:space="preserve">
+    <value>Status</value>
+  </data>
+</root>

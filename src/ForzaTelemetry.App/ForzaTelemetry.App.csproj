@@ -22,4 +22,21 @@
     <ProjectReference Include="..\ForzaTelemetry.Udp\ForzaTelemetry.Udp.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      Strongly typed accessor ForzaTelemetry.App.Resources.Strings for {x:Static res:Strings.Key}. It is a committed
+      file: the build-time generator works for plain compilation, but its output is not part of the WPF markup-compile
+      pass, so XAML could not see the type. Add a property here whenever a key is added to Strings.resx.
+    -->
+    <Compile Update="Resources\Strings.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Strings.resx</DependentUpon>
+    </Compile>
+    <EmbeddedResource Update="Resources\Strings.resx">
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>Strings.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+  </ItemGroup>
+
 </Project>

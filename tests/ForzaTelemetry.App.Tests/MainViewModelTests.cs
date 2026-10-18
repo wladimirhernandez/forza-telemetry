@@ -148,6 +148,63 @@ public class MainViewModelTests
     }
 
     [Fact]
+    public async Task ConnectionState_follows_stopped_listening_receiving_and_no_data()
+    {
+        var fake = new FakeTelemetrySource();
+        var service = new TelemetryService(() => fake);
+        var timeProvider = new FakeTimeProvider();
+        var vm = new MainViewModel(service, timeProvider);
+        Assert.Equal(ConnectionState.Stopped, vm.ConnectionState);
+
+        await vm.StartCommand.ExecuteAsync(null);
+        Assert.Equal(ConnectionState.Listening, vm.ConnectionState);
+
+        fake.Publish(TestPackets.Sample());
+        Assert.True(await Wait.UntilAsync(() => service.ReceivedCount == 1));
+        vm.Refresh();
+        Assert.Equal(ConnectionState.Receiving, vm.ConnectionState);
+
+        timeProvider.Advance(TimeSpan.FromSeconds(3));
+        vm.Refresh();
+        Assert.Equal(ConnectionState.NoData, vm.ConnectionState);
+
+        await vm.StopCommand.ExecuteAsync(null);
+        Assert.Equal(ConnectionState.Stopped, vm.ConnectionState);
+    }
+
+    [Fact]
+    public async Task ConnectionState_is_Error_when_the_port_is_already_in_use()
+    {
+        var service = new TelemetryService(
+            () => throw new SocketException((int)SocketError.AddressAlreadyInUse));
+        var vm = new MainViewModel(service, TimeProvider.System);
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.Equal(ConnectionState.Error, vm.ConnectionState);
+    }
+
+    [Fact]
+    public async Task RpmReadout_uses_space_grouping_and_raises_change_notification()
+    {
+        var fake = new FakeTelemetrySource();
+        var service = new TelemetryService(() => fake);
+        var vm = new MainViewModel(service, TimeProvider.System);
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        await vm.StartCommand.ExecuteAsync(null);
+        fake.Publish(TestPackets.Sample(currentEngineRpm: 7_439f, engineMaxRpm: 9_000f));
+        Assert.True(await Wait.UntilAsync(() => service.ReceivedCount == 1));
+        vm.Refresh();
+
+        Assert.Equal("7 439 / 9 000", vm.RpmReadout);
+        Assert.Contains(nameof(MainViewModel.RpmReadout), changed);
+
+        await vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [Fact]
     public void Design_time_constructor_populates_sample_values_for_the_previewer()
     {
         var vm = new MainViewModel();
