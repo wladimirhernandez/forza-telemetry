@@ -514,8 +514,13 @@ public class MainViewModelTests
     {
         public string[] Ips { get; set; } = ips;
 
-        public IReadOnlyList<LanAddress> GetLanAddresses() =>
-            Ips.Select(ip => new LanAddress("Wi-Fi", IPAddress.Parse(ip))).ToList();
+        public int LastReadThreadId { get; private set; }
+
+        public IReadOnlyList<LanAddress> GetLanAddresses()
+        {
+            LastReadThreadId = Environment.CurrentManagedThreadId;
+            return Ips.Select(ip => new LanAddress("Wi-Fi", IPAddress.Parse(ip))).ToList();
+        }
     }
 
     [Fact]
@@ -594,5 +599,68 @@ public class MainViewModelTests
         Assert.False(service.IsRunning);
         Assert.True(vm.StartCommand.CanExecute(null));
         Assert.False(vm.StopCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task A_paused_game_keeps_the_real_packets_per_second_and_the_redline()
+    {
+        var fake = new FakeTelemetrySource();
+        var service = new TelemetryService(() => fake);
+        var timeProvider = new FakeTimeProvider();
+        var vm = new MainViewModel(service, timeProvider);
+        await vm.StartCommand.ExecuteAsync(null);
+
+        fake.Publish(TestPackets.Sample(engineMaxRpm: 8_200f));
+        Assert.True(await Wait.UntilAsync(() => service.ReceivedCount == 1));
+        timeProvider.Advance(TimeSpan.FromSeconds(1));
+        vm.Refresh();
+        Assert.Equal(8_200f, vm.MaxRpm);
+
+        for (var i = 0; i < 4; i++)
+        {
+            fake.Publish(TestPackets.Sample(engineMaxRpm: 0f, isRaceOn: false));
+        }
+
+        Assert.True(await Wait.UntilAsync(() => service.ReceivedCount == 5));
+        timeProvider.Advance(TimeSpan.FromSeconds(1));
+        vm.Refresh();
+
+        Assert.Equal(0f, vm.Rpm); // live driving values are idle...
+        Assert.Equal(4.0, vm.PacketsPerSecond, precision: 3); // ...but packets are still arriving
+        Assert.Equal(8_200f, vm.MaxRpm); // and the car's redline survives the pause
+
+        await vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [Fact]
+    public async Task DataOutPrimaryAddress_is_the_first_address_and_HasDataOutAddress_follows_it()
+    {
+        var network = new FakeNetworkInfo("192.168.0.204", "10.0.0.7");
+        var vm = new MainViewModel(new TelemetryService(() => new FakeTelemetrySource()), TimeProvider.System, network);
+
+        Assert.Equal("192.168.0.204", vm.DataOutPrimaryAddress);
+        Assert.True(vm.HasDataOutAddress);
+
+        network.Ips = [];
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.Null(vm.DataOutPrimaryAddress);
+        Assert.False(vm.HasDataOutAddress);
+        await vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [Fact]
+    public async Task Every_address_read_is_logged_and_Start_reads_the_adapters_off_the_calling_thread()
+    {
+        var logger = new ListLogger<MainViewModel>();
+        var network = new FakeNetworkInfo("192.168.0.204");
+        var vm = new MainViewModel(new TelemetryService(() => new FakeTelemetrySource()), TimeProvider.System, network, logger);
+        var callerThread = Environment.CurrentManagedThreadId;
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, logger.Entries.Count(e => e.Message.Contains("192.168.0.204 (Wi-Fi)"))); // constructor + Start
+        Assert.NotEqual(callerThread, network.LastReadThreadId);
+        await vm.StopCommand.ExecuteAsync(null);
     }
 }

@@ -70,13 +70,10 @@ public partial class App : Application
             loggerFactory.CreateLogger<TelemetryService>());
         _ticker = new DispatcherTimerTicker();
 
-        var networkInfo = new NetworkInfo();
-        var lanAddresses = networkInfo.GetLanAddresses();
-        AppLog.LanAddresses(
-            _logger,
-            lanAddresses.Count == 0 ? "(none found)" : string.Join(", ", lanAddresses.Select(a => $"{a.Address} ({a.AdapterName})")));
-
-        var viewModel = new MainViewModel(_telemetryService, TimeProvider.System, networkInfo);
+        // The view model reads the adapters once (and logs what it read, now and on every later Start), so this
+        // root does not enumerate them a second time.
+        var viewModel = new MainViewModel(
+            _telemetryService, TimeProvider.System, new NetworkInfo(), loggerFactory.CreateLogger<MainViewModel>());
 
         // The ticker runs on the UI thread and calls Refresh, which pulls the latest packet into the bound properties.
         _refresh = viewModel.Refresh;
@@ -104,7 +101,7 @@ public partial class App : Application
         catch (Exception ex)
         {
             // Nothing to show while exiting, but the file keeps the evidence.
-            AppLog.UnhandledUiException(_logger, ex);
+            AppLog.ShutdownStopFailed(_logger, ex);
         }
 
         // Last log call, then flush and close the file so the final lines are not lost with the process.

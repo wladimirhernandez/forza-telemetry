@@ -11,13 +11,20 @@ namespace ForzaTelemetry.App.Services;
 /// </summary>
 public static partial class LanAddressSelector
 {
-    // Names/descriptions that mark VPN-like or virtual-switch adapters. Word boundaries keep "TAP" from matching
-    // inside unrelated words; "TAP-Windows Adapter" still matches because "-" is not a word character.
-    [GeneratedRegex(@"\b(WireGuard|OpenVPN|VPN|TAP|TUN|Wintun|Tunnel)\b|vEthernet|Hyper-V|VMware|VirtualBox|Loopback", RegexOptions.IgnoreCase)]
+    // Names/descriptions that mark VPN-like adapters: never where a console is. Word boundaries keep "TAP" from
+    // matching inside unrelated words; "TAP-Windows Adapter" still matches because "-" is not a word character.
+    [GeneratedRegex(@"\b(WireGuard|OpenVPN|VPN|TAP|TUN|Wintun|Tunnel)\b|Loopback", RegexOptions.IgnoreCase)]
     private static partial Regex NonLanName();
 
+    // Virtual switches. Usually host-only noise (WSL, Hyper-V "Default Switch", VMnet), BUT a Hyper-V EXTERNAL switch
+    // takes over the physical NIC and then holds the PC's only real LAN address. What tells them apart is the default
+    // gateway: an external switch has one, a host-only one does not. So these are kept only with a gateway, and are
+    // ranked below physical adapters.
+    [GeneratedRegex(@"vEthernet|Hyper-V|VMware|VirtualBox", RegexOptions.IgnoreCase)]
+    private static partial Regex VirtualName();
+
     /// <summary>
-    /// Keeps adapters that are up, are not loopback/tunnel/PPP, are not named like a VPN or virtual switch, and have a
+    /// Keeps adapters that are up, are not loopback/tunnel/PPP, are not named like a VPN, are not a virtual switch without a gateway, and have a
     /// real IPv4 (not the 169.254.x.x "no DHCP answer" fallback). Adapters with a default gateway rank first (they are
     /// the ones connected to a router, and so to the console); if at least one has a gateway, the others are dropped.
     /// </summary>
@@ -25,6 +32,7 @@ public static partial class LanAddressSelector
     {
         var candidates = adapters
             .Where(a => a.IsUp && IsPhysicalLanType(a.Type) && !NonLanName().IsMatch(a.Name) && !NonLanName().IsMatch(a.Description))
+            .Where(a => !IsVirtual(a) || a.HasGateway)
             .Select(a => (Adapter: a, Addresses: a.IPv4Addresses.Where(IsUsableIPv4).ToList()))
             .Where(c => c.Addresses.Count > 0)
             .ToList();
@@ -37,10 +45,13 @@ public static partial class LanAddressSelector
         }
 
         return candidates
-            .OrderBy(c => TypeRank(c.Adapter.Type))
+            .OrderBy(c => IsVirtual(c.Adapter) ? 1 : 0)
+            .ThenBy(c => TypeRank(c.Adapter.Type))
             .SelectMany(c => c.Addresses.Select(address => new LanAddress(c.Adapter.Name, address)))
             .ToList();
     }
+
+    private static bool IsVirtual(NetworkAdapterInfo a) => VirtualName().IsMatch(a.Name) || VirtualName().IsMatch(a.Description);
 
     private static bool IsPhysicalLanType(NetworkInterfaceType type) =>
         type is not (NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel or NetworkInterfaceType.Ppp

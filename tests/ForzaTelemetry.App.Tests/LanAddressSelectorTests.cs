@@ -43,11 +43,34 @@ public class LanAddressSelectorTests
     [InlineData("Surfshark WireGuard", "Surfshark WireGuard Tunnel")]
     [InlineData("Ethernet 2", "TAP-Windows Adapter V9")]
     [InlineData("Proton VPN", "ProtonVPN TUN")]
-    [InlineData("vEthernet (Default Switch)", "Hyper-V Virtual Ethernet Adapter")]
-    [InlineData("VMware Network Adapter VMnet1", "VMware Virtual Ethernet Adapter")]
-    public void Drops_vpn_like_and_virtual_adapters_even_when_typed_as_Ethernet(string name, string description)
+    public void Drops_vpn_like_adapters_even_when_typed_as_Ethernet(string name, string description)
     {
         Assert.Empty(Ips([Adapter(name, "10.8.0.2", NetworkInterfaceType.Ethernet, description: description)]));
+    }
+
+    [Theory]
+    [InlineData("vEthernet (Default Switch)", "Hyper-V Virtual Ethernet Adapter")]
+    [InlineData("VMware Network Adapter VMnet1", "VMware Virtual Ethernet Adapter")]
+    public void Drops_virtual_switches_without_a_gateway(string name, string description)
+    {
+        Assert.Empty(Ips([Adapter(name, "172.20.0.1", NetworkInterfaceType.Ethernet, gateway: false, description: description)]));
+    }
+
+    [Fact]
+    public void Keeps_a_Hyper_V_external_switch_that_holds_the_only_LAN_address()
+    {
+        var external = Adapter("vEthernet (External)", "192.168.0.50", description: "Hyper-V Virtual Ethernet Adapter");
+
+        Assert.Equal(["192.168.0.50"], Ips([external]));
+    }
+
+    [Fact]
+    public void Ranks_a_virtual_switch_with_a_gateway_below_physical_adapters()
+    {
+        var external = Adapter("vEthernet (External)", "192.168.0.50", description: "Hyper-V Virtual Ethernet Adapter");
+        var wifi = Adapter("Wi-Fi", "192.168.0.204", NetworkInterfaceType.Wireless80211);
+
+        Assert.Equal(["192.168.0.204", "192.168.0.50"], Ips([external, wifi]));
     }
 
     [Fact]

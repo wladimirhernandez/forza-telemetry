@@ -524,6 +524,15 @@ namespace ForzaTelemetry.App.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Copy IP address.
+        /// </summary>
+        public static string CopyIpTooltip {
+            get {
+                return ResourceManager.GetString("CopyIpTooltip", resourceCulture)!;
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to not found.
         /// </summary>
         public static string DataOutIpNone {

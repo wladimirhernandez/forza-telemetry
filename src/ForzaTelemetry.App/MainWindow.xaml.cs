@@ -18,6 +18,25 @@ public partial class MainWindow : Window
         DataContext = viewModel;
     }
 
+    /// <summary>Copies the best Data Out IP to the clipboard (one address, even when several are listed).</summary>
+    private void OnCopyIpClick(object sender, RoutedEventArgs e)
+    {
+        if ((DataContext as MainViewModel)?.DataOutPrimaryAddress is not { } address)
+        {
+            return;
+        }
+
+        try
+        {
+            // SetText can fail with a COMException when another process holds the clipboard open; a missed copy is
+            // not worth an error dialog, the user can simply click again.
+            Clipboard.SetText(address);
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+        }
+    }
+
     /// <summary>
     /// The earliest moment the window has a Win32 handle (HWND) but is not yet visible. Everything that needs the
     /// handle (monitor lookups, the message hook) starts here.

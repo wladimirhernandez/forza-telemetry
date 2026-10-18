@@ -174,4 +174,7 @@
   <data name="DataOutPortPill" xml:space="preserve">
     <value>Puerto {0}</value>
   </data>
+  <data name="CopyIpTooltip" xml:space="preserve">
+    <value>Copiar dirección IP</value>
+  </data>
 </root>

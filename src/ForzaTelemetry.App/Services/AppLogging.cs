@@ -59,8 +59,11 @@ public sealed class AppLogging : IDisposable
 
             return new AppLogging(LoggerFactory.Create(builder => builder.AddSerilog(serilog, dispose: true)), logDirectory);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        catch (Exception)
         {
+            // Every exception, not a hand-picked list: Serilog, the file sink and the file system can fail in ways
+            // nobody enumerated (security, path length, sharing violations...), and this runs before the app's own
+            // exception handlers exist, so anything escaping here would crash startup silently.
             return new AppLogging(NullLoggerFactory.Instance, null);
         }
     }

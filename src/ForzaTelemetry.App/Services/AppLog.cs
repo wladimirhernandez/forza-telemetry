@@ -26,6 +26,9 @@ internal static partial class AppLog
     [LoggerMessage(EventId = 105, Level = LogLevel.Error, Message = "Unobserved task exception (a faulted Task nobody awaited).")]
     public static partial void UnobservedTaskException(ILogger logger, Exception exception);
 
+    [LoggerMessage(EventId = 106, Level = LogLevel.Error, Message = "Stopping the telemetry service during shutdown failed.")]
+    public static partial void ShutdownStopFailed(ILogger logger, Exception exception);
+
     [LoggerMessage(EventId = 110, Level = LogLevel.Information, Message = "Telemetry receive loop started.")]
     public static partial void ServiceStarted(ILogger logger);
 

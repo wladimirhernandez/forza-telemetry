@@ -6,6 +6,7 @@ using ForzaTelemetry.App.Resources;
 using ForzaTelemetry.App.Services;
 using ForzaTelemetry.Core;
 using ForzaTelemetry.Udp;
+using Microsoft.Extensions.Logging;
 
 namespace ForzaTelemetry.App;
 
@@ -41,6 +42,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly TelemetryService _telemetryService;
     private readonly TimeProvider _timeProvider;
     private readonly INetworkInfo? _networkInfo;
+    private readonly ILogger? _logger;
 
     // Used by Refresh to turn "packets received since last time" into a per-second rate.
     private long _receivedCountAtLastRefresh;
@@ -113,6 +115,14 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private string _dataOutAddress = Strings.DataOutIpNone;
+
+    /// <summary>The best-ranked LAN address alone (what the copy button copies), or null when none was found.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDataOutAddress))]
+    private string? _dataOutPrimaryAddress;
+
+    /// <summary>True when there is an address to copy; enables the copy button.</summary>
+    public bool HasDataOutAddress => DataOutPrimaryAddress is not null;
 
     /// <summary>The UDP port the game must send to (fixed: <see cref="UdpTelemetryListener.DefaultPort"/>).</summary>
     public int DataOutPort => UdpTelemetryListener.DefaultPort;
@@ -261,12 +271,15 @@ public sealed partial class MainViewModel : ObservableObject
     /// exact <see cref="PacketsPerSecond"/> instead of one that depends on real wall-clock timing.
     /// </param>
     /// <param name="networkInfo">Source of the LAN address shown in the top bar; optional so tests that do not care can omit it.</param>
-    public MainViewModel(TelemetryService telemetryService, TimeProvider timeProvider, INetworkInfo? networkInfo = null)
+    /// <param name="logger">Receives the address list on every read (so the log shows what the user was told); optional.</param>
+    public MainViewModel(
+        TelemetryService telemetryService, TimeProvider timeProvider, INetworkInfo? networkInfo = null, ILogger? logger = null)
     {
         _telemetryService = telemetryService;
         _timeProvider = timeProvider;
         _networkInfo = networkInfo;
-        RefreshDataOutAddress();
+        _logger = logger;
+        RefreshDataOutAddress(); // the one read at startup (the composition root no longer reads adapters itself)
         _lastRefreshAt = timeProvider.GetUtcNow();
         _lastPacketArrivalAt = _lastRefreshAt;
     }
@@ -298,6 +311,7 @@ public sealed partial class MainViewModel : ObservableObject
             // a shift light still blinking), so show the idle dashboard.
             IsRunning = false;
             ResetLiveValues();
+            PacketsPerSecond = 0; // the loop is dead: nothing is arriving, whatever the last sample said
             ConnectionState = ConnectionState.Error;
             Status = DescribeFault(fault);
             return;
@@ -338,16 +352,17 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Idle dashboard: zero/placeholder readouts, no tire colors, no car pill, shift light off. Keeps the per-car
+    /// Idle dashboard: zero/placeholder LIVE readouts, no tire colors, no car pill, shift light off. Keeps the per-car
     /// gauge scales and the clocks, so it is safe to call repeatedly (every tick while faulted or paused).
     /// </summary>
     private void ResetLiveValues()
     {
+        // Deliberately NOT reset here: PacketsPerSecond (a paused game still sends packets, so the rate stays
+        // truthful; Refresh and ResetSessionState own it) and MaxRpm (the redline belongs to the car, not to the
+        // pause; wiping it on every paused tick would defeat the "keep the previous redline" guard in Refresh).
         Rpm = 0;
-        MaxRpm = DefaultMaxRpm;
         SpeedKmh = 0;
         GearLabel = NoGearLabel;
-        PacketsPerSecond = 0;
 
         IsRedline = false;
         LateralG = 0;
@@ -387,6 +402,8 @@ public sealed partial class MainViewModel : ObservableObject
     private void ResetSessionState()
     {
         ResetLiveValues();
+        PacketsPerSecond = 0;
+        MaxRpm = DefaultMaxRpm;
 
         _currentCarOrdinal = null;
         _peakPowerKw = PeakPowerFloorKw;
@@ -403,13 +420,34 @@ public sealed partial class MainViewModel : ObservableObject
         _receivedCountAtLastRefresh = _telemetryService.ReceivedCount;
     }
 
-    /// <summary>Re-reads this PC's LAN addresses into <see cref="DataOutAddress"/>.</summary>
-    public void RefreshDataOutAddress()
+    /// <summary>Re-reads this PC's LAN addresses into <see cref="DataOutAddress"/> (synchronously; used once at startup).</summary>
+    public void RefreshDataOutAddress() => ApplyAddresses(_networkInfo?.GetLanAddresses() ?? []);
+
+    // Adapter enumeration is a blocking OS call that can take a noticeable moment on a PC with many virtual adapters,
+    // so a Start click must not run it on the UI thread. Task.Run does the read on the thread pool; the await then
+    // resumes on the UI thread (WPF's synchronization context), where the bound properties may be set.
+    private async Task RefreshDataOutAddressAsync()
     {
-        var addresses = _networkInfo?.GetLanAddresses() ?? [];
+        var network = _networkInfo;
+        var addresses = network is null ? [] : await Task.Run(network.GetLanAddresses);
+        ApplyAddresses(addresses);
+    }
+
+    private void ApplyAddresses(IReadOnlyList<LanAddress> addresses)
+    {
         DataOutAddress = addresses.Count == 0
             ? Strings.DataOutIpNone
             : string.Join(", ", addresses.Select(a => a.Address.ToString()));
+
+        // What the copy button puts on the clipboard: ONE address (the best-ranked), not the comma-separated list.
+        DataOutPrimaryAddress = addresses.Count == 0 ? null : addresses[0].Address.ToString();
+
+        if (_logger is not null)
+        {
+            AppLog.LanAddresses(
+                _logger,
+                addresses.Count == 0 ? "(none found)" : string.Join(", ", addresses.Select(a => $"{a.Address} ({a.AdapterName})")));
+        }
     }
 
     private void UpdateTires(TelemetryPacket p)
@@ -439,6 +477,10 @@ public sealed partial class MainViewModel : ObservableObject
         {
             _currentCarOrdinal = p.CarOrdinal;
             TrailResetToken++; // the old car's G history means nothing for the new one
+            if (p.EngineMaxRpm <= 0)
+            {
+                MaxRpm = DefaultMaxRpm; // no redline reported for the new car: do not inherit the old car's
+            }
             _peakPowerKw = PeakPowerFloorKw;
             _peakTorqueNm = PeakTorqueFloorNm;
             _peakBoostPsi = PeakBoostFloorPsi;
@@ -579,7 +621,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     private async Task StartCoreAsync()
     {
-        RefreshDataOutAddress(); // The user may have changed network since the last Start.
+        await RefreshDataOutAddressAsync(); // The user may have changed network since the last Start.
         await _telemetryService.StartAsync();
 
         // After the service started (it dropped its own stale Latest) and on the UI thread (this continuation

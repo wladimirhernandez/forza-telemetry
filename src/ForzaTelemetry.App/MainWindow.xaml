@@ -196,20 +196,33 @@
 
                 <!--
                   Right group: where to point the game (Data Out IP and port), then the primary action. Separate pills
-                  instead of one "ip - port" string, so each value reads on its own and can be selected for copying.
+                  instead of one "ip - port" string, so each value reads on its own. The text itself is a plain TextBlock (not
+                  selectable), so the small button next to the IP copies it to the clipboard.
                 -->
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <ContentControl Style="{StaticResource StatusPill}" Tag="{x:Null}"
                                     AutomationProperties.Name="{x:Static res:Strings.DataOutIpLabel}">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{x:Static res:Strings.DataOutIpLabel}" Foreground="{StaticResource MutedBrush}" />
-                            <TextBlock Text="{Binding DataOutAddress}" Margin="8,0,0,0" FontWeight="SemiBold" />
+                            <TextBlock Text="{x:Static res:Strings.DataOutIpLabel}" Foreground="{StaticResource MutedBrush}"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding DataOutAddress}" Margin="8,0,0,0" FontWeight="SemiBold"
+                                       VerticalAlignment="Center" />
+                            <!-- TabIndex 1: the Start/Stop toggle (TabIndex 0) stays the first tab stop of this bar. -->
+                            <Button Style="{StaticResource WindowGlyphButton}" Width="24" Height="24" Margin="6,0,-8,0" VerticalAlignment="Center"
+                                    KeyboardNavigation.TabIndex="1" Click="OnCopyIpClick"
+                                    IsEnabled="{Binding HasDataOutAddress}"
+                                    ToolTip="{x:Static res:Strings.CopyIpTooltip}"
+                                    AutomationProperties.Name="{x:Static res:Strings.CopyIpTooltip}">
+                                <Path Data="{StaticResource CopyIcon}"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                      StrokeThickness="1.3" StrokeLineJoin="Round" />
+                            </Button>
                         </StackPanel>
                     </ContentControl>
                     <ContentControl Style="{StaticResource StatusPill}" Margin="10,0,0,0" Tag="{x:Null}"
                                     Content="{Binding DataOutPort}"
                                     ContentStringFormat="{x:Static res:Strings.DataOutPortPill}" />
-                <Button Style="{StaticResource ToggleListeningButton}" Margin="14,0,0,0"
+                <Button Style="{StaticResource ToggleListeningButton}" Margin="14,0,0,0" KeyboardNavigation.TabIndex="0"
                         Command="{Binding ToggleListeningCommand}">
                     <StackPanel Orientation="Horizontal">
                         <!-- Icon and label follow IsRunning; both read the button Foreground, which the style also switches. -->
