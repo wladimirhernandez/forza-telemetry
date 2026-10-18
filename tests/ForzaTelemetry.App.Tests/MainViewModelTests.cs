@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using ForzaTelemetry.App.Resources;
 using ForzaTelemetry.App.Services;
 using ForzaTelemetry.Core;
+using System.Net;
 using ForzaTelemetry.Udp;
 using Microsoft.Extensions.Time.Testing;
 
@@ -505,5 +506,49 @@ public class MainViewModelTests
         }
 
         Assert.Equal("Detenido", Strings.ResourceManager.GetString(nameof(Strings.StatusStopped), spanish));
+    }
+
+    // ---- Data Out address -------------------------------------------------------------------------------
+
+    private sealed class FakeNetworkInfo(params string[] ips) : INetworkInfo
+    {
+        public string[] Ips { get; set; } = ips;
+
+        public IReadOnlyList<LanAddress> GetLanAddresses() =>
+            Ips.Select(ip => new LanAddress("Wi-Fi", IPAddress.Parse(ip))).ToList();
+    }
+
+    [Fact]
+    public void DataOutAddress_lists_the_LAN_addresses_and_the_port_is_the_listener_default()
+    {
+        var service = new TelemetryService(() => new FakeTelemetrySource());
+        var vm = new MainViewModel(service, TimeProvider.System, new FakeNetworkInfo("192.168.0.204", "10.0.0.7"));
+
+        Assert.Equal("192.168.0.204, 10.0.0.7", vm.DataOutAddress);
+        Assert.Equal(UdpTelemetryListener.DefaultPort, vm.DataOutPort);
+    }
+
+    [Fact]
+    public void DataOutAddress_says_not_found_when_there_is_no_usable_adapter()
+    {
+        var service = new TelemetryService(() => new FakeTelemetrySource());
+
+        Assert.Equal(Strings.DataOutIpNone, new MainViewModel(service, TimeProvider.System, new FakeNetworkInfo()).DataOutAddress);
+        Assert.Equal(Strings.DataOutIpNone, new MainViewModel(service, TimeProvider.System).DataOutAddress);
+    }
+
+    [Fact]
+    public async Task DataOutAddress_is_refreshed_on_Start()
+    {
+        var network = new FakeNetworkInfo("192.168.0.204");
+        var service = new TelemetryService(() => new FakeTelemetrySource());
+        var vm = new MainViewModel(service, TimeProvider.System, network);
+
+        network.Ips = ["172.16.0.9"];
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.Equal("172.16.0.9", vm.DataOutAddress);
+
+        await vm.StopCommand.ExecuteAsync(null);
     }
 }

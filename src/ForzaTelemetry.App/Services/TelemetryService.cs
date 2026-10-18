@@ -1,5 +1,7 @@
 using System.Net.Sockets;
 using ForzaTelemetry.Core;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ForzaTelemetry.App.Services;
 
@@ -46,6 +48,7 @@ namespace ForzaTelemetry.App.Services;
 public sealed class TelemetryService : IAsyncDisposable
 {
     private readonly Func<ITelemetrySource> _sourceFactory;
+    private readonly ILogger<TelemetryService> _logger;
 
     // Serializes Start and Stop. Stop nulls the shared fields BEFORE it awaits the loop and the dispose, so
     // without this a second Stop (e.g. App.OnExit while the Stop button's Stop is still in flight) would see
@@ -63,9 +66,12 @@ public sealed class TelemetryService : IAsyncDisposable
     private Exception? _fault;
     private bool _isRunning;
 
-    public TelemetryService(Func<ITelemetrySource> sourceFactory)
+    /// <param name="sourceFactory">Builds a fresh telemetry source for every Start (see the class remarks).</param>
+    /// <param name="logger">Where lifecycle events and faults are recorded; optional (defaults to discarding them), like the UDP listener's.</param>
+    public TelemetryService(Func<ITelemetrySource> sourceFactory, ILogger<TelemetryService>? logger = null)
     {
         _sourceFactory = sourceFactory;
+        _logger = logger ?? NullLogger<TelemetryService>.Instance;
     }
 
     /// <summary>Most recently received packet of the CURRENT session, or null if none has arrived yet (cleared on Start and Stop).</summary>
@@ -140,6 +146,7 @@ public sealed class TelemetryService : IAsyncDisposable
         catch (Exception ex)
         {
             Volatile.Write(ref _fault, ex);
+            AppLog.StartFailed(_logger, ex);
             return;
         }
 
@@ -153,6 +160,7 @@ public sealed class TelemetryService : IAsyncDisposable
         // Stop ran in between (a NullReferenceException that would fault the loop task).
         var token = cts.Token;
         _loopTask = Task.Run(() => RunLoopAsync(source, token));
+        AppLog.ServiceStarted(_logger);
     }
 
     private async Task RunLoopAsync(ITelemetrySource source, CancellationToken ct)
@@ -178,6 +186,7 @@ public sealed class TelemetryService : IAsyncDisposable
             // the runtime, neither of which is acceptable for "the network hiccuped" in a UI app —
             // recording it as Fault lets MainViewModel show it instead.
             Volatile.Write(ref _fault, ex);
+            AppLog.LoopFaulted(_logger, ex);
         }
         finally
         {
@@ -243,6 +252,7 @@ public sealed class TelemetryService : IAsyncDisposable
 
         cts.Dispose();
         Volatile.Write(ref _isRunning, false);
+        AppLog.ServiceStopped(_logger, ReceivedCount);
     }
 
     public async ValueTask DisposeAsync()

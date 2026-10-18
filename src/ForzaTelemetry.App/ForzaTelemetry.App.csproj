@@ -16,6 +16,13 @@
   <ItemGroup>
     <!-- Versions are centrally managed in the root Directory.Packages.props. -->
     <PackageReference Include="CommunityToolkit.Mvvm" />
+    <!--
+      Same logging stack as ForzaTelemetry.Console: Serilog writes the file, Serilog.Extensions.Logging exposes it as
+      the ILogger<T> that ForzaTelemetry.Udp expects. This project is the composition root, so it is where the
+      concrete backend is chosen.
+    -->
+    <PackageReference Include="Serilog.Extensions.Logging" />
+    <PackageReference Include="Serilog.Sinks.File" />
   </ItemGroup>
 
   <ItemGroup>

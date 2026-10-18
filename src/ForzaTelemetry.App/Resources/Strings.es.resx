@@ -165,4 +165,13 @@
   <data name="ErrorGeneric" xml:space="preserve">
     <value>Error: {0}</value>
   </data>
+  <data name="DataOutIpLabel" xml:space="preserve">
+    <value>IP de Data Out</value>
+  </data>
+  <data name="DataOutIpNone" xml:space="preserve">
+    <value>no encontrada</value>
+  </data>
+  <data name="DataOutPortPill" xml:space="preserve">
+    <value>Puerto {0}</value>
+  </data>
 </root>

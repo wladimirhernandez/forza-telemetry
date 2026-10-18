@@ -1,6 +1,7 @@
 using System.Net.Sockets;
 using ForzaTelemetry.App.Services;
 using ForzaTelemetry.Core;
+using Microsoft.Extensions.Logging;
 
 namespace ForzaTelemetry.App.Tests;
 
@@ -160,5 +161,34 @@ public class TelemetryServiceTests
         Assert.Null(service.Latest);
 
         await service.StopAsync();
+    }
+
+    [Fact]
+    public async Task Logs_start_stop_and_a_mid_stream_fault()
+    {
+        var fake = new FakeTelemetrySource();
+        var logger = new ListLogger<TelemetryService>();
+        var service = new TelemetryService(() => fake, logger);
+
+        await service.StartAsync();
+        fake.FailNextReadWith(new InvalidOperationException("boom"));
+        fake.Publish(TestPackets.Sample());
+        Assert.True(await Wait.UntilAsync(() => service.Fault is not null));
+        await service.StopAsync();
+
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Information && e.Message.Contains("started"));
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Error && e.Exception?.Message == "boom");
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Information && e.Message.Contains("stopped"));
+    }
+
+    [Fact]
+    public async Task Logs_a_factory_failure_as_an_error()
+    {
+        var logger = new ListLogger<TelemetryService>();
+        var service = new TelemetryService(() => throw new SocketException((int)SocketError.AddressAlreadyInUse), logger);
+
+        await service.StartAsync();
+
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Error && e.Exception is SocketException);
     }
 }

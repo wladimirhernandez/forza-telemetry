@@ -1,7 +1,11 @@
+using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
 using ForzaTelemetry.App.Services;
 using ForzaTelemetry.Udp;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ForzaTelemetry.App;
 
@@ -10,6 +14,10 @@ public partial class App : Application
 {
     // How often the UI samples the latest packet (~20 Hz); see DispatcherTimerTicker for why sampling.
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromMilliseconds(50);
+
+    // Created first in OnStartup so that even a composition failure is logged; flushed and closed in OnExit.
+    private AppLogging? _logging;
+    private ILogger<App> _logger = NullLogger<App>.Instance;
 
     private TelemetryService? _telemetryService;
     private DispatcherTimerTicker? _ticker;
@@ -26,6 +34,14 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        _logging = AppLogging.Create(AppLogging.DefaultLogDirectory);
+        _logger = _logging.Factory.CreateLogger<App>();
+        AppLog.Starting(
+            _logger,
+            Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown",
+            RuntimeInformation.OSDescription,
+            RuntimeInformation.FrameworkDescription);
+
         RegisterGlobalExceptionHandlers();
 
         // Exceptions thrown here (composition root) would otherwise leave a process with no window: the default
@@ -36,6 +52,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
+            AppLog.StartupFailed(_logger, ex);
             MessageBox.Show(ex.Message, "Startup error", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
         }
@@ -44,10 +61,22 @@ public partial class App : Application
     private void ComposeAndShowMainWindow()
     {
         // The factory (not an instance) lets Stop/Start rebuild the UDP listener and rebind the port.
-        _telemetryService = new TelemetryService(() => new UdpTelemetryListener(UdpTelemetryListener.DefaultPort));
+        // The same ILoggerFactory feeds both the service and every listener the factory builds, so bind, first
+        // datagram per sender and discarded-datagram messages land in the same file as the app's own events.
+        var loggerFactory = _logging!.Factory;
+        var listenerLogger = loggerFactory.CreateLogger<UdpTelemetryListener>();
+        _telemetryService = new TelemetryService(
+            () => new UdpTelemetryListener(UdpTelemetryListener.DefaultPort, logger: listenerLogger),
+            loggerFactory.CreateLogger<TelemetryService>());
         _ticker = new DispatcherTimerTicker();
 
-        var viewModel = new MainViewModel(_telemetryService, TimeProvider.System);
+        var networkInfo = new NetworkInfo();
+        var lanAddresses = networkInfo.GetLanAddresses();
+        AppLog.LanAddresses(
+            _logger,
+            lanAddresses.Count == 0 ? "(none found)" : string.Join(", ", lanAddresses.Select(a => $"{a.Address} ({a.AdapterName})")));
+
+        var viewModel = new MainViewModel(_telemetryService, TimeProvider.System, networkInfo);
 
         // The ticker runs on the UI thread and calls Refresh, which pulls the latest packet into the bound properties.
         _refresh = viewModel.Refresh;
@@ -72,10 +101,15 @@ public partial class App : Application
         {
             _telemetryService?.StopAsync().GetAwaiter().GetResult();
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Nothing useful to do while exiting; logging arrives in T4.
+            // Nothing to show while exiting, but the file keeps the evidence.
+            AppLog.UnhandledUiException(_logger, ex);
         }
+
+        // Last log call, then flush and close the file so the final lines are not lost with the process.
+        AppLog.Exiting(_logger);
+        _logging?.Dispose();
 
         base.OnExit(e);
     }
@@ -84,17 +118,25 @@ public partial class App : Application
     {
         DispatcherUnhandledException += OnDispatcherUnhandledException;
 
-        // A faulted Task nobody awaited: mark it observed so it is not silently dropped/escalated.
-        TaskScheduler.UnobservedTaskException += (_, args) => args.SetObserved();
+        // A faulted Task that nobody awaited. Since .NET 4.5 it no longer terminates the process by default; it is
+        // raised here when the finalizer collects the Task, which may be long after the failure. Log it (so it is not
+        // silently lost) and mark it observed (so nothing escalates it later).
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            AppLog.UnobservedTaskException(_logger, args.Exception);
+            args.SetObserved();
+        };
     }
 
     /// <summary>
     /// An exception thrown on the UI thread (e.g. in a bound property or Refresh) would otherwise tear down the whole
     /// app. Show it and keep running: the dashboard is a live monitor, and losing the window over one bad tick is
-    /// worse than a message. Logging arrives in T4.
+    /// worse than a message. Every occurrence is logged, including the ones the dialog guard below suppresses.
     /// </summary>
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs args)
     {
+        AppLog.UnhandledUiException(_logger, args.Exception);
+
         // Before the window is shown there is nothing to keep alive: leave the exception unhandled so the process
         // fails visibly instead of lingering headless.
         if (!_mainWindowShown)

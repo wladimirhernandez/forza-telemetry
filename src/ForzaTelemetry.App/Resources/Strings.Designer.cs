@@ -514,5 +514,32 @@ namespace ForzaTelemetry.App.Resources {
             }
         }
 
+        /// <summary>
+        ///   Looks up a localized string similar to Data Out IP.
+        /// </summary>
+        public static string DataOutIpLabel {
+            get {
+                return ResourceManager.GetString("DataOutIpLabel", resourceCulture)!;
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to not found.
+        /// </summary>
+        public static string DataOutIpNone {
+            get {
+                return ResourceManager.GetString("DataOutIpNone", resourceCulture)!;
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Port {0}.
+        /// </summary>
+        public static string DataOutPortPill {
+            get {
+                return ResourceManager.GetString("DataOutPortPill", resourceCulture)!;
+            }
+        }
+
     }
 }

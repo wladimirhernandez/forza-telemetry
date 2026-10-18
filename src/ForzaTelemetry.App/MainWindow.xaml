@@ -191,7 +191,22 @@
                     </ContentControl>
                 </StackPanel>
 
-                <Button Style="{StaticResource ToggleListeningButton}" HorizontalAlignment="Right"
+                <!--
+                  Right group: where to point the game (Data Out IP and port), then the primary action. Separate pills
+                  instead of one "ip - port" string, so each value reads on its own and can be selected for copying.
+                -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <ContentControl Style="{StaticResource StatusPill}" Tag="{x:Null}"
+                                    AutomationProperties.Name="{x:Static res:Strings.DataOutIpLabel}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{x:Static res:Strings.DataOutIpLabel}" Foreground="{StaticResource MutedBrush}" />
+                            <TextBlock Text="{Binding DataOutAddress}" Margin="8,0,0,0" FontWeight="SemiBold" />
+                        </StackPanel>
+                    </ContentControl>
+                    <ContentControl Style="{StaticResource StatusPill}" Margin="10,0,0,0" Tag="{x:Null}"
+                                    Content="{Binding DataOutPort}"
+                                    ContentStringFormat="{x:Static res:Strings.DataOutPortPill}" />
+                <Button Style="{StaticResource ToggleListeningButton}" Margin="14,0,0,0"
                         Command="{Binding ToggleListeningCommand}">
                     <StackPanel Orientation="Horizontal">
                         <!-- Icon and label follow IsRunning; both read the button Foreground, which the style also switches. -->
@@ -222,6 +237,7 @@
                         </TextBlock>
                     </StackPanel>
                 </Button>
+                </StackPanel>
             </Grid>
 
             <!--

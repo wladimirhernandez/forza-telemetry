@@ -36,6 +36,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     private readonly TelemetryService _telemetryService;
     private readonly TimeProvider _timeProvider;
+    private readonly INetworkInfo? _networkInfo;
 
     // Used by Refresh to turn "packets received since last time" into a per-second rate.
     private long _receivedCountAtLastRefresh;
@@ -99,6 +100,18 @@ public sealed partial class MainViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     private bool _isRunning;
+
+    // ---- Data Out address ---------------------------------------------------------------
+
+    /// <summary>
+    /// What to type into the game's Data Out IP field: this PC's likely LAN address(es), comma-separated, or a
+    /// localized "not found" text. Refreshed on every Start, since the network can change while the app is open.
+    /// </summary>
+    [ObservableProperty]
+    private string _dataOutAddress = Strings.DataOutIpNone;
+
+    /// <summary>The UDP port the game must send to (fixed: <see cref="UdpTelemetryListener.DefaultPort"/>).</summary>
+    public int DataOutPort => UdpTelemetryListener.DefaultPort;
 
     // ---- Shift lights ------------------------------------------------------
 
@@ -231,6 +244,7 @@ public sealed partial class MainViewModel : ObservableObject
         CarClassLabel = "A";
         CarPerformanceIndex = 780;
         DrivetrainLabel = "AWD";
+        DataOutAddress = "192.168.1.20";
     }
 
     /// <summary>
@@ -242,10 +256,13 @@ public sealed partial class MainViewModel : ObservableObject
     /// fake clock (<c>Microsoft.Extensions.Time.Testing.FakeTimeProvider</c>) and get a deterministic,
     /// exact <see cref="PacketsPerSecond"/> instead of one that depends on real wall-clock timing.
     /// </param>
-    public MainViewModel(TelemetryService telemetryService, TimeProvider timeProvider)
+    /// <param name="networkInfo">Source of the LAN address shown in the top bar; optional so tests that do not care can omit it.</param>
+    public MainViewModel(TelemetryService telemetryService, TimeProvider timeProvider, INetworkInfo? networkInfo = null)
     {
         _telemetryService = telemetryService;
         _timeProvider = timeProvider;
+        _networkInfo = networkInfo;
+        RefreshDataOutAddress();
         _lastRefreshAt = timeProvider.GetUtcNow();
         _lastPacketArrivalAt = _lastRefreshAt;
     }
@@ -382,6 +399,15 @@ public sealed partial class MainViewModel : ObservableObject
         _receivedCountAtLastRefresh = _telemetryService.ReceivedCount;
     }
 
+    /// <summary>Re-reads this PC's LAN addresses into <see cref="DataOutAddress"/>.</summary>
+    public void RefreshDataOutAddress()
+    {
+        var addresses = _networkInfo?.GetLanAddresses() ?? [];
+        DataOutAddress = addresses.Count == 0
+            ? Strings.DataOutIpNone
+            : string.Join(", ", addresses.Select(a => a.Address.ToString()));
+    }
+
     private void UpdateTires(TelemetryPacket p)
     {
         FrontLeft.Update(p.TireTempFrontLeft, p.TireCombinedSlipFrontLeft, p.NormalizedSuspensionTravelFrontLeft);
@@ -502,6 +528,7 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanStart))]
     private async Task StartAsync()
     {
+        RefreshDataOutAddress(); // The user may have changed network since the last Start.
         await _telemetryService.StartAsync();
 
         // After the service started (it dropped its own stale Latest) and on the UI thread (this continuation
