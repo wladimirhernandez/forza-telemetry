@@ -27,6 +27,9 @@ public static class CarNameStrings
     /// <summary>"A nickname only for you. It shows on every screen and in the recordings list."</summary>
     public static string CarRenameHint => ResourceManager.GetString("CarRenameHint", Culture)!;
 
+    /// <summary>"Default name: {0}"</summary>
+    public static string CarRenameDefaultName => ResourceManager.GetString("CarRenameDefaultName", Culture)!;
+
     /// <summary>"Car name"</summary>
     public static string CarRenameBoxName => ResourceManager.GetString("CarRenameBoxName", Culture)!;
 

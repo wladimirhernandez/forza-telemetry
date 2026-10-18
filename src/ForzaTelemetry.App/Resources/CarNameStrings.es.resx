@@ -18,6 +18,9 @@
   <data name="CarRenameHint" xml:space="preserve">
     <value>Un apodo solo para ti. Se muestra en todas las pantallas y en la lista de grabaciones.</value>
   </data>
+  <data name="CarRenameDefaultName" xml:space="preserve">
+    <value>Nombre por defecto: {0}</value>
+  </data>
   <data name="CarRenameBoxName" xml:space="preserve">
     <value>Nombre del coche</value>
   </data>

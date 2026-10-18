@@ -552,10 +552,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
         var names = new Dictionary<int, string>();
         foreach (var ordinal in records.Select(r => r.Car.CarOrdinal).Distinct())
         {
-            if (_carNames?.Find(ordinal) is { } name)
-            {
-                names[ordinal] = name;
-            }
+            names[ordinal] = CarDisplayName.For(ordinal, _carNames); // nickname, else the real name, else "Car #N"
         }
         await _export!.RunAsync(
             CsvExportRunner.SuggestedName(ExportStrings.ExportPerformanceFileName, _time.GetLocalNow()),

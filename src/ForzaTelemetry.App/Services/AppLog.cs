@@ -157,6 +157,18 @@ internal static partial class AppLog
     [LoggerMessage(EventId = 187, Level = LogLevel.Warning, Message = "The car names {Path} could not be read, so changes are not written to it this session (the file is left untouched).")]
     public static partial void CarNamesWriteSuspended(ILogger logger, string path);
 
+    [LoggerMessage(EventId = 195, Level = LogLevel.Information, Message = "Car catalog loaded: {Cars} car name(s).")]
+    public static partial void CarCatalogLoaded(ILogger logger, int cars);
+
+    [LoggerMessage(EventId = 196, Level = LogLevel.Warning, Message = "The car catalog resource {Resource} is missing; cars show as numbers unless renamed.")]
+    public static partial void CarCatalogMissing(ILogger logger, string resource);
+
+    [LoggerMessage(EventId = 197, Level = LogLevel.Warning, Message = "The car catalog could not be read; cars show as numbers unless renamed.")]
+    public static partial void CarCatalogUnreadable(ILogger logger, Exception exception);
+
+    [LoggerMessage(EventId = 198, Level = LogLevel.Warning, Message = "Car catalog: {Count} unusable entries skipped.")]
+    public static partial void CarCatalogEntriesSkipped(ILogger logger, int count);
+
     // ---- Sessions: recording and replay (160s) ----
 
     [LoggerMessage(EventId = 160, Level = LogLevel.Information, Message = "Recording started: {Path}.")]

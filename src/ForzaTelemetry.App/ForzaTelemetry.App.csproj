@@ -64,6 +64,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The bundled real car names (see CarCatalog); the logical name is pinned so the code can find it. -->
+    <EmbeddedResource Include="Resources\CarCatalog.fh6.json" LogicalName="ForzaTelemetry.App.Resources.CarCatalog.fh6.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Lets the test project reach internal helpers (AtomicFile, the system-culture capture) without making them public API. -->
     <InternalsVisibleTo Include="ForzaTelemetry.App.Tests" />
   </ItemGroup>

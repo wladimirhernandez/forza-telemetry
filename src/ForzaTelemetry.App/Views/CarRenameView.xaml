@@ -41,6 +41,8 @@
                         <KeyBinding Key="Escape" Command="{Binding CancelCommand}" />
                     </TextBox.InputBindings>
                 </TextBox>
+                <TextBlock Text="{Binding DefaultNameText}" Style="{StaticResource MutedLabel}" FontSize="12" TextWrapping="Wrap"
+                           Margin="0,8,0,0" Visibility="{Binding HasDefaultName, Converter={StaticResource BoolToVisibility}}" />
                 <TextBlock Text="{Binding Error}" Style="{StaticResource MutedLabel}" FontSize="12" TextWrapping="Wrap"
                            Foreground="{StaticResource BrakeBrush}" Margin="0,8,0,0"
                            AutomationProperties.LiveSetting="Polite"

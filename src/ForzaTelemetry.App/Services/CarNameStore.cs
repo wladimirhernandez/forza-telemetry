@@ -74,11 +74,18 @@ public sealed class CarNameStore
 
     /// <param name="path">Full path of the names file.</param>
     /// <param name="logger">Receives load/save outcomes; optional.</param>
-    public CarNameStore(string path, ILogger? logger = null)
+    /// <param name="catalog">The bundled real car names, the fallback under a nickname; optional (none: cars show as "Car #1234").</param>
+    public CarNameStore(string path, ILogger? logger = null, CarCatalog? catalog = null)
     {
         _path = path;
         _logger = logger ?? NullLogger.Instance;
+        _catalog = catalog ?? CarCatalog.Empty;
     }
+
+    private readonly CarCatalog _catalog;
+
+    /// <summary>The real name of a car model from the bundled list, or null when the list does not know it. Ignores nicknames.</summary>
+    public string? CatalogName(int carOrdinal) => _catalog.TryGetName(carOrdinal, out var name) ? name : null;
 
     /// <summary><c>%APPDATA%\ForzaTelemetry\cars.json</c>.</summary>
     public static string DefaultPath { get; } = Path.Combine(
