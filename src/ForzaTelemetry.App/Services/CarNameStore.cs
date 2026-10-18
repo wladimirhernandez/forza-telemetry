@@ -26,9 +26,9 @@ public enum CarNameProblem
 /// The nicknames players give their cars, kept in memory and in <c>%APPDATA%\ForzaTelemetry\cars.json</c>.
 /// </summary>
 /// <remarks>
-/// <b>Why nicknames and not a car database.</b> The game identifies a car by a number (<c>CarOrdinal</c>) and the telemetry spec does not
-/// give the names, so "Car #2211" is all the app can know. Shipping a table of names would mean trusting an unverified list for a game that
-/// is still new; letting the player name the cars they actually drive is always right and costs nothing to maintain.
+/// <b>Why nicknames on top of the catalog.</b> The game identifies a car by a number (<c>CarOrdinal</c>) and the telemetry spec does not
+/// give the names. The app ships a community-maintained name list (<see cref="CarCatalog"/>), but it can lag behind new cars and players
+/// often want their own names; a nickname always wins over the catalog name (see <see cref="CarNames"/>).
 /// <para>
 /// <b>The file.</b> <c>{ "schemaVersion": 1, "cars": { "2211": "Daily GT" } }</c>: ordinal to name, one entry per car MODEL (an upgraded
 /// version of the same car keeps its name). Same care as the other JSON files (see <see cref="AtomicFile"/>): writes go through a temp file,
