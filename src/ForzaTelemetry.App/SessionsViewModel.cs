@@ -154,6 +154,25 @@ public sealed partial class RecordingRowViewModel : ObservableObject
 
     [RelayCommand]
     private Task DeleteAsync() => _owner.DeleteAsync(this);
+
+    /// <summary>This recording can be converted to CSV now: it is readable, there is a dialog to ask with, and no other export is running.</summary>
+    public bool CanExport => Item.IsReadable && _owner.CanExport;
+
+    /// <summary>Says what the button does, or why it is disabled while another export runs.</summary>
+    public string ExportTooltip => _owner.IsExporting ? ExportStrings.ExportBusyTooltip : ExportStrings.ExportRecordingTooltip;
+
+    public string ExportName => string.Format(CultureInfo.CurrentCulture, ExportStrings.ExportRecordingNamed, Name);
+
+    /// <summary>An export started or ended somewhere on the page: the button is enabled or disabled again.</summary>
+    internal void OnExportStateChanged()
+    {
+        ExportCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanExport));
+        OnPropertyChanged(nameof(ExportTooltip));
+    }
+
+    [RelayCommand(CanExecute = nameof(CanExport))]
+    private Task ExportAsync() => _owner.ExportAsync(this);
 }
 
 /// <summary>
@@ -192,6 +211,8 @@ public sealed partial class SessionsViewModel : ObservableObject
     private readonly IConfirmationService _confirmation;
     private readonly IFolderOpener? _folderOpener;
     private readonly ILogger? _logger;
+    private readonly IFileSaveDialog? _saveDialog;
+    private CancellationTokenSource? _exportCts;
 
     private ISessionsHost? _host;
     private string? _recordingPath;
@@ -220,6 +241,7 @@ public sealed partial class SessionsViewModel : ObservableObject
     /// <param name="folderOpener">Opens the recordings folder in Explorer; optional.</param>
     /// <param name="logger">Receives recording failures; optional.</param>
     /// <param name="carNames">The player's car nicknames, shown in the Cars column; optional (cars then show as "Car #1234").</param>
+    /// <param name="saveDialog">Asks where to save a recording as CSV; optional (the Export buttons are then disabled).</param>
     public SessionsViewModel(
         TelemetryService service,
         SessionRecorder recorder,
@@ -227,8 +249,10 @@ public sealed partial class SessionsViewModel : ObservableObject
         IConfirmationService? confirmation = null,
         IFolderOpener? folderOpener = null,
         ILogger? logger = null,
-        CarNameStore? carNames = null)
+        CarNameStore? carNames = null,
+        IFileSaveDialog? saveDialog = null)
     {
+        _saveDialog = saveDialog;
         CarNames = carNames;
         if (carNames is not null)
         {
@@ -774,6 +798,111 @@ public sealed partial class SessionsViewModel : ObservableObject
 
         await RefreshLibraryAsync();
     }
+
+    // ---- CSV export of a recording ---------------------------------------------------------------------------
+
+    /// <summary>A recording is being converted to CSV right now (the page shows its progress and a Cancel button).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanExport))]
+    private bool _isExporting;
+
+    /// <summary>How much of the recording has been converted, 0..1.</summary>
+    [ObservableProperty]
+    private double _exportProgress;
+
+    /// <summary>For example <c>Exporting session.fh6rec... 37%</c>.</summary>
+    [ObservableProperty]
+    private string _exportText = "";
+
+    /// <summary>The per-recording Export buttons are usable: there is a dialog to ask with and no export is running.</summary>
+    public bool CanExport => _saveDialog is not null && !IsExporting;
+
+    partial void OnIsExportingChanged(bool value)
+    {
+        foreach (var row in Rows)
+        {
+            row.OnExportStateChanged();
+        }
+    }
+
+    /// <summary>
+    /// Converts one recording to a CSV file the user picks the place of. The conversion streams the file off the UI thread (a long
+    /// session is hundreds of thousands of rows), shows its progress, and can be cancelled (<see cref="CancelExportCommand"/>); a
+    /// cancelled or failed export leaves no partial file (see <see cref="ExportFile"/>). Only one runs at a time.
+    /// </summary>
+    internal async Task ExportAsync(RecordingRowViewModel row)
+    {
+        if (!row.CanExport || _saveDialog is null || _shuttingDown)
+        {
+            return;
+        }
+
+        var path = _saveDialog.PickSavePath(
+            ExportStrings.ExportDialogTitle, row.Name + ".csv", CsvExportRunner.Filter);
+        if (path is null)
+        {
+            return; // cancelled: not an error
+        }
+
+        // Linked to the shutdown token: closing the app cancels a running export like the user's Cancel does.
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
+        _exportCts = cts;
+        Notice = "";
+        ExportProgress = 0;
+        ExportText = ProgressText(row.Name, 0);
+        IsExporting = true;
+
+        // Progress<T> posts to the context it was created on (the UI thread), so the bar moves without any marshaling here. A
+        // report that arrives after the export ended is ignored: it must not bring the bar back.
+        var progress = new Progress<double>(fraction =>
+        {
+            if (IsExporting && ReferenceEquals(_exportCts, cts))
+            {
+                ExportProgress = fraction;
+                ExportText = ProgressText(row.Name, fraction);
+            }
+        });
+
+        try
+        {
+            var result = await Task.Run(() => RecordingCsv.ExportFileAsync(row.Path, path, progress, cts.Token), cts.Token);
+            Log(logger => AppLog.ExportSaved(logger, path));
+            SetNotice(
+                string.Format(
+                    CultureInfo.CurrentCulture, ExportStrings.ExportSavedPackets,
+                    System.IO.Path.GetFileName(path), result.Rows.ToString("N0", CultureInfo.CurrentCulture)),
+                isError: false);
+        }
+        catch (OperationCanceledException)
+        {
+            Log(logger => AppLog.ExportCancelled(logger, path));
+            if (!_shuttingDown)
+            {
+                SetNotice(ExportStrings.ExportCancelled, isError: false);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
+        {
+            // A damaged or newer-format recording (InvalidRecordingException is an IOException) and a full or locked disk both land here.
+            Log(logger => AppLog.ExportFailed(logger, ex, path));
+            SetNotice(
+                string.Format(CultureInfo.CurrentCulture, ExportStrings.ExportFailed, System.IO.Path.GetFileName(path), ex.Message),
+                isError: true);
+        }
+        finally
+        {
+            _exportCts = null;
+            IsExporting = false;
+            ExportProgress = 0;
+        }
+    }
+
+    private static string ProgressText(string name, double fraction) =>
+        string.Format(CultureInfo.CurrentCulture, ExportStrings.ExportProgressFormat, name, (int)Math.Round(fraction * 100));
+
+    /// <summary>Stops the running export; its partial file is discarded.</summary>
+    [RelayCommand]
+    private void CancelExport() => _exportCts?.Cancel();
 
     /// <summary>The localized sentence for a name problem; empty for <see cref="RecordingNameError.None"/>.</summary>
     internal static string Describe(RecordingNameError error) => error switch

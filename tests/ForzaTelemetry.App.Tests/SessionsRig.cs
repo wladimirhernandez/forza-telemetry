@@ -46,7 +46,7 @@ internal sealed class SessionsRig : IDisposable
 
     public SessionsRig(
         bool confirmDelete = true, bool pauseReplayAtStart = false, double replaySpeed = ReplaySpeed.Max, bool withPerformance = false,
-        CarNameStore? carNames = null)
+        CarNameStore? carNames = null, IFileSaveDialog? saveDialog = null)
     {
         Folder = Path.Combine(_root, "recordings");
         Engines = new TelemetryEngines();
@@ -80,7 +80,7 @@ internal sealed class SessionsRig : IDisposable
             Performance = new PerformanceViewModel(Engines.Acceleration, Engines.TopSpeed, Engines.CarChanges, PerformanceHistory);
         }
 
-        Sessions = new SessionsViewModel(Service, Recorder, Library, Confirmation, Opener, carNames: carNames);
+        Sessions = new SessionsViewModel(Service, Recorder, Library, Confirmation, Opener, carNames: carNames, saveDialog: saveDialog);
         Shell = new ShellViewModel(
             Service,
             Clock,

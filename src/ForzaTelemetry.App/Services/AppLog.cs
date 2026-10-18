@@ -194,4 +194,13 @@ internal static partial class AppLog
 
     [LoggerMessage(EventId = 171, Level = LogLevel.Warning, Message = "Could not refresh the recordings list after a recording stopped ({Folder}); it is read again the next time the page opens.")]
     public static partial void LibraryRefreshFailed(ILogger logger, Exception exception, string folder);
+
+    [LoggerMessage(EventId = 188, Level = LogLevel.Information, Message = "CSV exported: {Path}.")]
+    public static partial void ExportSaved(ILogger logger, string path);
+
+    [LoggerMessage(EventId = 189, Level = LogLevel.Warning, Message = "Could not export to {Path}.")]
+    public static partial void ExportFailed(ILogger logger, Exception exception, string path);
+
+    [LoggerMessage(EventId = 190, Level = LogLevel.Information, Message = "CSV export of {Path} cancelled.")]
+    public static partial void ExportCancelled(ILogger logger, string path);
 }

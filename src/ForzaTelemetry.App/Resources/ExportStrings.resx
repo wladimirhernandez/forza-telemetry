@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="ExportButton" xml:space="preserve">
+    <value>Export CSV</value>
+  </data>
+  <data name="ExportLapsTooltip" xml:space="preserve">
+    <value>Save this session's laps as a CSV file for a spreadsheet</value>
+  </data>
+  <data name="ExportLapsDisabledTooltip" xml:space="preserve">
+    <value>Finish a lap to be able to export</value>
+  </data>
+  <data name="ExportPerformanceTooltip" xml:space="preserve">
+    <value>Save every car's best results as a CSV file for a spreadsheet</value>
+  </data>
+  <data name="ExportPerformanceDisabledTooltip" xml:space="preserve">
+    <value>There are no results to export yet</value>
+  </data>
+  <data name="ExportRecordingTooltip" xml:space="preserve">
+    <value>Convert this recording to a CSV file, one row per packet</value>
+  </data>
+  <data name="ExportRecordingNamed" xml:space="preserve">
+    <value>Export {0} to CSV</value>
+  </data>
+  <data name="ExportBusyTooltip" xml:space="preserve">
+    <value>Another export is still running</value>
+  </data>
+  <data name="ExportDialogTitle" xml:space="preserve">
+    <value>Export to CSV</value>
+  </data>
+  <data name="ExportFilterLabel" xml:space="preserve">
+    <value>CSV files</value>
+  </data>
+  <data name="ExportLapsFileName" xml:space="preserve">
+    <value>laps</value>
+  </data>
+  <data name="ExportPerformanceFileName" xml:space="preserve">
+    <value>performance</value>
+  </data>
+  <data name="ExportSaved" xml:space="preserve">
+    <value>Saved {0}</value>
+  </data>
+  <data name="ExportSavedPackets" xml:space="preserve">
+    <value>Saved {0} ({1} packets)</value>
+  </data>
+  <data name="ExportFailed" xml:space="preserve">
+    <value>Could not save {0}: {1}</value>
+  </data>
+  <data name="ExportCancelled" xml:space="preserve">
+    <value>Export cancelled</value>
+  </data>
+  <data name="ExportProgressFormat" xml:space="preserve">
+    <value>Exporting {0}… {1}%</value>
+  </data>
+  <data name="ExportProgressName" xml:space="preserve">
+    <value>Export progress</value>
+  </data>
+  <data name="ExportCancelTooltip" xml:space="preserve">
+    <value>Stop the export and discard the partial file</value>
+  </data>
+</root>

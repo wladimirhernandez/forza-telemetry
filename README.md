@@ -13,9 +13,9 @@ Eight tabs, each one keyboard-reachable with Ctrl+1 to Ctrl+8:
 | Tab | What it does |
 | --- | --- |
 | **Dashboard** | The car at a glance: tire temperatures, shift lights, gear and speed, pedal and steering inputs, G-force, engine gauges. |
-| **Performance** | Times 0-100 and 0-200 km/h, the quarter mile and your top speed, and keeps the best of each per car. |
-| **Laps** | Best, last and current lap with a live delta against your best, and the list of every lap. |
-| **Sessions** | Records what the game sends to a file and plays it back later at 0.5x to 4x, driving every other tab as if it were live. Rename, delete and open the folder from here. |
+| **Performance** | Times 0-100 and 0-200 km/h, the quarter mile and your top speed, and keeps the best of each per car. Export CSV saves every car's bests for a spreadsheet. |
+| **Laps** | Best, last and current lap with a live delta against your best, and the list of every lap. Export CSV saves them (time and gap to best) for a spreadsheet. |
+| **Sessions** | Records what the game sends to a file and plays it back later at 0.5x to 4x, driving every other tab as if it were live. Rename, delete and open the folder from here, or export a recording to CSV (one row per packet: time, speed, RPM, gear, inputs, position, lap). |
 | **Analysis** | Live speed, RPM, throttle, brake and steering traces over the last seconds, stacked on one time axis; or switch to Lap comparison to lay the lap you are driving over your best lap, by distance, with a time-gap lane. |
 | **Map** | The path you drove, colored by speed, with braking points marked. Works on live data and on replays. |
 | **Tuning** | Power and torque curves captured from your full-throttle pulls, plus understeer and oversteer, tire temperature and suspension bottoming hints. |
