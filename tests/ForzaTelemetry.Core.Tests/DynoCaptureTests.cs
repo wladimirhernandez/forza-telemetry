@@ -4,10 +4,13 @@ namespace ForzaTelemetry.Core.Tests;
 
 public class DynoCaptureTests
 {
-    private static TelemetryPacket Pull(float rpm, float power, float torque, int car = 1) =>
+    private const int Pi = 500;
+
+    private static TelemetryPacket Pull(float rpm, float power, float torque, int car = 1, int pi = Pi) =>
         TestPackets.Drive(0, 30f, 0f, gear: 3) with
         {
             CarOrdinal = car,
+            CarPerformanceIndex = pi,
             CurrentEngineRpm = rpm,
             Power = power,
             Torque = torque,
@@ -21,7 +24,7 @@ public class DynoCaptureTests
 
         dyno.OnPacket(Pull(4130f, 200_000f, 400f));
 
-        var point = Assert.Single(dyno.GetCurve(1));
+        var point = Assert.Single(dyno.GetCurve(1, Pi));
         Assert.Equal(4150f, point.Rpm);
         Assert.Equal(200_000f, point.PowerWatts);
         Assert.Equal(400f, point.TorqueNewtonMeters);
@@ -36,7 +39,7 @@ public class DynoCaptureTests
         dyno.OnPacket(Pull(4190f, 190_000f, 360f));
         dyno.OnPacket(Pull(4150f, 170_000f, 395f));
 
-        var point = Assert.Single(dyno.GetCurve(1));
+        var point = Assert.Single(dyno.GetCurve(1, Pi));
         Assert.Equal(190_000f, point.PowerWatts);
         Assert.Equal(395f, point.TorqueNewtonMeters);
     }
@@ -50,7 +53,7 @@ public class DynoCaptureTests
         dyno.OnPacket(Pull(3000f, 1f, 1f));
         dyno.OnPacket(Pull(4500f, 1f, 1f));
 
-        Assert.Equal([3050f, 4550f, 6050f], dyno.GetCurve(1).Select(p => p.Rpm));
+        Assert.Equal([3050f, 4550f, 6050f], dyno.GetCurve(1, Pi).Select(p => p.Rpm));
     }
 
     [Theory]
@@ -78,7 +81,7 @@ public class DynoCaptureTests
 
         dyno.OnPacket(packet);
 
-        Assert.Empty(dyno.GetCurve(1));
+        Assert.Empty(dyno.GetCurve(1, Pi));
     }
 
     [Fact]
@@ -88,7 +91,7 @@ public class DynoCaptureTests
 
         dyno.OnPacket(Pull(5000f, 100_000f, 300f) with { Accel = 242 });
 
-        Assert.Single(dyno.GetCurve(1));
+        Assert.Single(dyno.GetCurve(1, Pi));
     }
 
     [Fact]
@@ -99,11 +102,25 @@ public class DynoCaptureTests
         dyno.OnPacket(Pull(5000f, 100_000f, 300f, car: 1));
         dyno.OnPacket(Pull(5000f, 250_000f, 500f, car: 2));
 
-        Assert.Equal(100_000f, dyno.GetCurve(1)[0].PowerWatts);
-        Assert.Equal(250_000f, dyno.GetCurve(2)[0].PowerWatts);
+        Assert.Equal(100_000f, dyno.GetCurve(1, Pi)[0].PowerWatts);
+        Assert.Equal(250_000f, dyno.GetCurve(2, Pi)[0].PowerWatts);
         Assert.Equal(2, dyno.CurrentCarOrdinal);
         Assert.Equal(250_000f, dyno.GetCurrentCurve()[0].PowerWatts);
-        Assert.Empty(dyno.GetCurve(3));
+        Assert.Empty(dyno.GetCurve(3, Pi));
+    }
+
+    [Fact]
+    public void The_same_car_with_a_different_performance_index_gets_its_own_curve()
+    {
+        var dyno = new DynoCapture();
+
+        dyno.OnPacket(Pull(5000f, 100_000f, 300f, car: 1, pi: 500));
+        dyno.OnPacket(Pull(5000f, 180_000f, 420f, car: 1, pi: 650)); // upgraded build
+
+        Assert.Equal(100_000f, dyno.GetCurve(1, 500)[0].PowerWatts);
+        Assert.Equal(180_000f, dyno.GetCurve(1, 650)[0].PowerWatts);
+        Assert.Equal(650, dyno.CurrentPerformanceIndex);
+        Assert.Equal(180_000f, dyno.GetCurrentCurve()[0].PowerWatts);
     }
 
     [Fact]
@@ -113,13 +130,13 @@ public class DynoCaptureTests
         dyno.OnPacket(Pull(5000f, 1f, 1f, car: 1));
         dyno.OnPacket(Pull(5000f, 1f, 1f, car: 2));
 
-        dyno.Reset(1);
+        dyno.Reset(1, Pi);
 
-        Assert.Empty(dyno.GetCurve(1));
-        Assert.Single(dyno.GetCurve(2));
+        Assert.Empty(dyno.GetCurve(1, Pi));
+        Assert.Single(dyno.GetCurve(2, Pi));
 
         dyno.ResetAll();
-        Assert.Empty(dyno.GetCurve(2));
+        Assert.Empty(dyno.GetCurve(2, Pi));
     }
 
     [Fact]
@@ -129,6 +146,6 @@ public class DynoCaptureTests
 
         dyno.OnPacket(Pull(99_999f, 1f, 1f));
 
-        Assert.Empty(dyno.GetCurve(1));
+        Assert.Empty(dyno.GetCurve(1, Pi));
     }
 }

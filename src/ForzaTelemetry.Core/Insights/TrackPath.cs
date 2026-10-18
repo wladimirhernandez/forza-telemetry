@@ -38,7 +38,9 @@ public sealed class TrackPath : IPacketObserver
     private readonly int _maxPoints;
     private float _spacing;
     private int _version;
-    private bool _pendingSegmentStart = true;
+    private float _rawX;
+    private float _rawZ;
+    private bool _hasRaw;
 
     /// <summary>Creates a path with the given minimum spacing and cap.</summary>
     public TrackPath(float minSpacingMeters = 2f, int maxPoints = 20000)
@@ -85,12 +87,9 @@ public sealed class TrackPath : IPacketObserver
     {
         if (!packet.IsRaceOn || !float.IsFinite(packet.PositionX) || !float.IsFinite(packet.PositionZ))
         {
-            // After a pause the car may have been moved; do not connect across the gap.
-            lock (_gate)
-            {
-                _pendingSegmentStart = true;
-            }
-
+            // Paused/menu packets carry no usable position. We deliberately do NOT mark a new segment here:
+            // pausing in place and resuming must continue the same line. If the car really was moved while
+            // paused, the raw gap check below detects it on the first packet after the pause.
             return;
         }
 
@@ -100,18 +99,33 @@ public sealed class TrackPath : IPacketObserver
             var x = packet.PositionX;
             var z = packet.PositionZ;
 
-            if (_points.Count > 0)
+            // A jump is judged on the gap between consecutive PACKETS (raw positions), never on the gap to the
+            // last stored point: stored points get sparser as the path is thinned, so that gap would grow
+            // until every point looked like a teleport.
+            var jumped = false;
+            if (_hasRaw)
+            {
+                var rx = x - _rawX;
+                var rz = z - _rawZ;
+                jumped = (rx * rx) + (rz * rz) > JumpMeters * JumpMeters;
+            }
+
+            _rawX = x;
+            _rawZ = z;
+            _hasRaw = true;
+
+            if (_points.Count == 0 || jumped)
+            {
+                // First point ever (or after Clear) and every post-jump point always starts a segment.
+                _points.Add(new TrackPoint(x, z, packet.Speed, braking, StartsSegment: true));
+                _version++;
+            }
+            else
             {
                 var last = _points[^1];
                 var dx = x - last.X;
                 var dz = z - last.Z;
-                var distance = MathF.Sqrt((dx * dx) + (dz * dz));
-
-                if (distance > JumpMeters)
-                {
-                    _pendingSegmentStart = true;
-                }
-                else if (distance < _spacing)
+                if (MathF.Sqrt((dx * dx) + (dz * dz)) < _spacing)
                 {
                     // Too close to add, but never lose a braking mark: fold it into the last point.
                     if (braking && !last.Braking)
@@ -122,11 +136,10 @@ public sealed class TrackPath : IPacketObserver
 
                     return;
                 }
-            }
 
-            _points.Add(new TrackPoint(x, z, packet.Speed, braking, _pendingSegmentStart));
-            _pendingSegmentStart = false;
-            _version++;
+                _points.Add(new TrackPoint(x, z, packet.Speed, braking, StartsSegment: false));
+                _version++;
+            }
 
             if (_points.Count >= _maxPoints)
             {
@@ -166,35 +179,48 @@ public sealed class TrackPath : IPacketObserver
         {
             _points.Clear();
             _spacing = MinSpacingMeters;
-            _pendingSegmentStart = true;
+            _hasRaw = false;
             _version++;
         }
     }
 
-    /// <summary>Drops every second point and doubles the spacing, keeping braking flags and segment starts.</summary>
+    /// <summary>
+    /// Drops every second point and doubles the spacing. A pair whose second point starts a segment keeps BOTH
+    /// points: dropping the first would shorten the previous segment's end, dropping the second would lose the
+    /// segment start and draw a line across the jump.
+    /// </summary>
     private void Thin()
     {
-        var kept = new List<TrackPoint>((_points.Count / 2) + 1);
-        for (var i = 0; i < _points.Count; i += 2)
+        var kept = new List<TrackPoint>((_points.Count / 2) + 2);
+        var i = 0;
+        while (i < _points.Count)
         {
             var point = _points[i];
-            if (i + 1 < _points.Count)
+            if (i + 1 >= _points.Count)
             {
-                var next = _points[i + 1];
-                point = point with
-                {
-                    Braking = point.Braking || next.Braking,
-                };
-
-                if (next.StartsSegment)
-                {
-                    // Keep the jump: the dropped point began a new segment, so the survivor of the pair must too.
-                    // (Rare; treating the kept point as a segment start only loses one drawn line piece.)
-                    point = point with { StartsSegment = true };
-                }
+                kept.Add(point);
+                break;
             }
 
-            kept.Add(point);
+            var next = _points[i + 1];
+            if (next.StartsSegment)
+            {
+                kept.Add(point);
+                kept.Add(next);
+            }
+            else
+            {
+                kept.Add(point with { Braking = point.Braking || next.Braking });
+            }
+
+            i += 2;
+        }
+
+        // Pathological input (a jump every few points) could stop the list from shrinking; never exceed the cap.
+        if (kept.Count >= _maxPoints)
+        {
+            kept.RemoveRange(0, kept.Count - (_maxPoints / 2));
+            kept[0] = kept[0] with { StartsSegment = true };
         }
 
         _points.Clear();

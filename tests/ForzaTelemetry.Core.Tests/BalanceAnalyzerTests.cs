@@ -151,9 +151,24 @@ public class BalanceAnalyzerTests
         Assert.Equal(0, counter.Counts.Total);
 
         counter.OnPacket(Susp(fl: 1f));
+        Assert.Equal(1, counter.Counts.Total);
         counter.Reset();
 
-        Assert.Equal(0, counter.Counts.Total);
+        Assert.Equal(0, counter.Counts.Total); // reported as zero immediately...
+        counter.OnPacket(Susp(fl: 0.2f));
+        Assert.Equal(0, counter.Counts.Total); // ...and applied by the writer on its next packet
+    }
+
+    [Fact]
+    public void Reset_forgets_that_a_corner_was_bottomed_so_the_next_impact_counts()
+    {
+        var counter = new SuspensionBottomingCounter();
+        counter.OnPacket(Susp(fl: 1f)); // bottomed, not yet re-armed
+
+        counter.Reset();
+        counter.OnPacket(Susp(fl: 1f)); // still compressed after the reset: counts as a fresh event
+
+        Assert.Equal(1, counter.Counts.FrontLeft);
     }
 
     // ---- Tire temperatures ----

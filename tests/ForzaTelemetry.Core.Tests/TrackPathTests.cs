@@ -79,17 +79,30 @@ public class TrackPathTests
     }
 
     [Fact]
-    public void Pausing_starts_a_new_segment_and_stores_nothing_while_paused()
+    public void Pausing_in_place_continues_the_same_segment()
     {
         var path = new TrackPath();
         path.OnPacket(At(0, 0));
 
-        path.OnPacket(At(3, 0) with { IsRaceOn = false });
+        path.OnPacket(At(3, 0) with { IsRaceOn = false }); // menu packet: position ignored
         path.OnPacket(At(10, 0));
 
         var points = path.ToArray();
         Assert.Equal(2, points.Length);
-        Assert.True(points[1].StartsSegment);
+        Assert.False(points[1].StartsSegment);
+    }
+
+    [Fact]
+    public void Being_moved_while_paused_starts_a_new_segment()
+    {
+        var path = new TrackPath();
+        path.OnPacket(At(0, 0));
+        path.OnPacket(At(10, 0));
+
+        path.OnPacket(At(0, 0) with { IsRaceOn = false });
+        path.OnPacket(At(4000, 4000)); // resumed far away (e.g. rewind or teleport)
+
+        Assert.True(path.ToArray()[^1].StartsSegment);
     }
 
     [Fact]
@@ -162,5 +175,42 @@ public class TrackPathTests
         path.Clear();
 
         Assert.Equal(0, path.Count);
+    }
+
+    [Fact]
+    public void Thinning_keeps_the_segment_start_on_the_first_point_after_the_jump()
+    {
+        var path = new TrackPath(minSpacingMeters: 1f, maxPoints: 8);
+        for (var i = 0; i < 3; i++)
+        {
+            path.OnPacket(At(i, 0)); // segment A: x = 0..2
+        }
+
+        for (var i = 0; i < 5; i++)
+        {
+            path.OnPacket(At(5000 + i, 0)); // jump, then segment B: x = 5000..5004 (the 8th point triggers thinning)
+        }
+
+        var points = path.ToArray();
+        var firstB = points.First(p => p.X >= 5000f);
+        Assert.True(firstB.StartsSegment);
+        Assert.Equal(5000f, firstB.X); // the real segment start survived, not a neighbour
+        Assert.Equal(1, points.Count(p => p.X >= 5000f && p.StartsSegment));
+        Assert.True(points.Where(p => p.X < 5000f).Skip(1).All(p => !p.StartsSegment));
+    }
+
+    [Fact]
+    public void Long_paths_after_many_thinnings_do_not_turn_every_point_into_a_jump()
+    {
+        // Spacing doubles at each thinning; the jump test must use raw packet gaps, not the stored-point gap.
+        var path = new TrackPath(minSpacingMeters: 1f, maxPoints: 16);
+        for (var i = 0; i < 20000; i++)
+        {
+            path.OnPacket(At(i, 0)); // a continuous 20 km straight, 1 m per packet
+        }
+
+        var points = path.ToArray();
+        Assert.True(points.Length > 4);
+        Assert.Single(points, p => p.StartsSegment); // only the very first point
     }
 }

@@ -130,7 +130,7 @@ public class AccelerationTimerTests
         timer.OnPacket(TestPackets.Drive(19001, 0f, 600f));
 
         var snap = timer.Current;
-        Assert.Equal(AccelerationState.Done, snap.State);
+        Assert.Equal(AccelerationState.Armed, snap.State); // finished with partial results, then re-armed at standstill
         Assert.NotNull(snap.QuarterMileSeconds);
         Assert.NotNull(snap.ZeroTo100KmhSeconds);
         Assert.Null(snap.ZeroTo200KmhSeconds);
@@ -239,5 +239,42 @@ public class AccelerationTimerTests
         timer.OnPacket(TestPackets.Drive(20, float.NaN, 0f));
 
         Assert.Equal(AccelerationState.Armed, timer.Current.State);
+    }
+
+    [Fact]
+    public void Stopping_after_0_100_but_before_the_quarter_mile_keeps_the_partial_result()
+    {
+        const double a = 10;
+        var timer = new AccelerationTimer();
+        Launch(timer, a, durationSeconds: 4); // past 100 km/h at 2.78 s, quarter mile not reached
+
+        timer.OnPacket(TestPackets.Drive(5000, 0f, 90f)); // stopped
+
+        var snap = timer.Current;
+        Assert.Equal(AccelerationState.Armed, snap.State);
+        Assert.Equal((Kmh100 / a) - StartOffset(a), snap.ZeroTo100KmhSeconds!.Value, 0.005);
+        Assert.Null(snap.QuarterMileSeconds);
+    }
+
+    [Fact]
+    public void Reverse_gear_after_the_quarter_mile_keeps_the_measured_results()
+    {
+        var timer = new AccelerationTimer();
+        Launch(timer, 3, durationSeconds: 18); // quarter mile done, 200 km/h never reached, still running
+
+        timer.OnPacket(TestPackets.Drive(19500, 40f, 700f, gear: 0));
+
+        var snap = timer.Current;
+        Assert.Equal(AccelerationState.Done, snap.State);
+        Assert.NotNull(snap.QuarterMileSeconds);
+    }
+
+    [Fact]
+    public void Current_is_equal_between_reads_when_no_packet_arrived()
+    {
+        var timer = new AccelerationTimer();
+        Launch(timer, 10, durationSeconds: 1.5);
+
+        Assert.Equal(timer.Current, timer.Current);
     }
 }

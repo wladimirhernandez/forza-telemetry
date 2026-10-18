@@ -22,11 +22,11 @@ namespace ForzaTelemetry.Core.Performance;
 /// start the run early, yet launch time is not lost.</para>
 ///
 /// <para><b>Thread-safety.</b> One writer (<see cref="OnPacket"/>, the receive loop) and many readers.
-/// All results live in an immutable <see cref="AccelerationSnapshot"/>; the writer builds a new one and
-/// publishes it with <see cref="Volatile.Write{T}(ref T, T)"/>. A reader doing <see cref="Volatile.Read{T}(ref readonly T)"/>
-/// via <see cref="Current"/> therefore always sees a complete, consistent snapshot (a reference swap is atomic and
-/// the object never changes afterwards), with no locks. <see cref="Reset"/> only raises a flag that the writer
-/// honours on its next packet, so the writer's private state is never touched from another thread.</para>
+/// The writer holds a lock for the duration of one packet (uncontended, tens of nanoseconds); <see cref="Current"/>
+/// takes the same lock and BUILDS an immutable <see cref="AccelerationSnapshot"/> on read from the writer's
+/// fields. Building on read means a run in progress allocates one snapshot per UI refresh (~20 Hz) instead of
+/// one per packet (~60 Hz), and a reader can never observe a half-updated run. <see cref="Reset"/> only raises
+/// a flag that the writer honours on its next packet.</para>
 /// </remarks>
 public sealed class AccelerationTimer : IPacketObserver
 {
@@ -39,7 +39,8 @@ public sealed class AccelerationTimer : IPacketObserver
     /// <summary>A quarter mile in meters.</summary>
     public const double QuarterMileMeters = 402.336;
 
-    private AccelerationSnapshot _snapshot = AccelerationSnapshot.Empty;
+    private readonly object _gate = new();
+    private AccelerationSnapshot _published = AccelerationSnapshot.Empty;
     private int _resetRequested;
 
     // ---- Writer-only state (never touched by readers) ----
@@ -52,15 +53,41 @@ public sealed class AccelerationTimer : IPacketObserver
     private double? _zeroTo200;
     private double? _quarterTime;
     private double? _quarterTrap;
+    private double _latestTimeMs;
 
-    /// <summary>The latest published snapshot; safe to read from any thread.</summary>
-    public AccelerationSnapshot Current => Volatile.Read(ref _snapshot);
+    /// <summary>The current snapshot (built on read while running); safe to read from any thread.</summary>
+    public AccelerationSnapshot Current
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _state == AccelerationState.Running
+                    ? new AccelerationSnapshot(
+                        AccelerationState.Running,
+                        Math.Max(0, (_latestTimeMs - _startTimeMs) / 1000.0),
+                        _zeroTo100,
+                        _zeroTo200,
+                        _quarterTime,
+                        _quarterTrap)
+                    : _published;
+            }
+        }
+    }
 
     /// <summary>Asks the timer to forget all results (also the last completed run). Safe from any thread.</summary>
     public void Reset() => Volatile.Write(ref _resetRequested, 1);
 
     /// <inheritdoc />
     public void OnPacket(TelemetryPacket packet)
+    {
+        lock (_gate)
+        {
+            Process(packet);
+        }
+    }
+
+    private void Process(TelemetryPacket packet)
     {
         if (Interlocked.Exchange(ref _resetRequested, 0) == 1)
         {
@@ -137,15 +164,7 @@ public sealed class AccelerationTimer : IPacketObserver
 
                 if (stationary)
                 {
-                    if (_quarterTime is not null)
-                    {
-                        Finish(); // coasted to a stop after the line: keep what we measured
-                    }
-                    else
-                    {
-                        Abort(standstill: true);
-                    }
-
+                    Abort(standstill: true); // keeps whatever was already measured (see Abort)
                     break;
                 }
 
@@ -225,13 +244,8 @@ public sealed class AccelerationTimer : IPacketObserver
             return;
         }
 
-        Publish(new AccelerationSnapshot(
-            AccelerationState.Running,
-            Math.Max(0, (current.TimestampMS - _startTimeMs) / 1000.0),
-            _zeroTo100,
-            _zeroTo200,
-            _quarterTime,
-            _quarterTrap));
+        // No publish: Current builds the running snapshot from these fields when read.
+        _latestTimeMs = current.TimestampMS;
     }
 
     private void Finish()
@@ -242,16 +256,31 @@ public sealed class AccelerationTimer : IPacketObserver
         Publish(_lastCompleted);
     }
 
-    /// <summary>Drops the run in progress (if any) and falls back to the last completed result.</summary>
+    /// <summary>
+    /// Ends a run that cannot continue. If it already measured something (0-100 or the quarter mile), those
+    /// partial results are kept as the completed run - a driver who lifts after the line should not lose the
+    /// time. A run with nothing measured is dropped and the previous completed result stays.
+    /// </summary>
     private void Abort(bool standstill)
     {
         if (_state == AccelerationState.Running)
         {
+            if (_zeroTo100 is not null || _zeroTo200 is not null || _quarterTime is not null)
+            {
+                Finish();
+                if (standstill)
+                {
+                    EnterArmed();
+                }
+
+                return;
+            }
+
             ClearRun();
         }
 
         var next = standstill ? AccelerationState.Armed : AccelerationState.Idle;
-        if (_state == next && Current.State == next)
+        if (_state == next && _published.State == next)
         {
             return;
         }
@@ -268,5 +297,5 @@ public sealed class AccelerationTimer : IPacketObserver
         _quarterTrap = null;
     }
 
-    private void Publish(AccelerationSnapshot snapshot) => Volatile.Write(ref _snapshot, snapshot);
+    private void Publish(AccelerationSnapshot snapshot) => _published = snapshot;
 }

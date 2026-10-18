@@ -230,6 +230,49 @@ public class LapTrackerTests
 
         tracker.OnPacket(Lap(7, 99, 12345) with { IsRaceOn = false });
 
-        Assert.Same(before, tracker.Current);
+        Assert.Equal(before, tracker.Current);
+    }
+
+    [Fact]
+    public void Free_roam_never_grows_the_sample_buffers_and_never_becomes_a_reference()
+    {
+        var tracker = new LapTracker();
+
+        // LapNumber never changes in free roam; drive far beyond the sample capacity (1 sample per metre).
+        for (var i = 0; i <= LapTracker.MaxSamplesPerLap + 500; i++)
+        {
+            tracker.OnPacket(Lap(0, i / 50.0, i * 1.5));
+        }
+
+        // Still functional: no delta (no reference), lap clock keeps showing.
+        Assert.Null(tracker.Current.DeltaSeconds);
+        Assert.True(tracker.Current.CurrentLapSeconds > 100);
+    }
+
+    [Fact]
+    public void A_lap_with_unknown_time_is_still_listed_so_numbering_stays_aligned()
+    {
+        var tracker = new LapTracker();
+        tracker.OnPacket(Lap(0, 0.0, 0));
+        // Lap ends with neither LastLap nor a positive CurrentLap on the previous packet.
+        tracker.OnPacket(Lap(1, 0.0, 10, lastLap: 0));
+        DriveLap(tracker, 1, 20, 1000, lastLap: 0);
+        tracker.OnPacket(Lap(2, 0.0, 2000, lastLap: 20, bestLap: 20));
+
+        var snap = tracker.Current;
+        Assert.Equal(3, snap.CurrentLapNumber);
+        Assert.Equal([1, 2], snap.Laps.Select(l => l.Number));
+        Assert.Equal(0, snap.Laps[0].TimeSeconds); // unknown
+        Assert.False(snap.Laps[0].IsBest);
+        Assert.True(snap.Laps[1].IsBest);
+    }
+
+    [Fact]
+    public void Current_returns_equal_snapshots_when_nothing_changed()
+    {
+        var tracker = new LapTracker();
+        tracker.OnPacket(Lap(0, 1.0, 10));
+
+        Assert.Equal(tracker.Current, tracker.Current);
     }
 }
