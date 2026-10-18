@@ -1,0 +1,136 @@
+<UserControl x:Class="ForzaTelemetry.App.Views.AnalysisView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:local="clr-namespace:ForzaTelemetry.App"
+             xmlns:controls="clr-namespace:ForzaTelemetry.App.Controls"
+             xmlns:res="clr-namespace:ForzaTelemetry.App.Resources"
+             mc:Ignorable="d"
+             d:DesignWidth="1300" d:DesignHeight="700">
+    <!--
+      The Analysis page: a header with the window selector, the stacked trace chart in a card, and a strip of live
+      readouts. The DataContext is an AnalysisViewModel (handed down by the implicit DataTemplate in MainWindow).
+      The chart and the empty state share one grid cell; Visibility bound to HasData / IsEmpty decides which one shows.
+    -->
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+
+        <!-- One live readout tile: small muted label above a big thin numeral. -->
+        <Style x:Key="ReadoutTile" TargetType="Border" BasedOn="{StaticResource CardStyle}">
+            <Setter Property="Padding" Value="18,12" />
+        </Style>
+        <Style x:Key="ReadoutValue" TargetType="TextBlock" BasedOn="{StaticResource NumeralText}">
+            <Setter Property="FontSize" Value="30" />
+            <Setter Property="Margin" Value="0,2,0,0" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="28,18,28,18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header: title on the left, time window selector on the right. -->
+        <DockPanel Grid.Row="0">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="{x:Static res:InsightsStrings.AnalysisWindowLabel}" Style="{StaticResource MutedLabel}"
+                           VerticalAlignment="Center" Margin="0,0,12,0" />
+                <ListBox Style="{StaticResource SegmentedListBox}" ItemsSource="{Binding WindowOptions}"
+                         SelectedValue="{Binding WindowSeconds, Mode=TwoWay}"
+                         AutomationProperties.Name="{x:Static res:InsightsStrings.AnalysisWindowLabel}" />
+            </StackPanel>
+            <TextBlock Text="{x:Static res:InsightsStrings.AnalysisTitle}" Style="{StaticResource ValueText}"
+                       FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center" />
+        </DockPanel>
+
+        <!-- Chart card. -->
+        <Border Grid.Row="1" Style="{StaticResource CardStyle}" Margin="0,14,0,14" Padding="10,14,10,6"
+                AutomationProperties.Name="{x:Static res:InsightsStrings.AnalysisChartName}">
+            <Grid>
+                <controls:TraceChart Samples="{Binding Samples}" SampleCount="{Binding SampleCount}"
+                                     DataVersion="{Binding DataVersion}" WindowSeconds="{Binding WindowSeconds}"
+                                     SpeedScale="{Binding SpeedScale}" SpeedUnit="{Binding SpeedUnitLabel}"
+                                     Visibility="{Binding HasData, Converter={StaticResource BoolToVisibility}}" />
+
+                <!-- Empty state: shown until the first sample of a running race arrives. -->
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="440"
+                            Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
+                    <Border Width="72" Height="72" CornerRadius="{StaticResource PillRadius}" HorizontalAlignment="Center"
+                            Background="{StaticResource CardRaisedBrush}" BorderBrush="{StaticResource HairlineBrush}"
+                            BorderThickness="1">
+                        <Viewbox Width="34" Height="34" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="{Binding Source={x:Static local:PageIcons.Analysis}}"
+                                      Stroke="{StaticResource MutedBrush}" StrokeThickness="1.4"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                            </Canvas>
+                        </Viewbox>
+                    </Border>
+                    <TextBlock Text="{x:Static res:InsightsStrings.AnalysisEmptyTitle}" Style="{StaticResource ValueText}"
+                               FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,20,0,0" />
+                    <TextBlock Text="{x:Static res:InsightsStrings.AnalysisEmptyHint}" Style="{StaticResource MutedLabel}"
+                               FontSize="14" TextWrapping="Wrap" TextAlignment="Center" Margin="0,8,0,0" LineHeight="21" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Live readouts of the newest sample. -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Style="{StaticResource ReadoutTile}" Margin="0,0,10,0">
+                <StackPanel>
+                    <TextBlock Text="{x:Static res:InsightsStrings.LaneSpeed}" Style="{StaticResource MutedLabel}" />
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding SpeedText}" Style="{StaticResource ReadoutValue}" />
+                        <TextBlock Text="{Binding SpeedUnitLabel}" Style="{StaticResource MutedLabel}"
+                                   VerticalAlignment="Bottom" Margin="6,0,0,5" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="1" Style="{StaticResource ReadoutTile}" Margin="0,0,10,0">
+                <StackPanel>
+                    <TextBlock Text="{x:Static res:InsightsStrings.LaneRpm}" Style="{StaticResource MutedLabel}" />
+                    <TextBlock Text="{Binding RpmText}" Style="{StaticResource ReadoutValue}" />
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="2" Style="{StaticResource ReadoutTile}" Margin="0,0,10,0">
+                <StackPanel>
+                    <TextBlock Text="{x:Static res:InsightsStrings.LaneGear}" Style="{StaticResource MutedLabel}" />
+                    <TextBlock Text="{Binding GearText}" Style="{StaticResource ReadoutValue}" />
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="3" Style="{StaticResource ReadoutTile}" Margin="0,0,10,0">
+                <StackPanel>
+                    <TextBlock Text="{x:Static res:InsightsStrings.ThrottleLabel}" Style="{StaticResource MutedLabel}" />
+                    <TextBlock Text="{Binding ThrottleText}" Style="{StaticResource ReadoutValue}"
+                               Foreground="{StaticResource ThrottleBrush}" />
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="4" Style="{StaticResource ReadoutTile}" Margin="0,0,10,0">
+                <StackPanel>
+                    <TextBlock Text="{x:Static res:InsightsStrings.BrakeLabel}" Style="{StaticResource MutedLabel}" />
+                    <TextBlock Text="{Binding BrakeText}" Style="{StaticResource ReadoutValue}"
+                               Foreground="{StaticResource BrakeBrush}" />
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="5" Style="{StaticResource ReadoutTile}">
+                <StackPanel>
+                    <TextBlock Text="{x:Static res:InsightsStrings.LaneSteering}" Style="{StaticResource MutedLabel}" />
+                    <TextBlock Text="{Binding SteerText}" Style="{StaticResource ReadoutValue}"
+                               Foreground="{StaticResource ColdBrush}" />
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

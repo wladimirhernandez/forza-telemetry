@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="AnalysisTitle" xml:space="preserve">
+    <value>Trazas en vivo</value>
+  </data>
+  <data name="AnalysisWindowLabel" xml:space="preserve">
+    <value>Ventana</value>
+  </data>
+  <data name="WindowSecondsFormat" xml:space="preserve">
+    <value>{0} s</value>
+  </data>
+  <data name="AnalysisEmptyTitle" xml:space="preserve">
+    <value>Conduce para ver las trazas en vivo</value>
+  </data>
+  <data name="AnalysisEmptyHint" xml:space="preserve">
+    <value>La velocidad, las RPM, los pedales, el volante y la marcha aparecen aquí en cuanto empieza la carrera.</value>
+  </data>
+  <data name="LaneSpeed" xml:space="preserve">
+    <value>Velocidad</value>
+  </data>
+  <data name="LaneSpeedUnitFormat" xml:space="preserve">
+    <value>Velocidad ({0})</value>
+  </data>
+  <data name="LaneRpm" xml:space="preserve">
+    <value>RPM</value>
+  </data>
+  <data name="LanePedals" xml:space="preserve">
+    <value>Pedales</value>
+  </data>
+  <data name="LaneSteering" xml:space="preserve">
+    <value>Dirección</value>
+  </data>
+  <data name="LaneGear" xml:space="preserve">
+    <value>Marcha</value>
+  </data>
+  <data name="ThrottleLabel" xml:space="preserve">
+    <value>Acelerador</value>
+  </data>
+  <data name="BrakeLabel" xml:space="preserve">
+    <value>Freno</value>
+  </data>
+  <data name="SteerLeftShort" xml:space="preserve">
+    <value>I</value>
+  </data>
+  <data name="SteerRightShort" xml:space="preserve">
+    <value>D</value>
+  </data>
+  <data name="SecondsAgoFormat" xml:space="preserve">
+    <value>hace {0:0.0} s</value>
+  </data>
+  <data name="TimeNow" xml:space="preserve">
+    <value>ahora</value>
+  </data>
+  <data name="AnalysisChartName" xml:space="preserve">
+    <value>Trazas de telemetría en vivo</value>
+  </data>
+  <data name="MapTitle" xml:space="preserve">
+    <value>Mapa del recorrido</value>
+  </data>
+  <data name="MapEmptyTitle" xml:space="preserve">
+    <value>Conduce para dibujar tu recorrido</value>
+  </data>
+  <data name="MapEmptyHint" xml:space="preserve">
+    <value>El recorrido se dibuja en vivo, coloreado por velocidad.</value>
+  </data>
+  <data name="MapClear" xml:space="preserve">
+    <value>Borrar</value>
+  </data>
+  <data name="MapClearTooltip" xml:space="preserve">
+    <value>Borrar el recorrido dibujado</value>
+  </data>
+  <data name="MapDistance" xml:space="preserve">
+    <value>Distancia</value>
+  </data>
+  <data name="MapTopSpeed" xml:space="preserve">
+    <value>Velocidad máxima</value>
+  </data>
+  <data name="MapBrakingZones" xml:space="preserve">
+    <value>Zonas de frenada</value>
+  </data>
+  <data name="MapLegendTitleFormat" xml:space="preserve">
+    <value>Velocidad ({0})</value>
+  </data>
+  <data name="MapBrakingLegend" xml:space="preserve">
+    <value>Punto de frenada</value>
+  </data>
+  <data name="MapNavigationHint" xml:space="preserve">
+    <value>Rueda para acercar, arrastra para mover, doble clic para restablecer</value>
+  </data>
+  <data name="DistanceKm" xml:space="preserve">
+    <value>km</value>
+  </data>
+  <data name="DistanceMi" xml:space="preserve">
+    <value>mi</value>
+  </data>
+  <data name="MapChartName" xml:space="preserve">
+    <value>Mapa del recorrido coloreado por velocidad</value>
+  </data>
+  <data name="CornerFrontLeft" xml:space="preserve">
+    <value>DI</value>
+  </data>
+  <data name="CornerFrontRight" xml:space="preserve">
+    <value>DD</value>
+  </data>
+  <data name="CornerRearLeft" xml:space="preserve">
+    <value>TI</value>
+  </data>
+  <data name="CornerRearRight" xml:space="preserve">
+    <value>TD</value>
+  </data>
+  <data name="DynoTitle" xml:space="preserve">
+    <value>Potencia y par</value>
+  </data>
+  <data name="DynoHint" xml:space="preserve">
+    <value>Las aceleraciones a fondo construyen esta curva.</value>
+  </data>
+  <data name="DynoEmptyTitle" xml:space="preserve">
+    <value>Aún no hay curva</value>
+  </data>
+  <data name="DynoEmptyHint" xml:space="preserve">
+    <value>Acelera a fondo recorriendo el rango de revoluciones en una misma marcha para capturar potencia y par.</value>
+  </data>
+  <data name="DynoReset" xml:space="preserve">
+    <value>Reiniciar curva</value>
+  </data>
+  <data name="DynoResetTooltip" xml:space="preserve">
+    <value>Olvidar la curva capturada de este coche</value>
+  </data>
+  <data name="DynoPeakPower" xml:space="preserve">
+    <value>Potencia máxima</value>
+  </data>
+  <data name="DynoPeakTorque" xml:space="preserve">
+    <value>Par máximo</value>
+  </data>
+  <data name="DynoPowerAxis" xml:space="preserve">
+    <value>kW</value>
+  </data>
+  <data name="DynoTorqueAxis" xml:space="preserve">
+    <value>Nm</value>
+  </data>
+  <data name="DynoRpmAxis" xml:space="preserve">
+    <value>rpm</value>
+  </data>
+  <data name="DynoPeakPowerFormat" xml:space="preserve">
+    <value>{0} kW ({1} hp)</value>
+  </data>
+  <data name="DynoAtRpmFormat" xml:space="preserve">
+    <value>a {0} rpm</value>
+  </data>
+  <data name="DynoPeakTorqueFormat" xml:space="preserve">
+    <value>{0} Nm</value>
+  </data>
+  <data name="DynoChartName" xml:space="preserve">
+    <value>Curva de potencia y par</value>
+  </data>
+  <data name="CarFormat" xml:space="preserve">
+    <value>Coche {0}</value>
+  </data>
+  <data name="PiFormat" xml:space="preserve">
+    <value>PI {0}</value>
+  </data>
+  <data name="NoCarYet" xml:space="preserve">
+    <value>Aún no se detecta ningún coche</value>
+  </data>
+  <data name="BalanceTitle" xml:space="preserve">
+    <value>Equilibrio del coche</value>
+  </data>
+  <data name="BalanceUndersteer" xml:space="preserve">
+    <value>Subviraje</value>
+  </data>
+  <data name="BalanceOversteer" xml:space="preserve">
+    <value>Sobreviraje</value>
+  </data>
+  <data name="BalanceNeutral" xml:space="preserve">
+    <value>Neutro</value>
+  </data>
+  <data name="BalanceUnknown" xml:space="preserve">
+    <value>Toma una curva para medir el equilibrio.</value>
+  </data>
+  <data name="BalanceAdviceUndersteer" xml:space="preserve">
+    <value>El eje delantero se desliza más que el trasero. Prueba una barra estabilizadora delantera más blanda, una trasera más rígida o más carga aerodinámica delantera.</value>
+  </data>
+  <data name="BalanceAdviceOversteer" xml:space="preserve">
+    <value>El eje trasero se desliza más que el delantero. Prueba una barra estabilizadora delantera más rígida, una trasera más blanda o más carga aerodinámica trasera.</value>
+  </data>
+  <data name="BalanceAdviceNeutral" xml:space="preserve">
+    <value>Bien equilibrado: ambos ejes agarran más o menos igual.</value>
+  </data>
+  <data name="BalanceBarName" xml:space="preserve">
+    <value>Equilibrio entre subviraje y sobreviraje</value>
+  </data>
+  <data name="SuspensionTitle" xml:space="preserve">
+    <value>Suspensión</value>
+  </data>
+  <data name="SuspensionHint" xml:space="preserve">
+    <value>Veces que cada esquina tocó el tope.</value>
+  </data>
+  <data name="SuspensionReset" xml:space="preserve">
+    <value>Reiniciar contadores</value>
+  </data>
+  <data name="SuspensionResetTooltip" xml:space="preserve">
+    <value>Poner a cero los contadores de topes</value>
+  </data>
+  <data name="SuspensionAdviceNone" xml:space="preserve">
+    <value>Sin topes por ahora.</value>
+  </data>
+  <data name="SuspensionAdviceFew" xml:space="preserve">
+    <value>Algún tope ocasional es normal tras aterrizajes fuertes.</value>
+  </data>
+  <data name="SuspensionAdviceFront" xml:space="preserve">
+    <value>El eje delantero llega al tope a menudo. Prueba muelles delanteros más rígidos o más altura.</value>
+  </data>
+  <data name="SuspensionAdviceRear" xml:space="preserve">
+    <value>El eje trasero llega al tope a menudo. Prueba muelles traseros más rígidos o más altura.</value>
+  </data>
+  <data name="SuspensionAdviceBoth" xml:space="preserve">
+    <value>Ambos ejes llegan al tope a menudo. Prueba muelles más rígidos y más altura.</value>
+  </data>
+  <data name="TiresTitle" xml:space="preserve">
+    <value>Neumáticos</value>
+  </data>
+  <data name="TiresAdviceBalanced" xml:space="preserve">
+    <value>Las temperaturas de los neumáticos están equilibradas.</value>
+  </data>
+  <data name="TiresNoData" xml:space="preserve">
+    <value>Esperando datos de los neumáticos.</value>
+  </data>
+  <data name="TiresAdviceFrontHotter" xml:space="preserve">
+    <value>Los neumáticos delanteros están bastante más calientes que los traseros: el eje delantero hace casi todo el trabajo y tiende a subvirar. Ablanda la barra estabilizadora delantera o añade agarre trasero.</value>
+  </data>
+  <data name="TiresAdviceRearHotter" xml:space="preserve">
+    <value>Los neumáticos traseros están bastante más calientes que los delanteros: el eje trasero hace casi todo el trabajo y tiende a sobrevirar. Ablanda la barra estabilizadora trasera o añade agarre delantero.</value>
+  </data>
+  <data name="TiresAdviceLeftHotter" xml:space="preserve">
+    <value>Los neumáticos izquierdos están más calientes que los derechos. Es normal en circuitos con casi todas las curvas a derechas; si no, revisa la caída y las presiones de cada lado.</value>
+  </data>
+  <data name="TiresAdviceRightHotter" xml:space="preserve">
+    <value>Los neumáticos derechos están más calientes que los izquierdos. Es normal en circuitos con casi todas las curvas a izquierdas; si no, revisa la caída y las presiones de cada lado.</value>
+  </data>
+  <data name="TiresAdviceAllCold" xml:space="preserve">
+    <value>Todos los neumáticos están por debajo de su temperatura de trabajo. Conduce con más ritmo unas curvas para calentarlos.</value>
+  </data>
+  <data name="TiresAdviceAllHot" xml:space="preserve">
+    <value>Todos los neumáticos se están sobrecalentando. Levanta el ritmo un momento y revisa las presiones.</value>
+  </data>
+  <data name="TuningEmptyHint" xml:space="preserve">
+    <value>Conduce para ver las ayudas de puesta a punto.</value>
+  </data>
+</root>
