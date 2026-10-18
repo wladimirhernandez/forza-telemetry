@@ -44,7 +44,8 @@ internal sealed class SessionsRig : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "ForzaTelemetryTests", Guid.NewGuid().ToString("N"));
 
-    public SessionsRig(bool confirmDelete = true, bool pauseReplayAtStart = false, double replaySpeed = ReplaySpeed.Max)
+    public SessionsRig(
+        bool confirmDelete = true, bool pauseReplayAtStart = false, double replaySpeed = ReplaySpeed.Max, bool withPerformance = false)
     {
         Folder = Path.Combine(_root, "recordings");
         Engines = new TelemetryEngines();
@@ -72,12 +73,19 @@ internal sealed class SessionsRig : IDisposable
                 return source;
             });
 
+        if (withPerformance)
+        {
+            PerformanceHistory = new PerformanceHistoryStore(Path.Combine(_root, "performance.json"), Clock);
+            Performance = new PerformanceViewModel(Engines.Acceleration, Engines.TopSpeed, Engines.CarChanges, PerformanceHistory);
+        }
+
         Sessions = new SessionsViewModel(Service, Recorder, Library, Confirmation, Opener);
         Shell = new ShellViewModel(
             Service,
             Clock,
             dataOut: new DataOutViewModel(Settings.Current.UdpPort, null),
             settings: Settings,
+            performancePage: Performance,
             engines: Engines,
             sessionsPage: Sessions);
     }
@@ -104,12 +112,18 @@ internal sealed class SessionsRig : IDisposable
 
     public ShellViewModel Shell { get; }
 
+    /// <summary>The Performance page and its store, present only when the rig was built <c>withPerformance</c>.</summary>
+    public PerformanceViewModel? Performance { get; }
+
+    public PerformanceHistoryStore? PerformanceHistory { get; }
+
     /// <summary>The live source built by the most recent live Start.</summary>
     public FakeTelemetrySource? Source { get; private set; }
 
     /// <summary>Writes a real recording into the library folder and returns its path.</summary>
-    public Task<string> AddRecordingAsync(string name, int packets = 10, int car = 1234, DateTimeOffset? startedAt = null) =>
-        RecordingFiles.WriteAsync(Folder, name, packets, car: car, startedAt: startedAt);
+    public Task<string> AddRecordingAsync(
+        string name, int packets = 10, int car = 1234, DateTimeOffset? startedAt = null, int intervalMs = 100) =>
+        RecordingFiles.WriteAsync(Folder, name, packets, intervalMs, car, startedAt);
 
     public async Task StartLiveAsync()
     {
@@ -126,6 +140,7 @@ internal sealed class SessionsRig : IDisposable
 
     public async ValueTask StopEverythingAsync()
     {
+        await Sessions.PendingLibraryRefresh; // a rescan started by a stop may still be reading the files about to be deleted
         await Recorder.DisposeAsync();
         await Service.StopAsync();
     }

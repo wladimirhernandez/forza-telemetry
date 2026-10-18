@@ -23,9 +23,13 @@ public static class LapTimeFormatter
 
     // One entry: the zero text of the culture it was built for. The Laps screen reads Zero on every 20 Hz tick while no lap
     // runs, and rebuilding the same string 20 times a second is pointless. Keyed by culture (not computed once) because the
-    // decimal separator belongs to the culture, which tests, and a language switch, can change. A single immutable tuple
-    // swapped in one write keeps the cache thread-safe without a lock.
-    private static (CultureInfo Culture, string Text)? _zero;
+    // decimal separator belongs to the culture, which tests, and a language switch, can change. The entry is an immutable
+    // REFERENCE type: replacing a reference is one atomic write, so a reader sees either the old entry or the new one, never a
+    // culture from one and a text from the other. (A nullable value tuple would be copied in several steps, and that tear is
+    // exactly what this avoids.) Two threads that miss at once both build the same text and the last write wins: harmless.
+    private sealed record ZeroEntry(CultureInfo Culture, string Text);
+
+    private static volatile ZeroEntry? _zero;
 
     /// <summary>The zero time, <c>0:00.000</c>: what a clock that is not running shows.</summary>
     public static string Zero
@@ -33,13 +37,14 @@ public static class LapTimeFormatter
         get
         {
             var culture = CultureInfo.CurrentCulture;
-            if (_zero is { } cached && ReferenceEquals(cached.Culture, culture))
+            var cached = _zero; // one read: the checks below must all be about the same entry
+            if (cached is not null && ReferenceEquals(cached.Culture, culture))
             {
                 return cached.Text;
             }
 
             var text = Format(0);
-            _zero = (culture, text);
+            _zero = new ZeroEntry(culture, text);
             return text;
         }
     }

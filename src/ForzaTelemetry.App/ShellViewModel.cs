@@ -51,6 +51,12 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
     // What the top bar says it is replaying ("2026-10-18 01:23"), set by PlayAsync. Only meaningful while replaying.
     private string _replayLabel = "";
 
+    // True once the Performance page saved the session that is on screen (a Stop did it). BeginFreshSession saves it itself only
+    // when this is false, i.e. when the session ended WITHOUT a Stop (a mid-stream fault): saving twice would re-merge the same
+    // numbers and touch the history file for nothing. Cleared when a session begins, and when a port move carries one on (that
+    // stops and restarts the listener WITHIN one session, so what happens next is not saved yet).
+    private bool _sessionSaved;
+
     // The port the LAST Start tried to bind (read from the settings at that moment, not when an error is shown). A port
     // change while the listener is running or has failed updates the settings at once, so the settings port can differ
     // from the one the current listener, or the failed bind, used. Null until the first Start; messages then fall back to
@@ -561,9 +567,13 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
                 }
                 else if (_telemetryService.Fault is not null && _telemetryService.Mode == TelemetrySourceMode.Live)
                 {
-                    // Nothing to stop: a failed start left no listener behind. And nothing to continue either: that failed Start
-                    // already began a session (it reset the screens and the engines), so this retry is the first real start of it.
-                    await StartCoreAsync(continuesSession: false);
+                    // Two very different faults land here, and only the first one has anything to start over:
+                    // - the START failed (port in use): no listener ever ran, but the attempt already began a session (it reset the
+                    //   screens and the engines), so this retry is the first real start of it;
+                    // - the listener ran and DIED mid-stream (a socket error, the adapter went away): the session the user is
+                    //   looking at is still theirs, laps and bests included, and moving to another port carries on with it.
+                    //   Wiping it because the network hiccuped would be the data loss the running-port move avoids.
+                    await StartCoreAsync(continuesSession: !_telemetryService.StartFailed);
                 }
             });
         }
@@ -614,9 +624,13 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
         // packets. Before it starts nothing else touches them and the reset is exact. The price is that a Start that then
         // fails (port in use) leaves the screens empty, which is honest: the previous session is over once the user asked
         // for another one. (A port move continues the session and skips this.)
-        if (!continuesSession)
+        if (continuesSession)
         {
-            BeginFreshSession();
+            _sessionSaved = false; // the same session goes on: what happens next is not saved yet
+        }
+        else
+        {
+            BeginFreshSession(isReplay: false);
         }
 
         await _telemetryService.StartAsync();
@@ -633,17 +647,24 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
     /// loop is running (see <see cref="StartCoreAsync"/>). The order is the point:
     /// <list type="number">
     /// <item>The previous session's top speed is saved first: the engines are about to forget it, and a session that ended in a
-    /// fault never went through Stop. The loop is not running, so this read cannot race a change of car.</item>
+    /// fault never went through Stop. The loop is not running, so this read cannot race a change of car. A session that DID go
+    /// through Stop was saved by it (<see cref="_sessionSaved"/>) and is not saved a second time.</item>
     /// <item>The ENGINES are reset (one call, <see cref="TelemetryEngines.BeginSession"/>), including the car-change detector.</item>
     /// <item>The screens reset only what they DISPLAY, after their source is empty.</item>
     /// </list>
     /// </summary>
-    private void BeginFreshSession()
+    /// <param name="isReplay">The new session is a recording being replayed: the Performance page then saves nothing from it.</param>
+    private void BeginFreshSession(bool isReplay)
     {
-        Performance?.EndSession();
+        if (!_sessionSaved)
+        {
+            Performance?.EndSession();
+        }
+
         _engines?.BeginSession();
 
-        Performance?.BeginSession();
+        Performance?.BeginSession(isReplay);
+        _sessionSaved = false; // the session that is starting has saved nothing yet
         Laps?.BeginSession();
         Analysis?.BeginSession();
         Map?.BeginSession();
@@ -666,6 +687,7 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
         // Unlike the dashboard, the Performance numbers stay on screen (the user stops to READ the result); only unsaved
         // bests are written out and the state line stops claiming the timer is armed.
         Performance?.EndSession();
+        _sessionSaved = true;
         Laps?.EndSession();
         Refresh();
     }
@@ -683,6 +705,13 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
     public Task StopReplayAsync() =>
         RunExclusiveAsync(() => _telemetryService.IsReplaying ? StopCoreAsync() : Task.CompletedTask);
 
+    /// <inheritdoc />
+    public Task RestartReplayAsync() =>
+        RunExclusiveAsync(() =>
+            _telemetryService.IsReplaying && _telemetryService.ReplayPath is { } path
+                ? StartReplayCoreAsync(path, _replayLabel)
+                : Task.CompletedTask);
+
     private async Task StartReplayCoreAsync(string path, string label)
     {
         // Live listening (or another replay) ends first, cleanly: its recording is finished, its session saved, its UDP port or
@@ -695,8 +724,10 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
         _replayLabel = label;
 
         // A replay is a fresh session, exactly like a successful live Start: engines and screens reset BEFORE the loop starts
-        // (see BeginFreshSession), so what the tabs show is the recording and nothing else.
-        BeginFreshSession();
+        // (see BeginFreshSession), so what the tabs show is the recording and nothing else. This is also how a restart (or
+        // "play again" on a finished recording) works: it goes back to the first record AND to empty engines, never just a
+        // seek, because the accumulators (laps, path, top speed, the 0-100 timer) would otherwise count the recording twice.
+        BeginFreshSession(isReplay: true);
         await _telemetryService.StartReplayAsync(path);
 
         ResetSessionState();

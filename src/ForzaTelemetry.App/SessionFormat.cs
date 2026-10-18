@@ -29,7 +29,8 @@ public static class SessionFormat
 
     /// <summary>
     /// A file size in the largest sensible unit (<c>812 B</c>, <c>41.2 KB</c>, <c>1.3 MB</c>, <c>2.1 GB</c>), binary steps of 1024,
-    /// one decimal from KB up. Negative values read as zero.
+    /// one decimal from KB up. Negative values read as zero. The unit is chosen AFTER rounding to the one decimal that is shown,
+    /// so a size just under a boundary reads <c>1.0 MB</c> and never the nonsensical <c>1024.0 KB</c>.
     /// </summary>
     public static string Size(long bytes)
     {
@@ -40,13 +41,15 @@ public static class SessionFormat
         }
 
         string[] units = ["KB", "MB", "GB", "TB"];
-        var unit = -1;
-        do
+        var unit = 0;
+        value /= Kilo;
+
+        // Compare what will be DISPLAYED, not the raw value: 1023.96 KB prints as "1024.0", which is already a megabyte.
+        while (Math.Round(value, 1, MidpointRounding.AwayFromZero) >= Kilo && unit < units.Length - 1)
         {
             value /= Kilo;
             unit++;
         }
-        while (value >= Kilo && unit < units.Length - 1);
 
         return string.Create(CultureInfo.CurrentCulture, $"{value:0.0} {units[unit]}");
     }

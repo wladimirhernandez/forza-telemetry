@@ -385,6 +385,9 @@
   <data name="PerfTrapFormat" xml:space="preserve">
     <value>{0} {1} en la meta</value>
   </data>
+  <data name="PerfReplayNote" xml:space="preserve">
+    <value>Reproducción: estos resultados no se guardan en tu historial.</value>
+  </data>
   <data name="PerfThresholdNote" xml:space="preserve">
     <value>Las pruebas se miden hasta 100 y 200 km/h (unas 62 y 124 mph) con cualquier unidad. Las velocidades se muestran en tu unidad.</value>
   </data>

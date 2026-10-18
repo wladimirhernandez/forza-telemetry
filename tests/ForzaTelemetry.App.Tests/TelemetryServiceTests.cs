@@ -241,4 +241,29 @@ public class TelemetryServiceTests
 
         Assert.Contains(logger.Entries, e => e.Level == LogLevel.Error && e.Exception is SocketException);
     }
+
+    [Fact]
+    public async Task A_factory_failure_is_a_failed_start_and_a_mid_stream_failure_is_not()
+    {
+        var failStart = true;
+        var fake = new FakeTelemetrySource();
+        var service = new TelemetryService(
+            () => failStart ? throw new SocketException((int)SocketError.AddressAlreadyInUse) : fake);
+
+        await service.StartAsync();
+        Assert.NotNull(service.Fault);
+        Assert.True(service.StartFailed); // no listener ever ran: nothing was started
+
+        failStart = false;
+        await service.StartAsync();
+        Assert.Null(service.Fault);
+        Assert.False(service.StartFailed); // a later start clears it, like the fault
+
+        fake.FailNextReadWith(new InvalidOperationException("boom"));
+        fake.Publish(TestPackets.Sample());
+        Assert.True(await Wait.UntilAsync(() => service.Fault is not null));
+
+        Assert.False(service.StartFailed); // the listener ran and died: the session it served was real
+        await service.StopAsync();
+    }
 }

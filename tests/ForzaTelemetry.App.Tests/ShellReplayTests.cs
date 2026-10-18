@@ -1,6 +1,7 @@
 using System.Globalization;
 using ForzaTelemetry.App.Resources;
 using ForzaTelemetry.App.Services;
+using ForzaTelemetry.Core.Recording;
 
 namespace ForzaTelemetry.App.Tests;
 
@@ -254,5 +255,101 @@ public sealed class ShellReplayTests
 
         Assert.Same(rig.Sessions, rig.Shell.Tabs.Single(t => t.Id == PageId.Sessions).Page);
         Assert.Same(rig.Sessions, rig.Shell.Sessions);
+    }
+
+    // ---- Restart is a fresh session -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task Restarting_a_replay_begins_a_fresh_session_so_nothing_is_counted_twice()
+    {
+        using var rig = new SessionsRig();
+        var path = await rig.AddRecordingAsync("drive", packets: 10);
+        await rig.Shell.PlayAsync(path, Label);
+        Assert.True(await Wait.UntilAsync(() => rig.Service.Replay!.IsFinished));
+        Assert.Equal(10, rig.Engines.History.Count);
+        var firstReplay = rig.Service.Replay;
+
+        await rig.Shell.RestartReplayAsync();
+        Assert.True(await Wait.UntilAsync(() => rig.Service.Replay!.IsFinished && rig.Service.ReceivedCount == 20));
+
+        Assert.NotSame(firstReplay, rig.Service.Replay); // a new source, not a seek of the old one
+        Assert.Equal(10, rig.Engines.History.Count); // the engines were emptied first: 10, never 20
+        Assert.True(rig.Shell.IsReplaying);
+        await rig.Shell.StopReplayAsync();
+    }
+
+    [Fact]
+    public async Task Restarting_when_nothing_is_replaying_does_nothing()
+    {
+        using var rig = new SessionsRig();
+        await rig.StartLiveAsync();
+        var live = rig.Source;
+
+        await rig.Shell.RestartReplayAsync();
+
+        Assert.True(rig.Service.IsRunning);
+        Assert.Equal(TelemetrySourceMode.Live, rig.Service.Mode);
+        Assert.Same(live, rig.Source);
+        await rig.Shell.StopCommand.ExecuteAsync(null);
+    }
+
+    // ---- Packets per second -------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task The_packet_rate_counts_replayed_packets_like_live_ones()
+    {
+        using var rig = new SessionsRig(replaySpeed: ReplaySpeed.Normal);
+        var path = await rig.AddRecordingAsync("drive", packets: 60, intervalMs: 100);
+        await rig.Shell.PlayAsync(path, Label);
+
+        // The recording plays at one packet per 100 ms of the fake clock. The replay waits on the fake clock, and registers each wait only
+        // once the loop reaches it, so the clock is moved in small steps until the packets have arrived.
+        var ticks = 0;
+        Assert.True(await Wait.UntilAsync(() =>
+        {
+            if (ticks++ < 50)
+            {
+                rig.Clock.Advance(TimeSpan.FromMilliseconds(100));
+            }
+
+            return rig.Service.ReceivedCount >= 5;
+        }));
+        rig.Shell.Refresh();
+
+        Assert.True(rig.Shell.PacketsPerSecond > 0);
+        await rig.Shell.StopReplayAsync();
+    }
+
+    // ---- A replay does not feed the saved bests ----------------------------------------------------------
+
+    [Fact]
+    public async Task A_replay_begins_a_replay_session_on_the_performance_page_and_a_live_start_ends_it()
+    {
+        using var rig = new SessionsRig(pauseReplayAtStart: true, withPerformance: true);
+        var path = await rig.AddRecordingAsync("drive");
+
+        await rig.Shell.PlayAsync(path, Label);
+        Assert.True(rig.Performance!.IsReplaySession);
+
+        await rig.Shell.StopReplayAsync();
+        Assert.True(rig.Performance.IsReplaySession); // still the replay's numbers on screen: the note stays until a new session
+
+        await rig.Shell.StartCommand.ExecuteAsync(null);
+        Assert.False(rig.Performance.IsReplaySession);
+        await rig.Shell.StopCommand.ExecuteAsync(null);
+    }
+
+    [Fact]
+    public async Task Replaying_a_drive_writes_nothing_to_the_performance_history()
+    {
+        using var rig = new SessionsRig(withPerformance: true);
+        var path = await rig.AddRecordingAsync("fast", packets: 30, car: 1234);
+
+        await rig.Shell.PlayAsync(path, Label);
+        Assert.True(await Wait.UntilAsync(() => rig.Service.Replay!.IsFinished));
+        rig.Shell.Refresh();
+        await rig.Shell.StopReplayAsync();
+
+        Assert.Empty(rig.PerformanceHistory!.Records);
     }
 }

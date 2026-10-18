@@ -153,4 +153,7 @@ internal static partial class AppLog
 
     [LoggerMessage(EventId = 170, Level = LogLevel.Information, Message = "Replay started: {Path}.")]
     public static partial void ReplayStarted(ILogger logger, string path);
+
+    [LoggerMessage(EventId = 171, Level = LogLevel.Warning, Message = "Could not refresh the recordings list after a recording stopped ({Folder}); it is read again the next time the page opens.")]
+    public static partial void LibraryRefreshFailed(ILogger logger, Exception exception, string folder);
 }

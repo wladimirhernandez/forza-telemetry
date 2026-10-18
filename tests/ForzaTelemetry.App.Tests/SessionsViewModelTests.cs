@@ -13,6 +13,16 @@ public sealed class SessionsViewModelTests
 
         public int Stops { get; private set; }
 
+        public int Restarts { get; private set; }
+
+        public bool IsBusy { get; set; }
+
+        public Task RestartReplayAsync()
+        {
+            Restarts++;
+            return Task.CompletedTask;
+        }
+
         public Task PlayAsync(string path, string label)
         {
             Played.Add((path, label));
@@ -85,6 +95,7 @@ public sealed class SessionsViewModelTests
         Assert.Equal(SessionFormat.Size(24 + (25 * 12) + (25 * 324)), rig.Sessions.RecordingSizeText); // header + records + payloads
 
         await rig.Sessions.ToggleRecordingCommand.ExecuteAsync(null);
+        await rig.Sessions.PendingLibraryRefresh; // the list is rescanned in the background after the stop
 
         Assert.False(rig.Sessions.IsRecording);
         Assert.Equal(["2026-10-18_01-23-45", "older"], rig.Sessions.Rows.Select(r => r.Name)); // the new one is the newest
@@ -136,6 +147,7 @@ public sealed class SessionsViewModelTests
         await rig.Service.StopAsync(); // the loop is gone (a fault looks the same from here); the shell was not asked
         rig.Sessions.Refresh();
         await rig.Sessions.StopRecordingAsync(); // waits for the stop Refresh started
+        await rig.Sessions.PendingLibraryRefresh;
 
         Assert.False(rig.Sessions.IsRecording);
         Assert.False(rig.Recorder.IsRecording);
@@ -152,6 +164,7 @@ public sealed class SessionsViewModelTests
         rig.Recorder.OnDatagram(RecordingFiles.Datagram());
 
         await rig.Shell.StopCommand.ExecuteAsync(null);
+        await rig.Sessions.PendingLibraryRefresh;
 
         Assert.False(rig.Recorder.IsRecording);
         Assert.False(rig.Service.IsRunning);
@@ -489,7 +502,8 @@ public sealed class SessionsViewModelTests
         Assert.True(await Wait.UntilAsync(() => rig.Service.Replay!.IsFinished));
         var before = rig.Service.ReceivedCount;
 
-        rig.Sessions.RestartCommand.Execute(null);
+        await rig.Sessions.RestartCommand.ExecuteAsync(null);
+        rig.Service.Replay!.Resume(); // this rig builds every replay paused; the app's own replays start playing
 
         Assert.True(await Wait.UntilAsync(() => rig.Service.ReceivedCount == before + 6));
         await rig.Shell.StopReplayAsync();
@@ -560,5 +574,83 @@ public sealed class SessionsViewModelTests
         rig.Sessions.Refresh();
         Assert.Equal("", rig.Sessions.Notice); // reported once, not on every tick
         Assert.NotEmpty(notice);
+    }
+
+    // ---- Requests the shell drops ------------------------------------------------------------------------
+
+    [Fact]
+    public async Task A_play_the_busy_shell_will_drop_leaves_the_notice_and_the_playing_name_alone()
+    {
+        using var rig = new SessionsRig();
+        await rig.AddRecordingAsync("drive");
+        var host = new FakeHost { IsBusy = true };
+        rig.Sessions.Attach(host);
+        var row = Assert.Single(await rig.LoadLibraryAsync());
+        rig.Sessions.Notice = "Deleted something earlier";
+
+        await row.PlayCommand.ExecuteAsync(null);
+
+        Assert.Empty(host.Played); // not even asked: the shell would have dropped it
+        Assert.Equal("Deleted something earlier", rig.Sessions.Notice); // a message about something else is not erased for nothing
+
+        host.IsBusy = false;
+        await row.PlayCommand.ExecuteAsync(null);
+
+        Assert.Single(host.Played);
+        Assert.Equal("", rig.Sessions.Notice); // accepted: the message is about the previous action, not this replay
+    }
+
+    [Fact]
+    public async Task Restart_asks_the_host_for_a_fresh_replay_instead_of_seeking_the_running_one()
+    {
+        using var rig = new SessionsRig(pauseReplayAtStart: true);
+        var path = await rig.AddRecordingAsync("drive", packets: 6);
+        await rig.Shell.PlayAsync(path, "label");
+        var host = new FakeHost();
+        rig.Sessions.Attach(host);
+        rig.Sessions.Refresh();
+
+        await rig.Sessions.RestartCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, host.Restarts);
+        Assert.True(rig.Service.Replay!.IsPaused); // untouched: the host decides what a restart does, not the page
+        await rig.Shell.StopReplayAsync();
+    }
+
+    [Fact]
+    public async Task A_restart_keeps_the_chosen_speed()
+    {
+        using var rig = new SessionsRig(pauseReplayAtStart: true, replaySpeed: ReplaySpeed.Normal);
+        var path = await rig.AddRecordingAsync("drive", packets: 20);
+        await rig.Shell.PlayAsync(path, "label");
+        rig.Sessions.Refresh();
+        rig.Sessions.SelectedSpeed = ReplaySpeed.Double;
+        var before = rig.Service.Replay;
+
+        await rig.Sessions.RestartCommand.ExecuteAsync(null);
+
+        Assert.NotSame(before, rig.Service.Replay);
+        Assert.Equal(ReplaySpeed.Double, rig.Service.Replay!.Speed);
+        Assert.Equal(ReplaySpeed.Double, rig.Sessions.SelectedSpeed);
+        await rig.Shell.StopReplayAsync();
+    }
+
+    [Fact]
+    public async Task A_replay_that_dies_leaves_its_row_free_to_rename_and_delete()
+    {
+        using var rig = new SessionsRig();
+        var path = await rig.AddRecordingAsync("drive");
+        var row = Assert.Single(await rig.LoadLibraryAsync());
+        File.Delete(path); // gone between the listing and the click: the replay's loop dies on its first read
+
+        await rig.Shell.PlayAsync(path, "label");
+        Assert.True(await Wait.UntilAsync(() => rig.Service.Fault is not null));
+        rig.Sessions.Refresh();
+
+        // Nobody is playing it any more, so the row must not stay marked as in use (it would refuse a rename or delete for
+        // as long as the dead replay's state lingered).
+        Assert.False(row.IsPlaying);
+        Assert.True(row.CanModify);
+        await rig.Shell.StopReplayAsync(); // still works, and is a harmless no-op for a replay that is not running
     }
 }

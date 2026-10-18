@@ -104,6 +104,7 @@ public sealed class TelemetryService : IAsyncDisposable
     private TelemetryPacket? _latest;
     private long _receivedCount;
     private Exception? _fault;
+    private bool _startFailed;
     private bool _isRunning;
 
     /// <param name="sourceFactory">Builds a fresh telemetry source for every Start (see the class remarks).</param>
@@ -141,6 +142,14 @@ public sealed class TelemetryService : IAsyncDisposable
     /// a later successful Start clears an earlier failure.
     /// </summary>
     public Exception? Fault => Volatile.Read(ref _fault);
+
+    /// <summary>
+    /// True when <see cref="Fault"/> is the failure of the Start itself (the source could not be built: port in use, no such
+    /// file), as opposed to a source that ran and then broke mid-stream. The difference matters to the caller: a failed Start
+    /// never produced a session, while a mid-stream fault ended one that the user may want to carry on after fixing the cause
+    /// (typing another port). Cleared at the start of every Start, like <see cref="Fault"/>.
+    /// </summary>
+    public bool StartFailed => Volatile.Read(ref _startFailed);
 
     /// <summary>
     /// Where the current session's packets come from. While the service is stopped this is the mode of the LAST start attempt
@@ -221,6 +230,7 @@ public sealed class TelemetryService : IAsyncDisposable
         await StopCoreAsync().ConfigureAwait(false);
 
         Volatile.Write(ref _fault, null);
+        Volatile.Write(ref _startFailed, false);
         Volatile.Write(ref _mode, (int)mode);
 
         // Latest is also cleared on Stop; repeated here as a belt for a loop that faulted (no Stop ran).
@@ -239,6 +249,7 @@ public sealed class TelemetryService : IAsyncDisposable
         }
         catch (Exception ex)
         {
+            Volatile.Write(ref _startFailed, true);
             Volatile.Write(ref _fault, ex);
             AppLog.StartFailed(_logger, ex);
             return;
@@ -261,6 +272,7 @@ public sealed class TelemetryService : IAsyncDisposable
 
     private async Task RunLoopAsync(ITelemetrySource source, CancellationToken ct)
     {
+        var replay = source as ReplayTelemetrySource;
         try
         {
             await foreach (var packet in source.ReadPacketsAsync(ct).ConfigureAwait(false))
@@ -290,12 +302,32 @@ public sealed class TelemetryService : IAsyncDisposable
             // "Fault is not null" could read IsRunning == true. Volatile.Write is a release store, so a reader that
             // observes the fault (an acquire read) is guaranteed to observe the earlier IsRunning write too.
             Volatile.Write(ref _isRunning, false);
+            ReleaseReplay(replay); // before the fault is visible, so "faulted" never coexists with "still replaying this file"
             Volatile.Write(ref _fault, ex);
             AppLog.LoopFaulted(_logger, ex);
         }
         finally
         {
             Volatile.Write(ref _isRunning, false);
+            ReleaseReplay(replay);
+        }
+    }
+
+    /// <summary>
+    /// A replay whose loop has ended by itself (it faulted) stops being "the replay in progress": <see cref="Replay"/> and
+    /// <see cref="ReplayPath"/> are cleared, so nothing keeps treating its file as in use (the library would refuse to rename or
+    /// delete a recording nobody is playing) and nothing offers playback controls for a dead source. The source itself is
+    /// released later, by the next Start or Stop, like a faulted live listener (see <see cref="StartCoreAsync"/>).
+    /// <para>
+    /// Compare-and-swap, not a plain write: a Stop that already cleared the fields (and, in principle, a newer replay that was
+    /// published after it) must not be wiped by this late cleanup. Only the replay THIS loop was reading is ever cleared.
+    /// </para>
+    /// </summary>
+    private void ReleaseReplay(ReplayTelemetrySource? replay)
+    {
+        if (replay is not null && ReferenceEquals(Interlocked.CompareExchange(ref _replay, null, replay), replay))
+        {
+            Volatile.Write(ref _replayPath, null);
         }
     }
 

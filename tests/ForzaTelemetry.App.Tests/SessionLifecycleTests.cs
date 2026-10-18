@@ -47,7 +47,9 @@ public sealed class SessionLifecycleTests : IDisposable
                         throw new SocketException((int)SocketError.AddressAlreadyInUse);
                     }
 
-                    return new FakeTelemetrySource();
+                    var source = new FakeTelemetrySource();
+                    Sources.Add(source);
+                    return source;
                 },
                 observers: Engines.Observers);
             Shell = new ShellViewModel(
@@ -75,6 +77,9 @@ public sealed class SessionLifecycleTests : IDisposable
         public ShellViewModel Shell { get; }
 
         public HashSet<int> BusyPorts { get; } = [];
+
+        /// <summary>Every listener the service built, in order (a test makes one of them fail mid-stream).</summary>
+        public List<FakeTelemetrySource> Sources { get; } = [];
 
         /// <summary>One lap finished and the next one started, through the engines and the screens, as a session would produce.</summary>
         public void DriveOneLapAndTopSpeed()
@@ -179,6 +184,48 @@ public sealed class SessionLifecycleTests : IDisposable
         rig.DriveOneLapAndTopSpeed();
         Assert.Empty(rig.History.Records); // the fault path has no Stop, so nothing saved the 252 km/h yet
 
+        await rig.Shell.StartCommand.ExecuteAsync(null);
+
+        Assert.Equal(252, rig.History.Find(new CarKey(1234, 780))!.TopSpeedKmh!.Value, precision: 1);
+        await rig.Shell.StopCommand.ExecuteAsync(null);
+    }
+
+    [Fact]
+    public async Task Moving_the_port_after_the_listener_died_mid_stream_keeps_the_session()
+    {
+        var rig = new Rig(_directory);
+        await rig.Shell.StartCommand.ExecuteAsync(null);
+        rig.DriveOneLapAndTopSpeed();
+        var topSpeedText = rig.Performance.TopSpeedText;
+        Assert.True(rig.Laps.HasLaps);
+
+        // The listener ran and then broke (a socket error while receiving): not a failed Start.
+        rig.Sources[0].FailNextReadWith(new SocketException((int)SocketError.ConnectionReset));
+        rig.Sources[0].Publish(TestPackets.Sample());
+        Assert.True(await Wait.UntilAsync(() => rig.Service.Fault is not null));
+        Assert.False(rig.Service.StartFailed);
+
+        rig.Settings.Update(s => s with { UdpPort = 5400 });
+        Assert.True(await Wait.UntilAsync(() => rig.Service.IsRunning && !rig.Shell.IsBusy));
+
+        // The laps and the bests are what the user was looking at: the network hiccuped, the session did not end.
+        Assert.True(rig.Laps.HasLaps);
+        Assert.Equal(topSpeedText, rig.Performance.TopSpeedText);
+        await rig.Shell.StopCommand.ExecuteAsync(null);
+    }
+
+    [Fact]
+    public async Task A_session_saved_by_Stop_is_not_saved_a_second_time_by_the_next_Start()
+    {
+        var rig = new Rig(_directory);
+        await rig.Shell.StartCommand.ExecuteAsync(null);
+        rig.DriveOneLapAndTopSpeed();
+        await rig.Shell.StopCommand.ExecuteAsync(null); // saves the 252 km/h
+        Assert.Equal(252, rig.History.Find(new CarKey(1234, 780))!.TopSpeedKmh!.Value, precision: 1);
+
+        // Something still reaches the engines after the Stop (a late packet). If the next Start saved "the previous session"
+        // again it would read it and write it; the Stop already closed that session, so it must not.
+        rig.Engines.TopSpeed.OnPacket(TestPackets.Sample(speedMetersPerSecond: 80, carOrdinal: 1234, carClass: 3, performanceIndex: 780));
         await rig.Shell.StartCommand.ExecuteAsync(null);
 
         Assert.Equal(252, rig.History.Find(new CarKey(1234, 780))!.TopSpeedKmh!.Value, precision: 1);

@@ -353,4 +353,46 @@ public class LapTrackerTests
         Assert.Equal(5, lap.Number);
         Assert.Equal(21, lap.TimeSeconds, 3);
     }
+
+    [Fact]
+    public void A_jump_of_more_than_one_lap_never_promotes_the_samples_in_hand_to_the_delta_reference()
+    {
+        var tracker = new LapTracker();
+        DriveLap(tracker, 3, 20, 3000); // lap 4 of the race, seen from its very start: its samples would qualify
+
+        // 3 -> 5: the lap the packet reports (5, 21 s) is not the one these samples belong to.
+        tracker.OnPacket(Lap(5, 0.0, 5000, lastLap: 21, bestLap: 20));
+        DriveLap(tracker, 5, 20, 5000, lastLap: 21, bestLap: 20, stopAtSeconds: 10);
+
+        Assert.Single(tracker.Current.Laps);
+        Assert.Null(tracker.Current.DeltaSeconds); // no reference exists, so no delta can be claimed
+    }
+
+    [Fact]
+    public void A_jump_of_more_than_one_lap_without_a_last_lap_time_lists_the_lap_as_unknown_not_as_the_lap_in_progress()
+    {
+        var tracker = new LapTracker();
+        DriveLap(tracker, 3, 20, 3000);
+
+        tracker.OnPacket(Lap(5, 0.0, 5000)); // the game reports no last lap
+
+        var lap = Assert.Single(tracker.Current.Laps);
+        Assert.Equal(5, lap.Number);
+        Assert.Equal(0, lap.TimeSeconds); // the 20 s of lap 4 are not lap 5's time
+        Assert.False(lap.IsBest);
+    }
+
+    [Fact]
+    public void A_normal_lap_after_a_jump_becomes_the_reference_again()
+    {
+        var tracker = new LapTracker();
+        DriveLap(tracker, 3, 20, 3000);
+        tracker.OnPacket(Lap(5, 0.0, 5000, lastLap: 21, bestLap: 20));
+        DriveLap(tracker, 5, 20, 5000, lastLap: 21, bestLap: 20); // a full lap seen from its start
+        tracker.OnPacket(Lap(6, 0.0, 6000, lastLap: 20, bestLap: 20)); // exactly one lap later: a proper reference
+
+        DriveLap(tracker, 6, 20, 6000, lastLap: 20, bestLap: 20, stopAtSeconds: 10.0);
+
+        Assert.Equal(0.0, tracker.Current.DeltaSeconds!.Value, 2);
+    }
 }

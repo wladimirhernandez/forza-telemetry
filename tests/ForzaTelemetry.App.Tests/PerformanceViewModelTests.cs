@@ -591,6 +591,112 @@ public sealed class PerformanceViewModelTests : IDisposable
         Assert.Equal("--", rig.Vm.TopSpeedText);
     }
 
+    [Fact]
+    public void Reset_run_asks_the_receive_loop_to_reset_the_engines_and_shows_them_empty_meanwhile()
+    {
+        var rig = NewRig();
+        rig.Stand();
+        rig.Launch(10.0);
+        Assert.True(rig.TopSpeed.TopSpeedMs > 0);
+
+        rig.Vm.ResetRunCommand.Execute(null);
+
+        // The UI thread did not write the engines (the loop owns them): the reset is pending and the page already says empty,
+        // and keeps saying so on later ticks even though the engines still hold the old numbers.
+        Assert.True(rig.CarChanges.HasPendingEngineReset);
+        Assert.True(rig.TopSpeed.TopSpeedMs > 0);
+        rig.Vm.Refresh(null);
+        Assert.Equal("--", rig.Vm.TopSpeedText);
+        Assert.Equal("--", rig.Vm.ZeroTo100Text);
+
+        rig.Feed(0); // the loop's next packet carries the reset out before the engines see it
+
+        Assert.False(rig.CarChanges.HasPendingEngineReset);
+        Assert.Equal(0, rig.TopSpeed.TopSpeedMs);
+        Assert.Equal("--", rig.Vm.TopSpeedText);
+    }
+
+    [Fact]
+    public void Reset_run_after_the_car_changed_saves_the_old_cars_top_speed_under_the_old_car_and_never_the_new_cars()
+    {
+        var rig = NewRig();
+        rig.Feed(70, gear: 5); // 252 km/h in car 1234
+        Assert.Empty(rig.History.Records);
+
+        // The receive loop sees another car (and resets the engines) between two UI ticks; the UI has not looked yet.
+        rig.Car = 77;
+        rig.Pi = 450;
+        rig.CarChanges.OnPacket(TestPackets.Sample(speedMetersPerSecond: 3, carOrdinal: 77, performanceIndex: 450, carClass: 1, drivetrain: 0));
+
+        rig.Vm.ResetRunCommand.Execute(null);
+
+        Assert.Equal(252, rig.History.Find(new CarKey(1234, 780))!.TopSpeedKmh!.Value, precision: 1);
+        Assert.Null(rig.History.Find(new CarKey(77, 450))); // the new car has no top speed yet, and none is invented for it
+    }
+
+    // ---- Replays are not saved -------------------------------------------------------------------------------
+
+    [Fact]
+    public void A_replay_session_measures_and_shows_but_saves_nothing()
+    {
+        var rig = NewRig();
+        rig.Vm.BeginSession(isReplay: true);
+        rig.Stand();
+        rig.Launch(10.0);
+        rig.BrakeToStop(100, 800);
+
+        rig.Vm.EndSession();
+        rig.Vm.ResetRunCommand.Execute(null);
+
+        Assert.True(rig.Vm.IsReplaySession);
+        Assert.Empty(rig.History.Records); // not in memory...
+        Assert.False(File.Exists(rig.HistoryPath)); // ...and not on disk
+    }
+
+    [Fact]
+    public void A_replay_still_shows_what_it_measured_while_it_plays()
+    {
+        var rig = NewRig();
+        rig.Vm.BeginSession(isReplay: true);
+        rig.Stand();
+
+        rig.Launch(10.0);
+
+        Assert.NotEqual("--", rig.Vm.TopSpeedText);
+        Assert.NotEqual("--", rig.Vm.ZeroTo100Text);
+    }
+
+    [Fact]
+    public void A_car_change_inside_a_replay_does_not_save_the_previous_cars_top_speed()
+    {
+        var rig = NewRig();
+        rig.Vm.BeginSession(isReplay: true);
+        rig.Feed(70, gear: 5);
+        rig.Car = 77;
+        rig.Pi = 450;
+
+        rig.Feed(5);
+
+        Assert.Empty(rig.History.Records);
+    }
+
+    [Fact]
+    public void The_next_live_session_saves_again_after_a_replay()
+    {
+        var rig = NewRig();
+        rig.Vm.BeginSession(isReplay: true);
+        rig.Feed(70, gear: 5);
+        rig.Vm.EndSession();
+        Assert.Empty(rig.History.Records);
+
+        rig.StartNewSession(); // BeginSession() defaults to a live session
+        rig.Feed(60, gear: 5);
+        rig.Vm.EndSession();
+
+        Assert.False(rig.Vm.IsReplaySession);
+        Assert.Equal(216, rig.History.Find(new CarKey(1234, 780))!.TopSpeedKmh!.Value, precision: 1);
+    }
+
     // ---- Units ------------------------------------------------------------------------------------------------
 
     [Fact]

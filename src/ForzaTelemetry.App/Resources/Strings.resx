@@ -385,6 +385,9 @@
   <data name="PerfTrapFormat" xml:space="preserve">
     <value>{0} {1} at the line</value>
   </data>
+  <data name="PerfReplayNote" xml:space="preserve">
+    <value>Replay: these results are not saved to your history.</value>
+  </data>
   <data name="PerfThresholdNote" xml:space="preserve">
     <value>Runs are timed to 100 and 200 km/h (about 62 and 124 mph) in either unit. Speeds are shown in your unit.</value>
   </data>

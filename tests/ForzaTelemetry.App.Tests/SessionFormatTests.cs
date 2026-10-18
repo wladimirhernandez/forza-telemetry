@@ -34,6 +34,17 @@ public class SessionFormatTests
     }
 
     [Fact]
+    public void Size_chooses_the_unit_after_rounding_so_a_boundary_never_reads_as_1024()
+    {
+        Assert.Equal($"1023{Dec}8 KB", SessionFormat.Size(1048370)); // clearly below the boundary: stays in KB
+        Assert.Equal($"1{Dec}0 MB", SessionFormat.Size(1048525)); // 1023.95 KB prints as 1024.0, so it is a megabyte
+        Assert.Equal($"1{Dec}0 MB", SessionFormat.Size(1048575)); // one byte short of a megabyte rounds up to one
+        Assert.Equal($"1{Dec}0 MB", SessionFormat.Size(1048576));
+        Assert.Equal($"1{Dec}0 GB", SessionFormat.Size((1024L * 1024 * 1024) - 1));
+        Assert.Equal($"1024{Dec}0 TB", SessionFormat.Size(1024L * 1024 * 1024 * 1024 * 1024)); // nothing above TB to promote to
+    }
+
+    [Fact]
     public void Cars_name_the_first_and_count_the_rest_or_say_there_was_no_race()
     {
         Assert.Equal(SessionsStrings.SessionsNoCars, SessionFormat.Cars([]));

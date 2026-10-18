@@ -270,9 +270,15 @@
             </Border>
         </Grid>
 
-        <!-- Shown only in mph: the runs are still timed to 100 and 200 km/h. -->
-        <TextBlock Grid.Row="2" Text="{x:Static res:Strings.PerfThresholdNote}" Style="{StaticResource SmallNote}" Margin="4,10,4,0"
-                   Visibility="{Binding ShowThresholdNote, Converter={StaticResource BoolToVisibility}}" />
+        <StackPanel Grid.Row="2">
+            <!-- Shown while the numbers on screen come from a replay: they are measured and displayed, never saved. -->
+            <TextBlock Text="{x:Static res:Strings.PerfReplayNote}" Style="{StaticResource SmallNote}" Margin="4,10,4,0"
+                       Visibility="{Binding IsReplaySession, Converter={StaticResource BoolToVisibility}}" />
+
+            <!-- Shown only in mph: the runs are still timed to 100 and 200 km/h. -->
+            <TextBlock Text="{x:Static res:Strings.PerfThresholdNote}" Style="{StaticResource SmallNote}" Margin="4,10,4,0"
+                       Visibility="{Binding ShowThresholdNote, Converter={StaticResource BoolToVisibility}}" />
+        </StackPanel>
 
         <!-- ===== Best per car ===== -->
         <Border Grid.Row="3" Style="{StaticResource CardStyle}" Padding="22,16,22,8" Margin="0,14,0,0"

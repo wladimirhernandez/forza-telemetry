@@ -58,6 +58,7 @@ public sealed class CarChangeDetector : IPacketObserver
     private int _carClass;
     private int _drivetrain;
     private int _generation;
+    private volatile bool _engineResetRequested; // written under _gate; volatile so the per-packet check needs no lock
 
     /// <param name="topSpeed">The top-speed engine to freeze and reset on a change; optional (tests, or nothing to own).</param>
     /// <param name="acceleration">The 0-100 engine to reset on a change; optional.</param>
@@ -95,9 +96,40 @@ public sealed class CarChangeDetector : IPacketObserver
         }
     }
 
+    /// <summary>
+    /// True from <see cref="RequestEngineReset"/> until the receive loop has carried it out. While it is true the engines still
+    /// hold the numbers that are about to be forgotten, so a reader must treat them as already empty.
+    /// </summary>
+    public bool HasPendingEngineReset => _engineResetRequested;
+
+    /// <summary>
+    /// Asks for the top-speed and 0-100 engines to be reset, WITHOUT touching them: the reset is carried out by the receive loop
+    /// itself on its next packet (<see cref="OnPacket"/>), the only thread that is allowed to write them. Resetting them here, from
+    /// the UI thread, would race the loop's own writes (a lost sample, or a half-reset timer that goes on timing). Until the
+    /// request is carried out <see cref="HasPendingEngineReset"/> is true, and a reader shows the engines as empty.
+    /// </summary>
+    /// <remarks>
+    /// Needs a packet to be carried out, which is fine: with no packets there is no loop writing anything, and the next session
+    /// start resets every engine before its loop exists (see <see cref="TelemetryEngines.BeginSession"/>).
+    /// </remarks>
+    public void RequestEngineReset()
+    {
+        lock (_gate)
+        {
+            _engineResetRequested = true;
+        }
+    }
+
     /// <inheritdoc />
     public void OnPacket(TelemetryPacket packet)
     {
+        // Any packet carries a pending reset out, menus and pauses included: the user asked for empty engines, whatever the
+        // game is doing. Checked before the race-on filter below for that reason.
+        if (_engineResetRequested)
+        {
+            ApplyEngineReset();
+        }
+
         if (!packet.IsRaceOn)
         {
             return;
@@ -144,6 +176,25 @@ public sealed class CarChangeDetector : IPacketObserver
         }
     }
 
+    private void ApplyEngineReset()
+    {
+        lock (_gate)
+        {
+            if (!_engineResetRequested)
+            {
+                return;
+            }
+
+            _topSpeed?.Reset();
+            _acceleration?.Reset();
+
+            // Same publication order as a change of car: generation first, flag last. A reader that sees the flag cleared
+            // therefore also sees the reset engines, and a reader that straddled the reset sees the generation move.
+            Interlocked.Increment(ref _generation);
+            _engineResetRequested = false;
+        }
+    }
+
     /// <summary>Takes the oldest change nobody has handled yet; false when there is none. Called by the UI tick.</summary>
     public bool TryTake(out CarChange? change)
     {
@@ -166,6 +217,7 @@ public sealed class CarChangeDetector : IPacketObserver
             _carClass = 0;
             _drivetrain = 0;
             _changes.Clear();
+            _engineResetRequested = false; // the session reset that calls this one empties the engines itself
             Interlocked.Increment(ref _generation);
         }
     }

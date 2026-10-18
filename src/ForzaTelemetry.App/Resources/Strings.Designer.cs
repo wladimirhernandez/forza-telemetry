@@ -1174,6 +1174,15 @@ namespace ForzaTelemetry.App.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Replay: these results are not saved to your history..
+        /// </summary>
+        public static string PerfReplayNote {
+            get {
+                return ResourceManager.GetString("PerfReplayNote", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Runs are timed to 100 and 200 km/h (about 62 and 124 mph) in either unit. Speeds are shown in your unit..
         /// </summary>
         public static string PerfThresholdNote {

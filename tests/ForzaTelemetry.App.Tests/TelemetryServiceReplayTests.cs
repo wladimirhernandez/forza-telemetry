@@ -167,6 +167,32 @@ public sealed class TelemetryServiceReplayTests : IDisposable
     }
 
     [Fact]
+    public async Task A_replay_that_faults_is_no_longer_the_replay_in_progress_and_can_still_be_stopped_and_replaced()
+    {
+        var service = new TelemetryService(() => new FakeTelemetrySource(), replayFactory: InstantReplay());
+        var gone = Path.Combine(_folder, "gone.fh6rec");
+
+        await service.StartReplayAsync(gone);
+        Assert.True(await Wait.UntilAsync(() => service.Fault is not null));
+
+        // Nothing is playing, so nothing may claim to be: the library marks the file in use from ReplayPath, and a row that
+        // still said so would refuse to rename or delete a recording that nobody has open any more.
+        Assert.Null(service.Replay);
+        Assert.Null(service.ReplayPath);
+        Assert.False(service.IsReplaying);
+        Assert.False(service.StartFailed); // the source was built; it broke while reading
+
+        await service.StopAsync(); // releases what the dead loop left behind, without throwing
+        Assert.False(service.IsRunning);
+
+        var path = await RecordingFiles.WriteAsync(_folder, "drive", packets: 5);
+        await service.StartReplayAsync(path);
+        Assert.True(await Wait.UntilAsync(() => service.ReceivedCount == 5));
+        Assert.Equal(path, service.ReplayPath);
+        await service.StopAsync();
+    }
+
+    [Fact]
     public async Task A_file_that_is_not_a_recording_becomes_an_invalid_recording_fault()
     {
         Directory.CreateDirectory(_folder);

@@ -171,6 +171,20 @@ public sealed partial class PerformanceViewModel : ObservableObject
     [ObservableProperty]
     private string _elapsedText = "";
 
+    /// <summary>
+    /// The session on screen is a recording being replayed, so nothing it measures is saved (the page says so).
+    /// </summary>
+    /// <remarks>
+    /// <b>Decision: replays never write to the history.</b> A replay is for REVIEWING a drive, and the drive's results were
+    /// already saved when it happened live. Saving them again would add nothing, would stamp every best with today's date instead
+    /// of the day it was set, and, since a recording can be played any number of times, would be a side effect of looking. The
+    /// numbers are still measured and shown, so a replay is a faithful read-through; they just go nowhere. The flag belongs to
+    /// the session (set by <see cref="BeginSession"/>) and stays until the next one begins, so it also covers the end of the
+    /// replay, which would otherwise save the top speed of the recording.
+    /// </remarks>
+    [ObservableProperty]
+    private bool _isReplaySession;
+
     // ---- Result cards -------------------------------------------------------------------------------------
 
     // [NotifyPropertyChangedFor]: each card's screen-reader name is derived from its value text. Declaring that here means the
@@ -301,11 +315,26 @@ public sealed partial class PerformanceViewModel : ObservableObject
         // Save, then WRITE: the engines are about to forget this top speed, so a crash right after would otherwise lose a
         // best that only ever lived in memory (Merge changes memory; only Flush persists). The engines are read first, and
         // that read applies a pending change of car before it credits any number to a car (see ReadEngines).
-        ReadEngines();
-        SaveTopSpeedOfCurrentCar();
-        _history.Flush();
-        _acceleration.Reset();
-        _topSpeed.Reset();
+        //
+        // A read that comes back false (a change of car landed mid-read) is retried, because the retry drains that change and
+        // reads cleanly. What is NEVER done is saving after a failed read: the numbers held then are not known to belong to
+        // the car being credited. If every attempt fails the cars are changing faster than a button can be pressed, and the
+        // change itself already carried the old car's top speed into the history, so nothing worth keeping is lost.
+        var consistent = false;
+        for (var attempt = 0; attempt < 3 && !consistent; attempt++)
+        {
+            consistent = ReadEngines();
+        }
+
+        if (consistent)
+        {
+            SaveTopSpeedOfCurrentCar();
+            _history.Flush();
+        }
+
+        // The engines are written by the receive loop, so they are not reset from this (UI) thread: the loop is asked to, and
+        // does it on its next packet. Until then the detector reports the reset as pending and ReadEngines shows them empty.
+        _carChanges.RequestEngineReset();
         ForgetRun();
         _snapshot = AccelerationSnapshot.Empty;
         _topSpeedKmh = 0;
@@ -340,8 +369,10 @@ public sealed partial class PerformanceViewModel : ObservableObject
     /// loop was already running, raced with the first packets: a car change of packet one could be queued and then dropped, and
     /// a top speed read after the loop restarted could be saved under the wrong car.
     /// </remarks>
-    public void BeginSession()
+    /// <param name="isReplay">The session is a recording being played back (see <see cref="IsReplaySession"/>).</param>
+    public void BeginSession(bool isReplay = false)
     {
+        IsReplaySession = isReplay;
         _car = null;
         _live = false;
         ForgetRun();
@@ -358,7 +389,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
     public void EndSession()
     {
         Refresh(null);
-        SaveTopSpeedOfCurrentCar();
+        SaveTopSpeedOfCurrentCar(); // a no-op for a replay (see IsReplaySession)
         _history.Flush();
     }
 
@@ -405,8 +436,10 @@ public sealed partial class PerformanceViewModel : ObservableObject
             return false;
         }
 
-        var snapshot = _acceleration.Current;
-        var topSpeedKmh = _topSpeed.TopSpeedKmh;
+        // A reset the receive loop has not carried out yet (see ResetRun) means the engines are, for the user, already empty.
+        var resetPending = _carChanges.HasPendingEngineReset;
+        var snapshot = resetPending ? AccelerationSnapshot.Empty : _acceleration.Current;
+        var topSpeedKmh = resetPending ? 0 : _topSpeed.TopSpeedKmh;
         if (_carChanges.Generation != generation)
         {
             return false;
@@ -431,7 +464,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
                 // The old car's best is saved under the OLD car's class and drivetrain (they travel in the change, because
                 // the fields below describe the new car by now), then the cards are cleared: the engines were reset, and the
                 // screen would otherwise keep showing the previous car's results as if they were this one's.
-                if (change.PreviousTopSpeedKmh > 0)
+                if (change.PreviousTopSpeedKmh > 0 && !IsReplaySession)
                 {
                     _history.Merge(
                         previous,
@@ -526,7 +559,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
             return;
         }
 
-        if (_runCar is { } car)
+        if (_runCar is { } car && !IsReplaySession)
         {
             var improved = _history.Merge(
                 car,
@@ -560,7 +593,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
     {
         // The value read by the last consistent ReadEngines, which always belongs to _car (see there).
         var top = _topSpeedKmh;
-        if (_car is not { } car || top <= 0)
+        if (IsReplaySession || _car is not { } car || top <= 0)
         {
             return;
         }

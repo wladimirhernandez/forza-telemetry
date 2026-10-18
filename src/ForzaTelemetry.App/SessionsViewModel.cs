@@ -23,6 +23,18 @@ public interface ISessionsHost
 
     /// <summary>Ends the replay and returns to idle (the user presses Start to listen to the game again).</summary>
     Task StopReplayAsync();
+
+    /// <summary>
+    /// Plays the recording being replayed again from its first record, as a fresh session (empty engines and screens): a restart
+    /// and "play again" are not a seek, because everything the engines accumulated would be counted twice.
+    /// </summary>
+    Task RestartReplayAsync();
+
+    /// <summary>
+    /// A command (start, stop, replay, port move) is running, so one that arrives now is dropped. Asked BEFORE acting on a user's
+    /// request, so the page does not clear a message or forget a name for a request that was never going to be carried out.
+    /// </summary>
+    bool IsBusy { get; }
 }
 
 /// <summary>One recording in the library list: its display values and the commands on it (play, rename, delete).</summary>
@@ -184,6 +196,12 @@ public sealed partial class SessionsViewModel : ObservableObject
     private string _lastPlayedName = "";
     private Exception? _reportedPlaybackFault;
     private bool _syncingSpeed;
+
+    // The speed a restart keeps: the new source starts at 1x, but a user who chose 2x and pressed restart did not ask for 1x.
+    // Set only around a restart; null the rest of the time, so every other new replay starts at 1x.
+    private double? _carriedSpeed;
+
+    private Task _libraryRefresh = Task.CompletedTask;
 
     /// <param name="service">The telemetry service (live or replay), read in <see cref="Refresh"/>.</param>
     /// <param name="recorder">The recorder the listener feeds with raw datagrams.</param>
@@ -389,7 +407,31 @@ public sealed partial class SessionsViewModel : ObservableObject
                 isError: false);
         }
 
-        await RefreshLibraryAsync();
+        // NOT awaited. The stop itself ends here: the file is on disk and the recording state is cleared. Reading the folder
+        // again is only about showing the new file in the list, and on a big library it takes a while; awaiting it made every
+        // caller of the stop (the shell's Stop, a replay, a port move) wait for a rescan nobody asked for. The list updates when
+        // the scan is done.
+        _libraryRefresh = RefreshLibraryQuietlyAsync();
+    }
+
+    /// <summary>
+    /// The rescan the last recording stop started in the background (completed when none is running). The page never waits for
+    /// it; it exists so a test, or a shutdown, can wait for the scan to finish instead of racing the files it is reading.
+    /// </summary>
+    internal Task PendingLibraryRefresh => _libraryRefresh;
+
+    // The fire-and-forget wrapper: nobody awaits it, so it must not let anything escape (an unobserved exception would be lost
+    // or, worse, tear the process down) and must leave a trace.
+    private async Task RefreshLibraryQuietlyAsync()
+    {
+        try
+        {
+            await RefreshLibraryAsync();
+        }
+        catch (Exception ex)
+        {
+            Log(l => AppLog.LibraryRefreshFailed(l, ex, _library.Folder));
+        }
     }
 
     private void UpdateRecordingStats()
@@ -468,7 +510,7 @@ public sealed partial class SessionsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void PlayPause()
+    private async Task PlayPauseAsync()
     {
         if (_service.Replay is not { } replay)
         {
@@ -478,10 +520,11 @@ public sealed partial class SessionsViewModel : ObservableObject
         if (replay.IsFinished)
         {
             // The recording ended and is being held: "play" means play it again, from the start.
-            replay.SeekToStart();
-            replay.Resume();
+            await RestartReplayAsync();
+            return;
         }
-        else if (replay.IsPaused)
+
+        if (replay.IsPaused)
         {
             replay.Resume();
         }
@@ -494,13 +537,26 @@ public sealed partial class SessionsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void Restart()
+    private Task RestartAsync() => RestartReplayAsync();
+
+    // Restart means play from the start, even if it was paused, and as a FRESH session: the shell stops the replay and plays it
+    // again (see ISessionsHost.RestartReplayAsync). Rewinding the running source instead would leave the engines holding the
+    // first pass, so the second one would double the laps, the path and the top speed.
+    private async Task RestartReplayAsync()
     {
-        if (_service.Replay is { } replay)
+        if (_host is null || _host.IsBusy || _service.Replay is null)
         {
-            replay.SeekToStart();
-            replay.Resume(); // restart means play from the start, even if it was paused
-            Refresh();
+            return;
+        }
+
+        _carriedSpeed = SelectedSpeed;
+        try
+        {
+            await _host.RestartReplayAsync();
+        }
+        finally
+        {
+            _carriedSpeed = null;
         }
     }
 
@@ -571,7 +627,10 @@ public sealed partial class SessionsViewModel : ObservableObject
 
     internal Task PlayAsync(RecordingRowViewModel row)
     {
-        if (_host is null || !row.Item.IsReadable)
+        // A busy shell drops the request, so nothing about the page may change for it: the notice stays and the name of what is
+        // playing stays. Both are decided here, BEFORE the call, because the shell's own refresh at the end of a failed replay
+        // reports the failure using them; clearing afterwards would erase that report.
+        if (_host is null || !row.Item.IsReadable || _host.IsBusy)
         {
             return Task.CompletedTask;
         }
@@ -721,10 +780,17 @@ public sealed partial class SessionsViewModel : ObservableObject
         if (!ReferenceEquals(replay, _trackedReplay))
         {
             // A different replay began (or ended): a new source always starts at 1x, so the selector follows without writing back.
+            // (a restart is the exception: it keeps the speed the user had chosen).
             _trackedReplay = replay;
+            var speed = _carriedSpeed ?? ReplaySpeed.Normal;
             _syncingSpeed = true;
-            SelectedSpeed = ReplaySpeed.Normal;
+            SelectedSpeed = speed;
             _syncingSpeed = false;
+            if (replay is not null && speed != ReplaySpeed.Normal)
+            {
+                replay.Speed = speed;
+            }
+
             _reportedPlaybackFault = null;
         }
 

@@ -184,4 +184,53 @@ public class CarChangeDetectorTests
         Assert.Null(change.PreviousCar);
         Assert.Equal(new CarKey(77, 450), change.Car);
     }
+
+    // ---- A reset the UI asks for, carried out by the receive loop -----------------------------------------------
+
+    [Fact]
+    public void A_requested_engine_reset_waits_for_the_next_packet_and_leaves_the_engines_alone_until_then()
+    {
+        var topSpeed = new TopSpeedTracker();
+        var acceleration = new AccelerationTimer();
+        var detector = new CarChangeDetector(topSpeed, acceleration);
+        topSpeed.OnPacket(Packet(1, 780, speed: 50));
+        var generation = detector.Generation;
+
+        detector.RequestEngineReset(); // what the UI thread does: ask, never touch
+
+        Assert.True(detector.HasPendingEngineReset);
+        Assert.Equal(50, topSpeed.TopSpeedMs, precision: 3);
+        Assert.Equal(generation, detector.Generation);
+
+        detector.OnPacket(Packet(1, 780, speed: 10)); // the receive loop's next packet
+
+        Assert.False(detector.HasPendingEngineReset);
+        Assert.Equal(0, topSpeed.TopSpeedMs);
+        Assert.True(detector.Generation > generation); // a reader that straddled the reset sees it and discards its values
+    }
+
+    [Fact]
+    public void Any_packet_carries_a_requested_reset_out_even_one_from_a_menu()
+    {
+        var topSpeed = new TopSpeedTracker();
+        var detector = new CarChangeDetector(topSpeed);
+        topSpeed.OnPacket(Packet(1, 780, speed: 50));
+        detector.RequestEngineReset();
+
+        detector.OnPacket(Packet(0, 0, raceOn: false)); // paused: IsRaceOn false
+
+        Assert.False(detector.HasPendingEngineReset);
+        Assert.Equal(0, topSpeed.TopSpeedMs);
+    }
+
+    [Fact]
+    public void A_new_session_cancels_a_pending_reset_because_it_empties_the_engines_itself()
+    {
+        var detector = new CarChangeDetector(new TopSpeedTracker());
+        detector.RequestEngineReset();
+
+        detector.Reset();
+
+        Assert.False(detector.HasPendingEngineReset);
+    }
 }

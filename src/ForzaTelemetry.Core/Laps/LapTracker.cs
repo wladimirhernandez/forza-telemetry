@@ -24,7 +24,8 @@ namespace ForzaTelemetry.Core.Laps;
 /// lap stops recording and is marked unusable as a reference (it is not a real lap anyway).</para>
 ///
 /// <para><b>Validity.</b> A lap only becomes the reference if we saw it from its very start (the first packet
-/// of the lap had a small CurrentLap) and recorded all of it.</para>
+/// of the lap had a small CurrentLap), recorded all of it, and the lap counter advanced by exactly one: when it jumps by
+/// more, the samples in hand belong to a lap that is not the one the packet reports, so none is promoted.</para>
 ///
 /// <para><b>Restart handling.</b> If LapNumber decreases the race restarted: all history is cleared. If
 /// CurrentLap drops sharply within the same lap the lap was restarted: its samples are discarded. Packets
@@ -175,7 +176,12 @@ public sealed class LapTracker : IPacketObserver
 
     private void CompleteLap(TelemetryPacket packet)
     {
-        double time = packet.LastLap > 0 ? packet.LastLap : _previousCurrentLap;
+        // More than one lap completed since the last packet we saw (a dropped burst, a pause: 3 -> 5). The lap the packet reports
+        // (LastLap, number LapNumber) is NOT the one whose clock and distance samples we hold: those belong to the lap in progress
+        // before the jump. So its samples must never become the delta reference, and the lap in progress is no fallback for the
+        // reported lap's time either.
+        var skippedLaps = packet.LapNumber - _lapsCompleted > 1;
+        double time = packet.LastLap > 0 ? packet.LastLap : skippedLaps ? 0 : _previousCurrentLap;
 
         // The packet's LapNumber is the number of laps COMPLETED, so the lap that just ended is lap number LapNumber. Taking
         // it from the packet (not from "my previous count + 1") keeps the list in step with CurrentLapNumber in two cases:
@@ -200,8 +206,9 @@ public sealed class LapTracker : IPacketObserver
             _bestLap = time;
         }
 
-        // Only a lap observed from its start (and long enough to interpolate) can be the delta reference.
-        if (_currentLapValid && _currentCount >= 2 && (_bestSampleLapTime is null || time < _bestSampleLapTime))
+        // Only a lap observed from its start (and long enough to interpolate), and whose samples really are the reported lap's,
+        // can be the delta reference.
+        if (!skippedLaps && _currentLapValid && _currentCount >= 2 && (_bestSampleLapTime is null || time < _bestSampleLapTime))
         {
             // Swap instead of copy: the old reference arrays become the scratch space for the next lap.
             (_bestDistances, _currentDistances) = (_currentDistances, _bestDistances);
