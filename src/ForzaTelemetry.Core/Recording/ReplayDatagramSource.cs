@@ -17,6 +17,14 @@ namespace ForzaTelemetry.Core.Recording;
 /// recording is skipped).
 /// </para>
 /// <para>
+/// <b>Short waits are coalesced.</b> At 60 records per second and 2x or 4x the owed wait per record is 8 ms or 4 ms, but a
+/// timer cannot wait less than its resolution (about 15 ms on Windows): delaying per record, every record would take 15 ms and
+/// "4x" would play at about 1x. So the owed time is accumulated (<c>_owed</c>) and only waited for once it reaches
+/// <see cref="MinimumWait"/>; the records in between are delivered back to back. What the wait overshoots by (a timer always
+/// rounds up) is measured and credited against the following gaps, so the average rate stays exact at any speed. The credit is
+/// capped (<see cref="MaximumCredit"/>), so a stall never turns into a burst. Pause and seek reset it.
+/// </para>
+/// <para>
 /// <b>Controls</b> (<see cref="Speed"/>, <see cref="Pause"/>, <see cref="Resume"/>, <see cref="SeekToStart"/>)
 /// are thread-safe and meant to be called from the UI while another thread enumerates. A speed change
 /// applies from the next gap (a gap is ~16 ms, so this is imperceptible). A pause takes effect before the
@@ -45,6 +53,16 @@ public sealed class ReplayDatagramSource
     private readonly Func<Stream> _openRecording;
     private readonly TimeProvider _timeProvider;
     private readonly Lock _gate = new();
+
+    /// <summary>The shortest wait worth asking the timer for; shorter owed gaps are accumulated instead (see the class remarks).</summary>
+    private static readonly TimeSpan MinimumWait = TimeSpan.FromMilliseconds(10);
+
+    /// <summary>How far ahead of schedule the replay may get from timer overshoot before it stops giving credit (see the class remarks).</summary>
+    private static readonly TimeSpan MaximumCredit = TimeSpan.FromMilliseconds(60);
+
+    // Time owed to the schedule and not yet waited for (negative: waited too long, a credit). Touched only by the one
+    // enumerating thread, one record at a time, so it needs no lock.
+    private TimeSpan _owed;
 
     private double _speed = ReplaySpeed.Normal;
     private bool _paused;
@@ -210,6 +228,7 @@ public sealed class ReplayDatagramSource
 
                 restart = false;
                 ConsumeRestart();
+                _owed = TimeSpan.Zero; // a (re)start has no schedule to catch up with
 
                 var reader = await TryOpenAsync(ct).ConfigureAwait(false);
                 if (reader is null)
@@ -311,17 +330,40 @@ public sealed class ReplayDatagramSource
 
         try
         {
+            bool wasPaused;
+            lock (_gate)
+            {
+                wasPaused = _paused;
+            }
+
             if (!await WaitWhilePausedAsync(linked.Token).ConfigureAwait(false))
             {
                 return WaitOutcome.Restart;
             }
 
-            if (!double.IsPositiveInfinity(speed) && gap > TimeSpan.Zero)
+            if (wasPaused)
             {
-                var delay = TimeSpan.FromTicks((long)(gap.Ticks / speed));
-                if (delay > TimeSpan.Zero)
+                _owed = TimeSpan.Zero; // a pause is not a debt: resuming must not burst to "catch up"
+            }
+
+            if (double.IsPositiveInfinity(speed))
+            {
+                _owed = TimeSpan.Zero;
+            }
+            else if (gap > TimeSpan.Zero)
+            {
+                _owed += TimeSpan.FromTicks((long)(gap.Ticks / speed));
+                if (_owed >= MinimumWait)
                 {
-                    await Task.Delay(delay, _timeProvider, linked.Token).ConfigureAwait(false);
+                    var started = _timeProvider.GetTimestamp();
+                    await Task.Delay(_owed, _timeProvider, linked.Token).ConfigureAwait(false);
+
+                    // The timer rounds up: what it overshot by is paid back by the next gaps instead of lost.
+                    _owed -= _timeProvider.GetElapsedTime(started);
+                    if (_owed < -MaximumCredit)
+                    {
+                        _owed = -MaximumCredit;
+                    }
                 }
 
                 // A pause pressed DURING the wait must still hold this record back.

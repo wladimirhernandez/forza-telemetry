@@ -378,4 +378,49 @@ public class ReplayTelemetrySourceTests
 
         Assert.Throws<ArgumentOutOfRangeException>(() => source.Speed = value);
     }
+
+    /// <summary>A clock that lets every wait elapse the moment it is requested, counting the waits and the time they asked for.</summary>
+    private sealed class AutoAdvanceTimeProvider : FakeTimeProvider
+    {
+        public int Waits { get; private set; }
+
+        public TimeSpan Waited { get; private set; }
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = base.CreateTimer(callback, state, dueTime, period);
+            if (dueTime > TimeSpan.Zero && dueTime != Timeout.InfiniteTimeSpan)
+            {
+                Waits++;
+                Waited += dueTime;
+                Advance(dueTime);
+            }
+
+            return timer;
+        }
+    }
+
+    [Theory]
+    [InlineData(2.0, 480)]
+    [InlineData(4.0, 240)]
+    public async Task FastSpeeds_CoalesceShortGapsSoTheTimerResolutionCannotSlowThemDown(double speed, int expectedTotalMs)
+    {
+        // 61 records 16 ms apart (about one second at 60 Hz). Waiting 8 ms (2x) or 4 ms (4x) per record would, on a real
+        // timer that cannot wait less than ~15 ms, play at about 1x. Owed time must be accumulated and waited for in bigger
+        // pieces, with the total staying exact.
+        var time = new AutoAdvanceTimeProvider();
+        var records = Enumerable.Range(0, 61).Select(i => (Packet(1), i * 16)).ToArray();
+        var bytes = await RecordingAsync(records);
+        var source = new ReplayTelemetrySource(() => new MemoryStream(bytes), time) { Speed = speed, HoldAtEnd = false };
+
+        var count = 0;
+        await foreach (var _ in source.ReadPacketsAsync())
+        {
+            count++;
+        }
+
+        Assert.Equal(61, count);
+        Assert.True(time.Waits <= 31, $"expected at most one wait per two records, got {time.Waits}");
+        Assert.InRange(time.Waited.TotalMilliseconds, expectedTotalMs - 20, expectedTotalMs); // all but the last unpaid fraction
+    }
 }
