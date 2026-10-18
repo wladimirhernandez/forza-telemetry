@@ -19,13 +19,15 @@ public static class MiniModeGeometry
     public const double MinVisibleShare = 0.5;
 
     /// <summary>
-    /// A stable name for an arrangement of monitors: their work areas, ordered left to right then top to bottom, as text. The same desk
-    /// always gives the same text, and any change (a monitor added, moved or switched to another resolution) gives a different one.
+    /// A stable name for an arrangement of monitors: their full bounds (not their work areas), ordered left to right then top to bottom,
+    /// as text. The same desk always gives the same text, and any change (a monitor added, moved or switched to another resolution) gives a
+    /// different one. Bounds, because the work area also shrinks and moves when the taskbar is resized, hidden or docked elsewhere, and that
+    /// is not a different desk: it must not forget where the window was.
     /// </summary>
-    public static string SetupKey(IEnumerable<Rect> workAreas) =>
+    public static string SetupKey(IEnumerable<Rect> monitorBounds) =>
         string.Join(
             ';',
-            workAreas
+            monitorBounds
                 .OrderBy(area => area.Left)
                 .ThenBy(area => area.Top)
                 .Select(area => string.Create(
@@ -81,8 +83,13 @@ public static class MiniModeGeometry
     }
 
     /// <summary>Clamps an opacity into the range the mini window allows; NaN (a damaged value) becomes fully opaque.</summary>
-    public static double ClampOpacity(double opacity) =>
-        double.IsNaN(opacity) ? Services.AppSettings.MaxMiniOpacity : Math.Clamp(opacity, Services.AppSettings.MinMiniOpacity, Services.AppSettings.MaxMiniOpacity);
+    public static double ClampOpacity(double opacity) => Services.AppSettings.ClampMiniOpacity(opacity);
+
+    /// <summary>Device-independent units to pixels at <paramref name="dpi"/> (96 = 100%).</summary>
+    public static double ToPixels(double dips, double dpi) => dips * dpi / 96.0;
+
+    /// <summary>Pixels to device-independent units at <paramref name="dpi"/>.</summary>
+    public static double ToDips(double pixels, double dpi) => pixels * 96.0 / dpi;
 
     private static bool IsReal(Rect rect) =>
         !rect.IsEmpty && double.IsFinite(rect.Left) && double.IsFinite(rect.Top) && double.IsFinite(rect.Width) && double.IsFinite(rect.Height)

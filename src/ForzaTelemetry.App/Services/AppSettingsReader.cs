@@ -107,8 +107,10 @@ internal static class AppSettingsReader
                     break;
 
                 case "miniopacity":
-                    accepted = value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var opacity) && AppSettings.IsValidMiniOpacity(opacity);
-                    settings = accepted ? settings with { MiniOpacity = value.GetDouble() } : settings;
+                    // Any number is usable: it is clamped to the legal range (see AppSettings.ClampMiniOpacity); only a non-number is rejected.
+                    var opacity = 0.0;
+                    accepted = value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out opacity);
+                    settings = accepted ? settings with { MiniOpacity = AppSettings.ClampMiniOpacity(opacity) } : settings;
                     break;
 
                 case "miniplacements":

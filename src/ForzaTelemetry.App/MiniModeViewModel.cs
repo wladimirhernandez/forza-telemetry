@@ -89,8 +89,10 @@ public sealed partial class MiniModeViewModel : ObservableObject
     public string OpacityText => string.Format(CultureInfo.CurrentCulture, MiniStrings.MiniOpacityFormat, OpacityPercent);
 
     /// <summary>
-    /// True when opening the mini window should minimize the main window (the "Hide main window while mini mode is open" setting). Read
-    /// live from the settings, so changing it while the mini window is open takes effect the next time it closes.
+    /// True when opening the mini window should minimize the main window (the "Hide main window while mini mode is open" setting). The
+    /// controller reads it ONCE, at the moment the mini window opens, and remembers what it did: a change made while the mini window is open
+    /// applies to the next opening, and closing never re-reads it (otherwise the same session could minimize the main window and then
+    /// decline to bring it back, or the reverse).
     /// </summary>
     public bool HideMainWindow => (_settings?.Current ?? AppSettings.Default).HideMainWindowInMiniMode;
 
@@ -110,8 +112,9 @@ public sealed partial class MiniModeViewModel : ObservableObject
     partial void OnIsTopmostChanged(bool value) => _settings?.Update(s => s with { MiniAlwaysOnTop = value });
 
     /// <summary>
-    /// The remembered rectangle for the monitor arrangement <paramref name="setup"/> (see <see cref="MiniModeGeometry.SetupKey"/>), or null when
-    /// the window was never moved on this arrangement. Physical pixels.
+    /// The remembered position and size for the monitor arrangement <paramref name="setup"/> (see <see cref="MiniModeGeometry.SetupKey"/>), or
+    /// null when the window was never moved on this arrangement. The rectangle mixes units on purpose: Left/Top are physical pixels, Width/Height are
+    /// device-independent units (see <see cref="MiniWindowPlacement"/>).
     /// </summary>
     public Rect? SavedPlacement(string setup) =>
         (_settings?.Current ?? AppSettings.Default).MiniPlacements?.LastOrDefault(p => p.Setup == setup) is { } placement
@@ -123,7 +126,7 @@ public sealed partial class MiniModeViewModel : ObservableObject
     /// much the user moved or dragged meanwhile. The newest entry goes last and the list keeps only the latest few arrangements.
     /// </summary>
     /// <param name="setup">The monitor arrangement the position belongs to.</param>
-    /// <param name="bounds">The window rectangle in physical pixels.</param>
+    /// <param name="bounds">The window's NORMAL rectangle: Left/Top in physical pixels, Width/Height in device-independent units.</param>
     public void SaveWindowState(string setup, Rect bounds)
     {
         if (_settings is null)

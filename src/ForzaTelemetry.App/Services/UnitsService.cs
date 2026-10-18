@@ -85,23 +85,25 @@ public sealed partial class UnitsService : ObservableObject
     public static bool AffectsTemperature(string? propertyName) =>
         string.IsNullOrEmpty(propertyName) || propertyName is nameof(TemperatureUnit) or nameof(TemperatureLabel);
 
-    /// <summary>The power counterpart of <see cref="AffectsSpeed"/> (covers the secondary reading and its label too).</summary>
+    /// <summary>
+    /// The power counterpart of <see cref="AffectsSpeed"/>. It matches only the PRIMARY property (<see cref="PowerUnit"/>): the labels are
+    /// derived from it and notify too, so matching them as well would make a listener re-announce its readouts three times for one change.
+    /// A listener re-raises everything that depends on power (readout, label, the secondary reading) once, from this one signal.
+    /// </summary>
     public static bool AffectsPower(string? propertyName) =>
-        string.IsNullOrEmpty(propertyName) || propertyName is nameof(PowerUnit) or nameof(PowerLabel) or nameof(AltPowerLabel);
+        string.IsNullOrEmpty(propertyName) || propertyName is nameof(PowerUnit);
 
-    /// <summary>The boost counterpart of <see cref="AffectsSpeed"/>.</summary>
+    /// <summary>The boost counterpart of <see cref="AffectsPower"/>: only <see cref="BoostUnit"/>, once per change.</summary>
     public static bool AffectsBoost(string? propertyName) =>
-        string.IsNullOrEmpty(propertyName) || propertyName is nameof(BoostUnit) or nameof(BoostLabel);
+        string.IsNullOrEmpty(propertyName) || propertyName is nameof(BoostUnit);
 
     /// <summary>Psi in one bar (1 bar = 100 kPa; 1 psi = 6894.757 Pa).</summary>
     public const double PsiPerBar = 14.5037738;
 
-    /// <summary>Mechanical horsepower in one kilowatt: the same constant the dashboard uses, so there is one definition.</summary>
-    public const double HorsepowerPerKilowatt = DashboardMath.HorsepowerPerKilowatt;
-
     public static double PsiToBar(double psi) => psi / PsiPerBar;
 
-    public static double KilowattsToHorsepower(double kilowatts) => kilowatts * HorsepowerPerKilowatt;
+    /// <summary>Kilowatts to mechanical horsepower, through the app's single definition of the factor (<see cref="DashboardMath.ToHorsepower"/>).</summary>
+    public static double KilowattsToHorsepower(double kilowatts) => DashboardMath.ToHorsepower(kilowatts);
 
     /// <summary>Feet in one meter (exact: a foot is 0.3048 m by definition).</summary>
     public const double FeetPerMeter = 1 / 0.3048;

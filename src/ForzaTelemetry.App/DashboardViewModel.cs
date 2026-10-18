@@ -67,7 +67,6 @@ public sealed partial class DashboardViewModel : ObservableObject
         ThrottleInput = 0.7,
         SteerInput = 0.25,
         PowerKw = 280,
-        PowerHp = DashboardMath.ToHorsepower(280),
         PowerRatio = 0.8,
         TorqueNm = 410,
         TorqueRatio = 0.75,
@@ -163,10 +162,6 @@ public sealed partial class DashboardViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(PowerReadout))]
     [NotifyPropertyChangedFor(nameof(AltPowerReadout))]
     private double _powerKw;
-
-    /// <summary>The same power in mechanical horsepower.</summary>
-    [ObservableProperty]
-    private double _powerHp;
 
     /// <summary>Engine torque in Nm, never negative (see <see cref="PowerKw"/>).</summary>
     [ObservableProperty]
@@ -355,7 +350,6 @@ public sealed partial class DashboardViewModel : ObservableObject
         SteerInput = 0;
 
         PowerKw = 0;
-        PowerHp = 0;
         TorqueNm = 0;
         BoostPsi = 0;
         FuelPercent = 0;
@@ -431,7 +425,6 @@ public sealed partial class DashboardViewModel : ObservableObject
         }
 
         PowerKw = DashboardMath.ToKilowatts(p.Power);
-        PowerHp = DashboardMath.ToHorsepower(PowerKw);
         TorqueNm = Math.Max(0, p.Torque);
         BoostPsi = Math.Max(0, p.Boost);
         FuelRatio = DashboardMath.Clamp01(p.Fuel);

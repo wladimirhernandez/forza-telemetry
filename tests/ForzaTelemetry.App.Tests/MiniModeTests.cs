@@ -164,6 +164,112 @@ public sealed class MiniModeTests : IDisposable
     public void Opacity_is_clamped_to_60_to_100_percent_and_a_damaged_value_is_opaque(double input, double expected) =>
         Assert.Equal(expected, MiniModeGeometry.ClampOpacity(input));
 
+    [Theory]
+    [InlineData(0.3)]
+    [InlineData(0.6)]
+    [InlineData(0.85)]
+    [InlineData(1)]
+    [InlineData(9)]
+    [InlineData(double.NaN)]
+    public void The_reader_sanitizer_and_slider_agree_on_every_opacity(double opacity)
+    {
+        Directory.CreateDirectory(_directory);
+        var path = Path.Combine(_directory, "settings.json");
+        var expected = MiniModeGeometry.ClampOpacity(opacity);
+
+        Assert.Equal(expected, AppSettings.ClampMiniOpacity(opacity));
+        Assert.Equal(expected, (AppSettings.Default with { MiniOpacity = opacity }).Sanitized().MiniOpacity);
+        if (double.IsFinite(opacity))
+        {
+            File.WriteAllText(path, "{ \"miniOpacity\": " + opacity.ToString(System.Globalization.CultureInfo.InvariantCulture) + " }");
+            Assert.Equal(expected, new JsonSettingsStore(path).Load().MiniOpacity);
+        }
+
+        var vm = NewViewModel(out _, out _);
+        vm.Opacity = opacity;
+        Assert.Equal(expected, vm.Opacity);
+    }
+
+    [Fact]
+    public void Pixels_and_dips_convert_at_the_scale_of_the_monitor()
+    {
+        Assert.Equal(360, MiniModeGeometry.ToPixels(360, 96));
+        Assert.Equal(540, MiniModeGeometry.ToPixels(360, 144)); // 150%
+        Assert.Equal(720, MiniModeGeometry.ToPixels(360, 192)); // 200%
+        Assert.Equal(360, MiniModeGeometry.ToDips(540, 144), precision: 9);
+        // The same saved size is a different pixel count on each monitor, but the same DIP count: that is what stops the drift.
+        Assert.Equal(360, MiniModeGeometry.ToDips(MiniModeGeometry.ToPixels(360, 168), 168), precision: 9);
+    }
+
+    // ---- Main window: when it hides and when it comes back ----------------------------------------
+
+    [Fact]
+    public void The_hide_setting_is_decided_when_mini_mode_opens_and_not_read_again_at_close()
+    {
+        var policy = new MainWindowHidePolicy();
+
+        Assert.True(policy.BeginOpen(hideMainWindow: true, WindowState.Normal));
+        // The setting is switched off while mini mode is open: nothing in the policy can see it, so the close still restores.
+        Assert.Equal(WindowState.Normal, policy.EndClose(WindowState.Minimized));
+
+        Assert.False(policy.BeginOpen(hideMainWindow: false, WindowState.Normal));
+        Assert.Null(policy.EndClose(WindowState.Normal)); // never hidden, so never restored
+    }
+
+    [Fact]
+    public void A_maximized_main_window_comes_back_maximized()
+    {
+        var policy = new MainWindowHidePolicy();
+
+        Assert.True(policy.BeginOpen(true, WindowState.Maximized));
+        policy.OnMainWindowStateChanged(WindowState.Minimized); // the change our own minimize causes
+
+        Assert.Equal(WindowState.Maximized, policy.EndClose(WindowState.Minimized));
+    }
+
+    [Fact]
+    public void A_main_window_the_user_already_minimized_is_left_alone()
+    {
+        var policy = new MainWindowHidePolicy();
+
+        Assert.False(policy.BeginOpen(true, WindowState.Minimized));
+        Assert.Null(policy.EndClose(WindowState.Minimized));
+    }
+
+    [Fact]
+    public void Once_the_user_restores_the_main_window_it_is_never_touched_again_even_if_they_minimize_it_later()
+    {
+        var policy = new MainWindowHidePolicy();
+        policy.BeginOpen(true, WindowState.Normal);
+        policy.OnMainWindowStateChanged(WindowState.Minimized);
+
+        policy.OnMainWindowStateChanged(WindowState.Normal); // the user clicked its taskbar button
+        policy.OnMainWindowStateChanged(WindowState.Minimized); // and minimized it again
+
+        Assert.Null(policy.EndClose(WindowState.Minimized));
+    }
+
+    [Fact]
+    public void A_main_window_restored_by_the_user_is_not_moved_on_close()
+    {
+        var policy = new MainWindowHidePolicy();
+        policy.BeginOpen(true, WindowState.Maximized);
+
+        policy.OnMainWindowStateChanged(WindowState.Normal);
+
+        Assert.Null(policy.EndClose(WindowState.Normal));
+    }
+
+    [Fact]
+    public void The_policy_forgets_a_session_when_it_ends()
+    {
+        var policy = new MainWindowHidePolicy();
+        policy.BeginOpen(true, WindowState.Normal);
+        policy.EndClose(WindowState.Minimized);
+
+        Assert.Null(policy.EndClose(WindowState.Minimized)); // a second close restores nothing
+    }
+
     // ---- View model: state and persistence ------------------------------------------------------
 
     [Fact]
@@ -403,12 +509,12 @@ public sealed class MiniModeTests : IDisposable
 
         var loaded = new JsonSettingsStore(path, logger).Load();
 
-        Assert.Equal(1.0, loaded.MiniOpacity); // below 60%: unusable, back to the default
+        Assert.Equal(0.6, loaded.MiniOpacity); // below 60%: clamped to the nearest legal value, not rejected
         Assert.True(loaded.MiniAlwaysOnTop);
         Assert.False(loaded.HideMainWindowInMiniMode); // the good one survives
         Assert.Null(loaded.MiniPlacements);
         Assert.Equal(5400, loaded.UdpPort);
-        Assert.Contains(logger.Entries, e => e.Message.Contains("miniOpacity"));
+        Assert.DoesNotContain(logger.Entries, e => e.Message.Contains("miniOpacity")); // a number is always usable; only a non-number is rejected
     }
 
     [Fact]
@@ -460,9 +566,11 @@ public sealed class MiniModeTests : IDisposable
     }
 
     [Fact]
-    public void Sanitizing_puts_a_wild_opacity_back_to_the_default()
+    public void Sanitizing_clamps_a_wild_opacity_with_the_same_policy_as_the_slider()
     {
         Assert.Equal(1.0, (AppSettings.Default with { MiniOpacity = 5 }).Sanitized().MiniOpacity);
+        Assert.Equal(0.6, (AppSettings.Default with { MiniOpacity = 0.1 }).Sanitized().MiniOpacity);
+        Assert.Equal(0.6, (AppSettings.Default with { MiniOpacity = double.NegativeInfinity }).Sanitized().MiniOpacity);
         Assert.Equal(1.0, (AppSettings.Default with { MiniOpacity = double.NaN }).Sanitized().MiniOpacity);
         Assert.Equal(0.8, (AppSettings.Default with { MiniOpacity = 0.8 }).Sanitized().MiniOpacity);
     }

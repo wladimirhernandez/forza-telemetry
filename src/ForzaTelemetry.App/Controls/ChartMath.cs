@@ -518,9 +518,9 @@ public static class DynoMath
         return (bestPower, bestTorque);
     }
 
-    /// <summary>Watts in one mechanical horsepower (the "hp" of the imperial/US convention Forza's UI uses).</summary>
-    public const double WattsPerHorsepower = 745.69987158227;
-
-    /// <summary>Watts to mechanical horsepower (hp).</summary>
-    public static double ToHorsepower(double watts) => watts / WattsPerHorsepower;
+    /// <summary>
+    /// Watts to mechanical horsepower (hp). It goes through <see cref="DashboardMath.ToHorsepower"/>, the app's single definition of
+    /// the factor, so the dyno chart, the dashboard and the Power setting can never disagree by a rounding step.
+    /// </summary>
+    public static double ToHorsepower(double watts) => DashboardMath.ToHorsepower(watts / 1000.0);
 }

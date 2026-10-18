@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using ForzaTelemetry.App.Controls;
 using ForzaTelemetry.App.Resources;
 using ForzaTelemetry.App.Services;
 using ForzaTelemetry.Core;
@@ -127,11 +128,15 @@ public sealed class PowerBoostUnitsTests : IDisposable
     public void The_affects_filters_tell_the_families_apart()
     {
         Assert.True(UnitsService.AffectsPower(nameof(UnitsService.PowerUnit)));
-        Assert.True(UnitsService.AffectsPower(nameof(UnitsService.AltPowerLabel)));
         Assert.True(UnitsService.AffectsPower(null));
         Assert.False(UnitsService.AffectsPower(nameof(UnitsService.BoostUnit)));
-        Assert.True(UnitsService.AffectsBoost(nameof(UnitsService.BoostLabel)));
+        Assert.True(UnitsService.AffectsBoost(nameof(UnitsService.BoostUnit)));
+        Assert.True(UnitsService.AffectsBoost(""));
         Assert.False(UnitsService.AffectsBoost(nameof(UnitsService.PowerUnit)));
+        // Only the primary property: the derived labels notify too, and matching them would re-raise the readouts again for one change.
+        Assert.False(UnitsService.AffectsPower(nameof(UnitsService.PowerLabel)));
+        Assert.False(UnitsService.AffectsPower(nameof(UnitsService.AltPowerLabel)));
+        Assert.False(UnitsService.AffectsBoost(nameof(UnitsService.BoostLabel)));
         Assert.False(UnitsService.AffectsSpeed(nameof(UnitsService.PowerUnit)));
     }
 
@@ -167,6 +172,41 @@ public sealed class PowerBoostUnitsTests : IDisposable
         Assert.Contains(nameof(DashboardViewModel.PowerReadout), changed);
         Assert.Contains(nameof(DashboardViewModel.BoostUnitLabel), changed);
         Assert.DoesNotContain(nameof(DashboardViewModel.SpeedReadout), changed); // a power change does not re-render the speed
+    }
+
+    [Fact]
+    public void One_unit_change_raises_each_dependent_readout_exactly_once()
+    {
+        var (units, settings, _) = Rig();
+        var dashboard = new DashboardViewModel(units);
+        var tuning = new TuningViewModel(new DynoCapture(), new TelemetryHistory(), new SuspensionBottomingCounter(), units);
+        var dashboardChanges = new List<string?>();
+        var tuningChanges = new List<string?>();
+        dashboard.PropertyChanged += (_, e) => dashboardChanges.Add(e.PropertyName);
+        tuning.PropertyChanged += (_, e) => tuningChanges.Add(e.PropertyName);
+
+        settings.Update(s => s with { PowerUnit = PowerUnit.Hp });
+
+        Assert.Equal(1, dashboardChanges.Count(n => n == nameof(DashboardViewModel.PowerReadout)));
+        Assert.Equal(1, dashboardChanges.Count(n => n == nameof(DashboardViewModel.PowerUnitLabel)));
+        Assert.Equal(1, dashboardChanges.Count(n => n == nameof(DashboardViewModel.AltPowerReadout)));
+        Assert.Equal(1, dashboardChanges.Count(n => n == nameof(DashboardViewModel.AltPowerUnitLabel)));
+        Assert.Equal(1, tuningChanges.Count(n => n == nameof(TuningViewModel.PowerUnit)));
+
+        dashboardChanges.Clear();
+        settings.Update(s => s with { BoostUnit = BoostUnit.Bar });
+
+        Assert.Equal(1, dashboardChanges.Count(n => n == nameof(DashboardViewModel.BoostReadout)));
+        Assert.Equal(1, dashboardChanges.Count(n => n == nameof(DashboardViewModel.BoostUnitLabel)));
+    }
+
+    [Fact]
+    public void There_is_one_horsepower_factor_for_the_dashboard_the_setting_and_the_dyno()
+    {
+        const double kilowatts = 287.3;
+
+        Assert.Equal(DashboardMath.ToHorsepower(kilowatts), UnitsService.KilowattsToHorsepower(kilowatts));
+        Assert.Equal(DashboardMath.ToHorsepower(kilowatts), DynoMath.ToHorsepower(kilowatts * 1000), precision: 9);
     }
 
     [Fact]

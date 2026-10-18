@@ -79,7 +79,7 @@ public class DashboardViewModelTests
             TestPackets.Sample(power: 200_000f, torque: 350f, boost: 12.5f, fuel: 0.25f));
 
         Assert.Equal(200.0, vm.Dashboard.PowerKw, precision: 3);
-        Assert.Equal(268.204, vm.Dashboard.PowerHp, precision: 2);
+        Assert.Equal("268", vm.Dashboard.AltPowerReadout); // the same power in hp (default unit is kW)
         Assert.Equal(350.0, vm.Dashboard.TorqueNm, precision: 3);
         Assert.Equal(12.5, vm.Dashboard.BoostPsi, precision: 3);
         Assert.Equal(25.0, vm.Dashboard.FuelPercent, precision: 3);

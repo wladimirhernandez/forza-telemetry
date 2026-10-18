@@ -47,10 +47,10 @@ public enum AppLanguage
 /// The monitor arrangement this position belongs to (see <see cref="MiniModeGeometry.SetupKey"/>). A laptop that is sometimes docked has two
 /// layouts; remembering one position per layout puts the window back where it was on THIS desk instead of wherever the other layout left it.
 /// </param>
-/// <param name="Left">Left edge in physical pixels, in virtual-screen coordinates (negative on a monitor left of the primary one).</param>
+/// <param name="Left">Left edge in physical pixels, in virtual-screen coordinates (negative on a monitor left of the primary one). The window's NORMAL position, never a minimized or maximized one.</param>
 /// <param name="Top">Top edge in physical pixels.</param>
-/// <param name="Width">Width in physical pixels, shadow margin included.</param>
-/// <param name="Height">Height in physical pixels, shadow margin included.</param>
+/// <param name="Width">Width in device-independent units (1/96 inch), shadow margin included. Not pixels: the same window is a different number of pixels on monitors of different scaling, so the size is restored in the target monitor's own scale instead of drifting each time it moves between them.</param>
+/// <param name="Height">Height in device-independent units, shadow margin included.</param>
 public sealed record MiniWindowPlacement(string Setup, double Left, double Top, double Width, double Height)
 {
     /// <summary>True when every number is a real, positive-size rectangle and the layout is named: a hand-edited or damaged entry is dropped, not trusted.</summary>
@@ -160,12 +160,17 @@ public sealed record AppSettings(
         Language = Enum.IsDefined(Language) ? Language : Default.Language,
         PowerUnit = Enum.IsDefined(PowerUnit) ? PowerUnit : Default.PowerUnit,
         BoostUnit = Enum.IsDefined(BoostUnit) ? BoostUnit : Default.BoostUnit,
-        MiniOpacity = IsValidMiniOpacity(MiniOpacity) ? MiniOpacity : Default.MiniOpacity,
+        MiniOpacity = ClampMiniOpacity(MiniOpacity),
         MiniPlacements = SanitizedPlacements(MiniPlacements)
     };
 
-    /// <summary>True for a real number inside <see cref="MinMiniOpacity"/>..<see cref="MaxMiniOpacity"/> (NaN and infinity are not).</summary>
-    public static bool IsValidMiniOpacity(double opacity) => opacity is >= MinMiniOpacity and <= MaxMiniOpacity;
+    /// <summary>
+    /// The ONE opacity policy, used by the settings reader, <see cref="Sanitized"/>, the mini-mode view model and its slider: clamp into
+    /// <see cref="MinMiniOpacity"/>..<see cref="MaxMiniOpacity"/>; NaN (a damaged value) means fully opaque. Clamping rather than rejecting
+    /// keeps a hand-edited 0.3 as the nearest legal value (60%) instead of silently jumping to 100%.
+    /// </summary>
+    public static double ClampMiniOpacity(double opacity) =>
+        double.IsNaN(opacity) ? MaxMiniOpacity : Math.Clamp(opacity, MinMiniOpacity, MaxMiniOpacity);
 
     // Keeps the usable entries, one per monitor arrangement (the LAST one wins: it is the most recent), and only the newest few.
     // Returns the same list when nothing needed fixing, so a sanitized copy of clean settings still compares equal to the original.
