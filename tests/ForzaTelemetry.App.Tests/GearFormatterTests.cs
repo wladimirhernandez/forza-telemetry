@@ -1,4 +1,3 @@
-using ForzaTelemetry.App.ViewModels;
 
 namespace ForzaTelemetry.App.Tests;
 

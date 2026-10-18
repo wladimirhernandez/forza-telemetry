@@ -251,7 +251,7 @@ static async Task RunTelemetryViewAsync(UdpTelemetryListener listener, Cancellat
         // Plain Console.WriteLine, same as the log lines above: this is a live status view, not a
         // durable record, so it does not need to go through the logger — and mixing it in with log
         // lines on the same console is fine for this didactic tool (both are just text scrolling
-        // by); a real dashboard UI is what the future Avalonia front-end is for.
+        // by); a real dashboard UI is what the WPF app (ForzaTelemetry.App) is for.
         Console.WriteLine(
             $"RaceOn={(packet.IsRaceOn ? "Y" : "N")} " +
             $"Gear={packet.Gear,3} " +

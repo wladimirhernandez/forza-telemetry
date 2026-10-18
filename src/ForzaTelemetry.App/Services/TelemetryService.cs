@@ -21,7 +21,7 @@ namespace ForzaTelemetry.App.Services;
 /// <b>Why the receive loop runs on <see cref="Task.Run(Action)"/>:</b> an <c>await foreach</c> over
 /// <see cref="ITelemetrySource.ReadPacketsAsync"/> never completes on its own while the game keeps
 /// sending data — it is a live, unbounded stream. Awaiting it directly on the UI thread would freeze
-/// the whole application: Avalonia's UI thread also has to keep pumping window/input messages and
+/// the whole application: WPF's UI thread also has to keep pumping window/input messages and
 /// repainting, and it cannot do that while blocked awaiting the next packet. <see cref="Task.Run"/>
 /// hands the whole loop to a thread-pool thread instead, so the UI thread stays free. This is also
 /// exactly why nothing in this class may touch a bound UI property directly — see

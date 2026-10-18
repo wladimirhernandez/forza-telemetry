@@ -14,7 +14,7 @@ namespace ForzaTelemetry.Udp;
 /// </summary>
 /// <remarks>
 /// This type lives in its own project, not inside the console app, because it is reused as-is by
-/// the Avalonia UI (<c>ForzaTelemetry.App</c>'s <c>TelemetryService</c>) exactly like the console
+/// the WPF UI (<c>ForzaTelemetry.App</c>'s <c>TelemetryService</c>) exactly like the console
 /// app does today. Keeping it here means the UI never has to know about sockets.
 ///
 /// This is the concrete ADAPTER side of a hexagonal port/adapter split: <see cref="ITelemetrySource"/>
@@ -232,7 +232,7 @@ public sealed class UdpTelemetryListener : ITelemetrySource
 
     /// <summary>
     /// Reads and parses telemetry packets as they arrive. This is the stream a consumer (the
-    /// console app today, an Avalonia view model tomorrow) normally wants: a pull-based sequence
+    /// console app today, a WPF view model tomorrow) normally wants: a pull-based sequence
     /// of typed values that maps naturally onto a UI update loop (`await foreach` -&gt; update
     /// view model -&gt; repaint), without the consumer ever touching raw bytes or a background
     /// thread directly.

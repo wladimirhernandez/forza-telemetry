@@ -1,4 +1,4 @@
-namespace ForzaTelemetry.App.ViewModels;
+namespace ForzaTelemetry.App;
 
 /// <summary>
 /// Converts the raw <c>Gear</c> byte from a telemetry packet into a short display label. A static,

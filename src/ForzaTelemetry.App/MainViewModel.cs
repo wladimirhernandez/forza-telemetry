@@ -5,7 +5,7 @@ using ForzaTelemetry.App.Services;
 using ForzaTelemetry.Core;
 using ForzaTelemetry.Udp;
 
-namespace ForzaTelemetry.App.ViewModels;
+namespace ForzaTelemetry.App;
 
 /// <summary>
 /// The dashboard's single view model: current RPM/speed/gear, a packets-per-second figure, a
@@ -18,14 +18,13 @@ namespace ForzaTelemetry.App.ViewModels;
 /// remarks for the full reasoning. That is also why this class holds no reference to <see cref="IUiTicker"/>
 /// itself: it does not need to know HOW OFTEN it gets refreshed, only what to do when it is.
 /// <para>
-/// <b>Compiled bindings:</b> <c>MainView.axaml</c> declares <c>x:DataType="vm:MainViewModel"</c>,
-/// which tells Avalonia's XAML compiler the exact type every <c>{Binding ...}</c> in that view binds
-/// against. That means a typo like <c>{Binding SpeeedKmh}</c> is a BUILD error, not a silent runtime
-/// failure that only shows up as a blank label while the app is running — the same safety net
-/// <see cref="Nullable"/> reference types give C# code, applied to XAML bindings.
+/// <b>Bindings are reflection-based:</b> unlike a compiled binding, WPF resolves <c>{Binding SpeedKmh}</c>
+/// by property name at RUNTIME, so a typo shows up as a blank label (and a line in the Output window),
+/// not as a build error. <c>MainWindow.xaml</c> declares <c>d:DataContext</c> so the editor can at
+/// least check names at design time.
 /// </para>
 /// </remarks>
-public partial class MainViewModel : ViewModelBase
+public sealed partial class MainViewModel : ObservableObject
 {
     /// <summary>How stale the latest packet must be before the status line switches to "No data for Ns".</summary>
     private static readonly TimeSpan NoDataThreshold = TimeSpan.FromSeconds(2);
@@ -44,42 +43,42 @@ public partial class MainViewModel : ViewModelBase
     private DateTimeOffset _lastPacketArrivalAt;
 
     [ObservableProperty]
-    public partial float Rpm { get; set; }
+    private float _rpm;
 
     // 9000 is a placeholder redline shown before the first packet arrives (so the RPM bar has SOME
     // scale instead of Maximum=0); the real value is overwritten from EngineMaxRpm on first refresh,
     // since different cars in FH6 have very different actual redlines.
     [ObservableProperty]
-    public partial float MaxRpm { get; set; } = 9000f;
+    private float _maxRpm = 9000f;
 
     [ObservableProperty]
-    public partial float SpeedKmh { get; set; }
+    private float _speedKmh;
 
     [ObservableProperty]
-    public partial string GearLabel { get; set; } = "-";
+    private string _gearLabel = "-";
 
     [ObservableProperty]
-    public partial double PacketsPerSecond { get; set; }
+    private double _packetsPerSecond;
 
     [ObservableProperty]
-    public partial string Status { get; set; } = "Stopped";
+    private string _status = "Stopped";
 
     // [NotifyCanExecuteChangedFor]: whenever IsRunning changes, CommunityToolkit.Mvvm's source
     // generator re-checks StartCommand/StopCommand's CanExecute automatically (calling
     // Button.Command's CanExecute again is what actually enables/disables the bound Button in the
-    // view) — without this attribute, the buttons would only re-evaluate the next time WPF/Avalonia
+    // view) — without this attribute, the buttons would only re-evaluate the next time WPF
     // happened to ask, which is not guaranteed to be promptly after a Start/Stop.
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
-    public partial bool IsRunning { get; set; }
+    private bool _isRunning;
 
     /// <summary>
-    /// Design-time-only constructor: used by <c>MainView.axaml</c>'s <c>&lt;Design.DataContext&gt;</c>
-    /// so the Rider/VS previewer shows a populated dashboard instead of blank zeros. It builds a
-    /// harmless <see cref="TelemetryService"/> (whose factory is never actually invoked — nothing in
-    /// design mode calls Start) and then overwrites the display properties with representative
-    /// sample values.
+    /// Design-time-only constructor: used by <c>MainWindow.xaml</c>'s <c>d:DataContext</c>
+    /// (<c>IsDesignTimeCreatable=True</c>) so the Visual Studio/Rider designer shows a populated dashboard
+    /// instead of blank zeros. It builds a harmless <see cref="TelemetryService"/> (whose factory is never
+    /// invoked — nothing in design mode calls Start) and then overwrites the display properties with
+    /// representative sample values.
     /// </summary>
     public MainViewModel()
         : this(
@@ -96,7 +95,7 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Real constructor, used by the app's composition root (<c>App.axaml.cs</c>).
+    /// Real constructor, used by the app's composition root (<c>App.xaml.cs</c>'s <c>OnStartup</c>).
     /// </summary>
     /// <param name="telemetryService">The already-constructed telemetry service this view model reads from in <see cref="Refresh"/>.</param>
     /// <param name="timeProvider">
@@ -207,7 +206,7 @@ public partial class MainViewModel : ViewModelBase
     private bool CanStop() => IsRunning;
 
     // [RelayCommand]: CommunityToolkit.Mvvm's source generator turns this method into a public
-    // `StartCommand` property (an IAsyncRelayCommand) that MainView.axaml binds a Button.Command to.
+    // `StartCommand` property (an IAsyncRelayCommand) that MainWindow.xaml binds a Button.Command to.
     // Two separate commands (Start/Stop), each with its own CanExecute, is the clearer pattern for a
     // first look at commands: the Button's enabled state follows directly from ONE boolean condition
     // per button, instead of one toggle button whose single Content/meaning has to flip depending on

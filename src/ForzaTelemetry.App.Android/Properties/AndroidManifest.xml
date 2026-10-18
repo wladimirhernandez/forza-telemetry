@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" android:installLocation="auto">
-	<!-- Needed to receive UDP telemetry: the device listens on a UDP socket for Forza's "Data Out" packets. -->
-	<uses-permission android:name="android.permission.INTERNET" />
-	<application android:label="Forza Telemetry" android:icon="@drawable/Icon" />
-</manifest>

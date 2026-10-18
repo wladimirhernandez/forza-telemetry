@@ -1,13 +1,13 @@
-using Avalonia.Threading;
+using System.Windows.Threading;
 
 namespace ForzaTelemetry.App.Services;
 
 /// <summary>
-/// Real <see cref="IUiTicker"/>, backed by Avalonia's <see cref="DispatcherTimer"/>.
+/// Real <see cref="IUiTicker"/>, backed by WPF's <see cref="DispatcherTimer"/>.
 /// </summary>
 /// <remarks>
-/// <b>Why sample at a fixed rate instead of updating the UI on every packet:</b> Avalonia has the
-/// same rule as WPF/WinForms/most UI frameworks — ONLY the UI thread may touch bound properties or
+/// <b>Why sample at a fixed rate instead of updating the UI on every packet:</b> WPF has the
+/// same rule as WinForms/most UI frameworks — ONLY the UI thread may touch bound properties or
 /// controls. FH6 sends telemetry at ~30 packets/sec (60 in performance mode), so naively marshalling
 /// EVERY packet onto the UI thread (e.g. via <c>Dispatcher.Post</c> from the receive loop) would mean
 /// 30-60 dispatcher messages per second. That is wasteful — a human cannot perceive UI updates that

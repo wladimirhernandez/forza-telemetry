@@ -5,7 +5,7 @@ namespace ForzaTelemetry.App.Tests;
 /// <summary>
 /// Test double for <see cref="IUiTicker"/>: instead of firing on a real timer/dispatcher, a test
 /// calls <see cref="Tick"/> itself, whenever it wants — deterministically, with no need to wait on
-/// real wall-clock time or a real Avalonia UI thread just to exercise "what happens on a refresh".
+/// real wall-clock time or a real WPF UI thread just to exercise "what happens on a refresh".
 /// </summary>
 internal sealed class ManualTicker : IUiTicker
 {

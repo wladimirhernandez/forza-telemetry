@@ -2,6 +2,8 @@
 
   <!-- TargetFramework, Nullable, ImplicitUsings, TreatWarningsAsErrors come from Directory.Build.props. -->
   <PropertyGroup>
+    <!-- Must match the WPF project it references (WPF is Windows-only). -->
+    <TargetFramework>net10.0-windows</TargetFramework>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
@@ -21,10 +23,10 @@
   <ItemGroup>
     <!--
       Referencing ForzaTelemetry.App (not just Core/Udp) is deliberate: these tests exercise
-      TelemetryService and MainViewModel, which live in that project. This does pull in Avalonia's
-      packages transitively, but none of these tests need a live UI/Dispatcher — MainViewModel is
-      driven directly by calling Refresh(), and DispatcherTimerTicker (the only class that touches
-      Avalonia's real dispatcher) is never instantiated here; see ManualTicker for its test double.
+      TelemetryService and MainViewModel, which live in that project. None of these tests need a live
+      UI/Dispatcher: MainViewModel is driven directly by calling Refresh(), and DispatcherTimerTicker
+      (the only class that touches WPF's real dispatcher) is never instantiated here; see ManualTicker
+      for its test double.
     -->
     <ProjectReference Include="..\..\src\ForzaTelemetry.App\ForzaTelemetry.App.csproj" />
   </ItemGroup>

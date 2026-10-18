@@ -9,7 +9,7 @@
   <ItemGroup>
     <!--
       Only the ABSTRACTIONS package, deliberately: this classlib is reused by both the console app
-      today and an Avalonia UI later, and a reusable library must never choose a logging backend
+      today and a WPF UI later, and a reusable library must never choose a logging backend
       (Serilog, Console, NLog, ...) for its consumers - that choice belongs to the application at
       the composition root. Depending only on Microsoft.Extensions.Logging.Abstractions gives this
       project the ILogger<T> interface and NullLogger<T> fallback without dragging in any concrete
