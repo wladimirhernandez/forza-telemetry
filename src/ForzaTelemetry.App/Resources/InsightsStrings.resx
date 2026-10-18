@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="AnalysisTitle" xml:space="preserve">
+    <value>Live traces</value>
+  </data>
+  <data name="AnalysisWindowLabel" xml:space="preserve">
+    <value>Window</value>
+  </data>
+  <data name="WindowSecondsFormat" xml:space="preserve">
+    <value>{0} s</value>
+  </data>
+  <data name="AnalysisEmptyTitle" xml:space="preserve">
+    <value>Drive to see live traces</value>
+  </data>
+  <data name="AnalysisEmptyHint" xml:space="preserve">
+    <value>Speed, RPM, pedals, steering and gear appear here as soon as the race is on.</value>
+  </data>
+  <data name="LaneSpeed" xml:space="preserve">
+    <value>Speed</value>
+  </data>
+  <data name="LaneRpm" xml:space="preserve">
+    <value>RPM</value>
+  </data>
+  <data name="LanePedals" xml:space="preserve">
+    <value>Pedals</value>
+  </data>
+  <data name="LaneSteering" xml:space="preserve">
+    <value>Steering</value>
+  </data>
+  <data name="LaneGear" xml:space="preserve">
+    <value>Gear</value>
+  </data>
+  <data name="ThrottleLabel" xml:space="preserve">
+    <value>Throttle</value>
+  </data>
+  <data name="BrakeLabel" xml:space="preserve">
+    <value>Brake</value>
+  </data>
+  <data name="SteerLeftShort" xml:space="preserve">
+    <value>L</value>
+  </data>
+  <data name="SteerRightShort" xml:space="preserve">
+    <value>R</value>
+  </data>
+  <data name="SecondsAgoFormat" xml:space="preserve">
+    <value>{0:0.0} s ago</value>
+  </data>
+  <data name="TimeNow" xml:space="preserve">
+    <value>now</value>
+  </data>
+  <data name="AnalysisChartName" xml:space="preserve">
+    <value>Live telemetry traces</value>
+  </data>
+  <data name="MapTitle" xml:space="preserve">
+    <value>Track map</value>
+  </data>
+  <data name="MapEmptyTitle" xml:space="preserve">
+    <value>Drive to draw your path</value>
+  </data>
+  <data name="MapEmptyHint" xml:space="preserve">
+    <value>The route you drive is drawn live, colored by speed.</value>
+  </data>
+  <data name="MapClear" xml:space="preserve">
+    <value>Clear</value>
+  </data>
+  <data name="MapClearTooltip" xml:space="preserve">
+    <value>Clear the drawn path</value>
+  </data>
+  <data name="MapDistance" xml:space="preserve">
+    <value>Distance</value>
+  </data>
+  <data name="MapTopSpeed" xml:space="preserve">
+    <value>Top speed</value>
+  </data>
+  <data name="MapBrakingZones" xml:space="preserve">
+    <value>Braking zones</value>
+  </data>
+  <data name="MapLegendTitle" xml:space="preserve">
+    <value>Speed</value>
+  </data>
+  <data name="MapBrakingLegend" xml:space="preserve">
+    <value>Braking point</value>
+  </data>
+  <data name="MapNavigationHint" xml:space="preserve">
+    <value>Scroll to zoom, drag to pan, double-click to reset</value>
+  </data>
+  <data name="DistanceKm" xml:space="preserve">
+    <value>km</value>
+  </data>
+  <data name="DistanceMi" xml:space="preserve">
+    <value>mi</value>
+  </data>
+  <data name="MapChartName" xml:space="preserve">
+    <value>Track map colored by speed</value>
+  </data>
+  <data name="CornerFrontLeft" xml:space="preserve">
+    <value>FL</value>
+  </data>
+  <data name="CornerFrontRight" xml:space="preserve">
+    <value>FR</value>
+  </data>
+  <data name="CornerRearLeft" xml:space="preserve">
+    <value>RL</value>
+  </data>
+  <data name="CornerRearRight" xml:space="preserve">
+    <value>RR</value>
+  </data>
+  <data name="DynoTitle" xml:space="preserve">
+    <value>Power and torque</value>
+  </data>
+  <data name="DynoHint" xml:space="preserve">
+    <value>Full-throttle pulls build this curve.</value>
+  </data>
+  <data name="DynoEmptyTitle" xml:space="preserve">
+    <value>No curve yet</value>
+  </data>
+  <data name="DynoEmptyHint" xml:space="preserve">
+    <value>Accelerate at full throttle through the rev range in one gear to capture power and torque.</value>
+  </data>
+  <data name="DynoReset" xml:space="preserve">
+    <value>Reset curve</value>
+  </data>
+  <data name="DynoResetTooltip" xml:space="preserve">
+    <value>Forget the curve captured for this car</value>
+  </data>
+  <data name="DynoPeakPower" xml:space="preserve">
+    <value>Peak power</value>
+  </data>
+  <data name="DynoPeakTorque" xml:space="preserve">
+    <value>Peak torque</value>
+  </data>
+  <data name="DynoPowerAxis" xml:space="preserve">
+    <value>kW</value>
+  </data>
+  <data name="DynoTorqueAxis" xml:space="preserve">
+    <value>N·m</value>
+  </data>
+  <data name="DynoRpmAxis" xml:space="preserve">
+    <value>rpm</value>
+  </data>
+  <data name="DynoPeakPowerFormat" xml:space="preserve">
+    <value>{0} kW · {1} hp @ {2} rpm</value>
+  </data>
+  <data name="DynoPeakTorqueFormat" xml:space="preserve">
+    <value>{0} N·m @ {1} rpm</value>
+  </data>
+  <data name="DynoChartName" xml:space="preserve">
+    <value>Power and torque curve</value>
+  </data>
+  <data name="CarLabelFormat" xml:space="preserve">
+    <value>Car {0} · PI {1}</value>
+  </data>
+  <data name="NoCarYet" xml:space="preserve">
+    <value>No car detected yet</value>
+  </data>
+  <data name="BalanceTitle" xml:space="preserve">
+    <value>Handling balance</value>
+  </data>
+  <data name="BalanceUndersteer" xml:space="preserve">
+    <value>Understeer</value>
+  </data>
+  <data name="BalanceOversteer" xml:space="preserve">
+    <value>Oversteer</value>
+  </data>
+  <data name="BalanceNeutral" xml:space="preserve">
+    <value>Neutral</value>
+  </data>
+  <data name="BalanceUnknown" xml:space="preserve">
+    <value>Take a corner to read the balance.</value>
+  </data>
+  <data name="BalanceAdviceUndersteer" xml:space="preserve">
+    <value>The front slides more than the rear. Try a softer front anti-roll bar, a stiffer rear one, or more front downforce.</value>
+  </data>
+  <data name="BalanceAdviceOversteer" xml:space="preserve">
+    <value>The rear slides more than the front. Try a stiffer front anti-roll bar, a softer rear one, or more rear downforce.</value>
+  </data>
+  <data name="BalanceAdviceNeutral" xml:space="preserve">
+    <value>Well balanced: both axles grip about the same.</value>
+  </data>
+  <data name="BalanceBarName" xml:space="preserve">
+    <value>Understeer and oversteer balance</value>
+  </data>
+  <data name="SuspensionTitle" xml:space="preserve">
+    <value>Suspension</value>
+  </data>
+  <data name="SuspensionHint" xml:space="preserve">
+    <value>Times each corner hit the bump stop.</value>
+  </data>
+  <data name="SuspensionReset" xml:space="preserve">
+    <value>Reset counters</value>
+  </data>
+  <data name="SuspensionResetTooltip" xml:space="preserve">
+    <value>Set the bottoming counters back to zero</value>
+  </data>
+  <data name="SuspensionAdviceNone" xml:space="preserve">
+    <value>No bottoming so far.</value>
+  </data>
+  <data name="SuspensionAdviceFew" xml:space="preserve">
+    <value>Occasional bottoming is normal after big landings.</value>
+  </data>
+  <data name="SuspensionAdviceFront" xml:space="preserve">
+    <value>The front end bottoms out often. Try stiffer front springs or more ride height.</value>
+  </data>
+  <data name="SuspensionAdviceRear" xml:space="preserve">
+    <value>The rear end bottoms out often. Try stiffer rear springs or more ride height.</value>
+  </data>
+  <data name="SuspensionAdviceBoth" xml:space="preserve">
+    <value>Both axles bottom out often. Try stiffer springs and more ride height.</value>
+  </data>
+  <data name="TiresTitle" xml:space="preserve">
+    <value>Tires</value>
+  </data>
+  <data name="TiresAdviceBalanced" xml:space="preserve">
+    <value>Tire temperatures look balanced.</value>
+  </data>
+  <data name="TiresNoData" xml:space="preserve">
+    <value>Waiting for tire data.</value>
+  </data>
+  <data name="TiresAdviceFrontHotter" xml:space="preserve">
+    <value>The front tires run noticeably hotter than the rear: the front axle does most of the work and tends to understeer. Soften the front anti-roll bar or add rear grip.</value>
+  </data>
+  <data name="TiresAdviceRearHotter" xml:space="preserve">
+    <value>The rear tires run noticeably hotter than the front: the rear axle does most of the work and tends to oversteer. Soften the rear anti-roll bar or add front grip.</value>
+  </data>
+  <data name="TiresAdviceLeftHotter" xml:space="preserve">
+    <value>The left tires are hotter than the right. That is normal on tracks with mostly right-hand corners; otherwise check camber and pressures side to side.</value>
+  </data>
+  <data name="TiresAdviceRightHotter" xml:space="preserve">
+    <value>The right tires are hotter than the left. That is normal on tracks with mostly left-hand corners; otherwise check camber and pressures side to side.</value>
+  </data>
+  <data name="TiresAdviceAllCold" xml:space="preserve">
+    <value>All tires are below their working range. Drive harder for a few corners to bring them up to temperature.</value>
+  </data>
+  <data name="TiresAdviceAllHot" xml:space="preserve">
+    <value>All tires are overheating. Ease off for a moment and check the tire pressures.</value>
+  </data>
+  <data name="TuningEmptyHint" xml:space="preserve">
+    <value>Drive to see tuning insights.</value>
+  </data>
+</root>
