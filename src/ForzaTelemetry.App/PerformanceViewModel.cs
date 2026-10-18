@@ -43,7 +43,11 @@ public enum PerformanceSortColumn
     TopSpeed
 }
 
-/// <summary>One row of the per-car table, already formatted for display in the units that were selected when it was built.</summary>
+/// <summary>
+/// One row of the per-car table, already formatted for display in the units that were selected when it was built. The
+/// quarter mile is two values (the time and the speed at the line), kept apart so the table can stack them in two lines
+/// instead of joining them with a separator character.
+/// </summary>
 public sealed record CarPerformanceRow(
     string CarLabel,
     string ClassLabel,
@@ -52,6 +56,7 @@ public sealed record CarPerformanceRow(
     string ZeroTo100Text,
     string ZeroTo200Text,
     string QuarterMileText,
+    string QuarterMileTrapText,
     string TopSpeedText,
     string UpdatedText,
     bool IsCurrentCar)
@@ -59,7 +64,7 @@ public sealed record CarPerformanceRow(
     /// <summary>The whole row as one sentence for screen readers (a row of five numbers means little read cell by cell).</summary>
     public string Summary =>
         $"{CarLabel}, {ClassLabel} {PerformanceIndexText}, {DrivetrainLabel}. 0-100: {ZeroTo100Text}. 0-200: {ZeroTo200Text}. "
-        + $"{QuarterMileText}. {TopSpeedText}. {UpdatedText}";
+        + $"{(QuarterMileTrapText.Length > 0 ? QuarterMileText + ", " + QuarterMileTrapText : QuarterMileText)}. {TopSpeedText}. {UpdatedText}";
 }
 
 /// <summary>
@@ -93,6 +98,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
 
     private readonly AccelerationTimer _acceleration;
     private readonly TopSpeedTracker _topSpeed;
+    private readonly CarChangeDetector _carChanges;
     private readonly PerformanceHistoryStore _history;
     private readonly UnitsService _units;
     private readonly IConfirmationService _confirmation;
@@ -120,18 +126,21 @@ public sealed partial class PerformanceViewModel : ObservableObject
 
     /// <param name="acceleration">The engine that times the runs (fed by the receive loop).</param>
     /// <param name="topSpeed">The engine that tracks the session top speed (fed by the receive loop).</param>
+    /// <param name="carChanges">Reports every change of car, noticed per packet by the receive loop (see <see cref="CarChangeDetector"/>).</param>
     /// <param name="history">The per-car bests.</param>
     /// <param name="units">Converts and labels the speeds; optional (metric) for tests and the designer.</param>
     /// <param name="confirmation">Asks before the history is cleared; optional (clearing then needs no confirmation, for tests).</param>
     public PerformanceViewModel(
         AccelerationTimer acceleration,
         TopSpeedTracker topSpeed,
+        CarChangeDetector carChanges,
         PerformanceHistoryStore history,
         UnitsService? units = null,
         IConfirmationService? confirmation = null)
     {
         _acceleration = acceleration;
         _topSpeed = topSpeed;
+        _carChanges = carChanges;
         _history = history;
         _units = units ?? new UnitsService();
         _confirmation = confirmation ?? new AlwaysConfirm();
@@ -164,20 +173,28 @@ public sealed partial class PerformanceViewModel : ObservableObject
 
     // ---- Result cards -------------------------------------------------------------------------------------
 
+    // [NotifyPropertyChangedFor]: each card's screen-reader name is derived from its value text. Declaring that here means the
+    // name is announced as changed exactly when the value changed, instead of the 20 Hz refresh raising four notifications
+    // (and four binding updates) whether or not anything moved.
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ZeroTo100Name))]
     private string _zeroTo100Text = NoValue;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ZeroTo200Name))]
     private string _zeroTo200Text = NoValue;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(QuarterMileName))]
     private string _quarterMileText = NoValue;
 
     /// <summary>The speed at the quarter-mile line with its unit (<c>187 km/h at the line</c>), or empty before one is measured.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(QuarterMileName))]
     private string _quarterMileTrapText = "";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TopSpeedName))]
     private string _topSpeedText = NoValue;
 
     /// <summary>The unit label under the top speed: <c>km/h</c> or <c>mph</c>.</summary>
@@ -214,7 +231,26 @@ public sealed partial class PerformanceViewModel : ObservableObject
     [ObservableProperty]
     private bool _hasCar;
 
-    /// <summary>For example <c>Car #1234 · A 780 · AWD</c>; a localized "no car yet" text before the first one.</summary>
+    /// <summary>The first pill: <c>Car #1234</c>, or the localized "no car detected yet" before the first real car.</summary>
+    [ObservableProperty]
+    private string _carText = Strings.PerfNoCar;
+
+    /// <summary>Class letter(s) of the car (<c>A</c>); shown in the second pill, which is hidden until there is a car.</summary>
+    [ObservableProperty]
+    private string _carClassLabel = "";
+
+    /// <summary>Performance index of the car (<c>780</c>); the view adds the "PI" label from a resource.</summary>
+    [ObservableProperty]
+    private int _carPerformanceIndex;
+
+    /// <summary><c>FWD</c>, <c>RWD</c> or <c>AWD</c>; empty before the first car.</summary>
+    [ObservableProperty]
+    private string _drivetrainLabel = "";
+
+    /// <summary>
+    /// The whole car as one sentence for screen readers (<c>Car #1234, A 780, AWD</c>). The pills show it as separate pieces;
+    /// a screen reader would read three unrelated fragments, so the container carries this instead.
+    /// </summary>
     [ObservableProperty]
     private string _carSummary = Strings.PerfNoCar;
 
@@ -262,7 +298,10 @@ public sealed partial class PerformanceViewModel : ObservableObject
     [RelayCommand]
     private void ResetRun()
     {
+        // Save, then WRITE: the engines are about to forget this top speed, so a crash right after would otherwise lose a
+        // best that only ever lived in memory (Merge changes memory; only Flush persists).
         SaveTopSpeedOfCurrentCar();
+        _history.Flush();
         _acceleration.Reset();
         _topSpeed.Reset();
         ForgetRun();
@@ -291,10 +330,14 @@ public sealed partial class PerformanceViewModel : ObservableObject
 
     /// <summary>
     /// A new listening session starts (Start): everything the previous one measured leaves the screen, engines included.
-    /// The saved history is untouched.
+    /// The saved history is untouched, and the previous session's top speed is saved first: a Start after a fault (no Stop in
+    /// between, so no <see cref="EndSession"/> ran) would otherwise throw that best away with the reset.
     /// </summary>
     public void BeginSession()
     {
+        SaveTopSpeedOfCurrentCar();
+        _history.Flush();
+        _carChanges.Reset(); // the first car of this session is a "first car" again, even if it is the one just driven
         _acceleration.Reset();
         _topSpeed.Reset();
         _car = null;
@@ -325,10 +368,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
     {
         // Only a driving packet says anything about the car: menus and pauses send IsRaceOn = false with zeroed fields.
         _live = latest is { IsRaceOn: true };
-        if (latest is { IsRaceOn: true })
-        {
-            ObserveCar(latest);
-        }
+        ApplyCarChanges();
 
         _snapshot = _acceleration.Current;
         _topSpeedKmh = _topSpeed.TopSpeedKmh;
@@ -340,34 +380,37 @@ public sealed partial class PerformanceViewModel : ObservableObject
 
     // ---- Car ---------------------------------------------------------------------------------------------
 
-    private void ObserveCar(TelemetryPacket packet)
+    /// <summary>
+    /// Handles every change of car the receive loop has noticed since the last tick (normally none). The detector already
+    /// froze the old car's top speed and reset the engines on the packet where the car changed; what is left for the UI
+    /// thread is the bookkeeping that touches the history and the screen.
+    /// </summary>
+    private void ApplyCarChanges()
     {
-        var key = new CarKey(packet.CarOrdinal, packet.CarPerformanceIndex);
-        if (!key.IsValid)
+        while (_carChanges.TryTake(out var change))
         {
-            return; // not a car (loading, a menu): keep following the one we had
+            if (change!.PreviousCar is { } previous)
+            {
+                // The old car's best is saved under the OLD car's class and drivetrain (they travel in the change, because
+                // the fields below describe the new car by now), then the cards are cleared: the engines were reset, and the
+                // screen would otherwise keep showing the previous car's results as if they were this one's.
+                if (change.PreviousTopSpeedKmh > 0)
+                {
+                    _history.Merge(
+                        previous,
+                        change.PreviousClass,
+                        change.PreviousDrivetrain,
+                        new PerformanceResult(null, null, null, null, change.PreviousTopSpeedKmh));
+                }
+
+                _history.Flush();
+                ForgetRun();
+            }
+
+            _carClass = change.CarClass;
+            _drivetrain = change.Drivetrain;
+            SetCar(change.Car);
         }
-
-        _carClass = packet.CarClass;
-        _drivetrain = packet.DrivetrainType;
-
-        if (key == _car)
-        {
-            return;
-        }
-
-        if (_car is not null)
-        {
-            // A different car (or the same one after an upgrade): save the old car's top speed, then clear the cards, because
-            // the engines would otherwise keep showing the previous car's results as if they were this one's.
-            SaveTopSpeedOfCurrentCar();
-            _history.Flush();
-            _acceleration.Reset();
-            _topSpeed.Reset();
-            ForgetRun();
-        }
-
-        SetCar(key);
     }
 
     private void SetCar(CarKey? key)
@@ -375,15 +418,25 @@ public sealed partial class PerformanceViewModel : ObservableObject
         _car = key;
         _mergedTopSpeedKmh = 0;
         HasCar = key is not null;
-        CarSummary = key is { } car
-            ? string.Format(
-                CultureInfo.CurrentCulture,
-                "{0} · {1} {2} · {3}",
-                CarLabel(car),
-                CarInfoFormatter.ClassLabel(_carClass),
-                car.PerformanceIndex,
-                CarInfoFormatter.DrivetrainLabel(_drivetrain))
-            : Strings.PerfNoCar;
+
+        if (key is { } car)
+        {
+            CarText = CarLabel(car);
+            CarClassLabel = CarInfoFormatter.ClassLabel(_carClass);
+            CarPerformanceIndex = car.PerformanceIndex;
+            DrivetrainLabel = CarInfoFormatter.DrivetrainLabel(_drivetrain);
+            CarSummary = string.Format(
+                CultureInfo.CurrentCulture, "{0}, {1} {2}, {3}", CarText, CarClassLabel, CarPerformanceIndex, DrivetrainLabel);
+        }
+        else
+        {
+            CarText = Strings.PerfNoCar;
+            CarClassLabel = "";
+            CarPerformanceIndex = 0;
+            DrivetrainLabel = "";
+            CarSummary = Strings.PerfNoCar;
+        }
+
         RebuildRows(); // the current car's row is highlighted
     }
 
@@ -528,10 +581,6 @@ public sealed partial class PerformanceViewModel : ObservableObject
             : "";
         TopSpeedText = _topSpeedKmh > 0 ? _units.FormatSpeed(_topSpeedKmh) : NoValue;
 
-        OnPropertyChanged(nameof(ZeroTo100Name));
-        OnPropertyChanged(nameof(ZeroTo200Name));
-        OnPropertyChanged(nameof(QuarterMileName));
-        OnPropertyChanged(nameof(TopSpeedName));
     }
 
     private PerformanceRunState DescribeState(AccelerationState engineState)
@@ -567,6 +616,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(SpeedUnitLabel));
+        OnPropertyChanged(nameof(TopSpeedName)); // the name speaks the unit, which is not a stored property
         OnPropertyChanged(nameof(ShowThresholdNote));
         RebuildRows();
         Show();
@@ -593,15 +643,10 @@ public sealed partial class PerformanceViewModel : ObservableObject
 
     private CarPerformanceRow ToRow(CarPerformanceRecord record)
     {
-        var quarter = FormatSeconds(record.QuarterMileSeconds);
-        if (record.QuarterMileSeconds is not null)
-        {
-            quarter += " s";
-            if (record.QuarterMileTrapKmh is { } trap)
-            {
-                quarter += $"  ·  {_units.FormatSpeed(trap)} {_units.SpeedLabel}";
-            }
-        }
+        var quarter = record.QuarterMileSeconds is { } seconds ? $"{FormatSeconds(seconds)} s" : NoValue;
+        var trapSpeed = record.QuarterMileSeconds is not null && record.QuarterMileTrapKmh is { } trap
+            ? $"{_units.FormatSpeed(trap)} {_units.SpeedLabel}"
+            : "";
 
         return new CarPerformanceRow(
             CarLabel(record.Car),
@@ -611,6 +656,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
             record.ZeroTo100Seconds is { } t100 ? $"{FormatSeconds(t100)} s" : NoValue,
             record.ZeroTo200Seconds is { } t200 ? $"{FormatSeconds(t200)} s" : NoValue,
             quarter,
+            trapSpeed,
             record.TopSpeedKmh is { } top ? $"{_units.FormatSpeed(top)} {_units.SpeedLabel}" : NoValue,
             record.UpdatedAt == DateTimeOffset.UnixEpoch
                 ? NoValue

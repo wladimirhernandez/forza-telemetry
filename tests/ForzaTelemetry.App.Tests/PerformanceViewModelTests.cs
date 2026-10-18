@@ -48,12 +48,15 @@ public sealed class PerformanceViewModelTests : IDisposable
             History = new PerformanceHistoryStore(HistoryPath, time);
             Units = new UnitsService();
             Confirmation = new FakeConfirmation(confirm);
-            Vm = new PerformanceViewModel(Acceleration, TopSpeed, History, Units, Confirmation);
+            CarChanges = new CarChangeDetector(TopSpeed, Acceleration);
+            Vm = new PerformanceViewModel(Acceleration, TopSpeed, CarChanges, History, Units, Confirmation);
         }
 
         public AccelerationTimer Acceleration { get; } = new();
 
         public TopSpeedTracker TopSpeed { get; } = new();
+
+        public CarChangeDetector CarChanges { get; }
 
         public string HistoryPath { get; }
 
@@ -89,6 +92,7 @@ public sealed class PerformanceViewModelTests : IDisposable
         public TelemetryPacket Feed(double speed, double distance = 0, byte gear = 1, bool raceOn = true, uint stepMs = 20)
         {
             var packet = Packet(speed, distance, gear, raceOn);
+            CarChanges.OnPacket(packet); // first, like the app: it must see a new car before the engines do
             Acceleration.OnPacket(packet);
             TopSpeed.OnPacket(packet);
             Vm.Refresh(packet);
@@ -342,7 +346,14 @@ public sealed class PerformanceViewModelTests : IDisposable
         rig.Feed(0);
 
         Assert.True(rig.Vm.HasCar);
-        Assert.Equal($"{CarLabel(1234)} · A 780 · AWD", rig.Vm.CarSummary);
+
+        // Separate values for the separate pills, and one sentence (with commas, no separator character) for screen readers.
+        Assert.Equal(CarLabel(1234), rig.Vm.CarText);
+        Assert.Equal("A", rig.Vm.CarClassLabel);
+        Assert.Equal(780, rig.Vm.CarPerformanceIndex);
+        Assert.Equal("AWD", rig.Vm.DrivetrainLabel);
+        Assert.Equal($"{CarLabel(1234)}, A 780, AWD", rig.Vm.CarSummary);
+        Assert.DoesNotContain('·', rig.Vm.CarSummary);
     }
 
     [Fact]
@@ -374,9 +385,105 @@ public sealed class PerformanceViewModelTests : IDisposable
         Assert.Equal("--", rig.Vm.ZeroTo100Text); // the previous car's result is not this car's
         Assert.Equal("--", rig.Vm.TopSpeedText);
         Assert.Contains(CarLabel(77), rig.Vm.CarSummary);
-        Assert.Equal(1234, Assert.Single(rig.History.Records).Car.CarOrdinal); // the old car's data was kept
+        var saved = Assert.Single(rig.History.Records);
+        Assert.Equal(1234, saved.Car.CarOrdinal); // the old car's data was kept
+        Assert.Equal(3, saved.CarClass); // ... under the OLD car's class (the new car is class 1), not the new one's
         Assert.True(File.Exists(rig.HistoryPath));
         Assert.Contains(rig.Vm.Rows, r => r.CarLabel == CarLabel(1234) && !r.IsCurrentCar);
+    }
+
+    [Fact]
+    public void The_old_cars_top_speed_is_frozen_on_the_packet_where_the_car_changes_not_at_the_next_tick()
+    {
+        var rig = NewRig();
+        rig.Feed(70, gear: 5); // 252 km/h in car 1234
+
+        // Three packets of the NEW car arrive before the screen gets a tick (the game sends ~3 per 50 ms tick): the old
+        // best must not absorb them, and the new car must not inherit it. Only the engines see these, no Vm.Refresh.
+        rig.Car = 77;
+        rig.Pi = 450;
+        for (var i = 0; i < 3; i++)
+        {
+            var packet = TestPackets.Sample(speedMetersPerSecond: 20, gear: 3, carOrdinal: 77, performanceIndex: 450);
+            rig.CarChanges.OnPacket(packet);
+            rig.TopSpeed.OnPacket(packet);
+        }
+
+        Assert.Equal(20 * 3.6, rig.TopSpeed.TopSpeedKmh, precision: 3); // the new car starts its own maximum
+        rig.Feed(20, gear: 3);
+
+        Assert.Equal(252, rig.History.Find(new CarKey(1234, 780))!.TopSpeedKmh!.Value, precision: 1);
+        Assert.Equal(CarLabel(77), rig.Vm.CarText);
+    }
+
+    [Fact]
+    public void BeginSession_saves_the_previous_sessions_top_speed_before_the_engines_are_reset()
+    {
+        var rig = NewRig();
+        rig.Feed(70, gear: 5);
+        Assert.Empty(rig.History.Records); // not saved yet: nothing ended the session (a fault restart has no Stop)
+
+        rig.Vm.BeginSession();
+
+        Assert.Equal(252, rig.History.Find(new CarKey(1234, 780))!.TopSpeedKmh!.Value, precision: 1);
+        Assert.True(File.Exists(rig.HistoryPath)); // and written, not only merged in memory
+        Assert.Equal("--", rig.Vm.TopSpeedText);
+    }
+
+    [Fact]
+    public void The_same_car_is_picked_up_again_after_BeginSession()
+    {
+        var rig = NewRig();
+        rig.Feed(0);
+        rig.Vm.BeginSession();
+        Assert.False(rig.Vm.HasCar);
+
+        rig.Feed(0); // the same car, first packet of the new session
+
+        Assert.True(rig.Vm.HasCar);
+        Assert.Equal(CarLabel(1234), rig.Vm.CarText);
+    }
+
+    [Fact]
+    public void ResetRun_writes_the_saved_top_speed_to_disk_before_forgetting_it()
+    {
+        var rig = NewRig();
+        rig.Feed(70, gear: 5);
+
+        rig.Vm.ResetRunCommand.Execute(null);
+
+        Assert.True(File.Exists(rig.HistoryPath));
+        var reloaded = new PerformanceHistoryStore(rig.HistoryPath, _time);
+        reloaded.Load();
+        Assert.Equal(252, reloaded.Find(new CarKey(1234, 780))!.TopSpeedKmh!.Value, precision: 1);
+        Assert.Equal("--", rig.Vm.TopSpeedText);
+    }
+
+    [Fact]
+    public void A_refresh_that_changes_nothing_raises_no_screen_reader_name_notifications()
+    {
+        var rig = NewRig();
+        rig.Feed(0);
+        var raised = new List<string?>();
+        rig.Vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        rig.Feed(0);
+        rig.Feed(0);
+
+        Assert.DoesNotContain(raised, name => name is not null && name.EndsWith("Name", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_screen_reader_name_of_a_card_changes_together_with_its_value()
+    {
+        var rig = NewRig();
+        var raised = new List<string?>();
+        rig.Vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        rig.Feed(70, gear: 5); // top speed goes from "--" to 252
+
+        Assert.Contains(nameof(PerformanceViewModel.TopSpeedName), raised);
+        Assert.Contains("252", rig.Vm.TopSpeedName);
     }
 
     [Fact]
@@ -575,9 +682,12 @@ public sealed class PerformanceViewModelTests : IDisposable
         Assert.Equal(4.0, Parse(row.ZeroTo100Text.Replace(" s", "")));
         Assert.Equal("--", row.ZeroTo200Text);
         Assert.Contains("12", row.QuarterMileText);
-        Assert.Contains("180 km/h", row.QuarterMileText); // the trap speed of THAT quarter mile
+        Assert.DoesNotContain("km/h", row.QuarterMileText); // the time and the speed at the line are two lines, not one joined string
+        Assert.Equal("180 km/h", row.QuarterMileTrapText); // the trap speed of THAT quarter mile
         Assert.Equal("260 km/h", row.TopSpeedText);
         Assert.False(string.IsNullOrWhiteSpace(row.Summary));
+        Assert.DoesNotContain('·', row.Summary);
+        Assert.Contains("180 km/h", row.Summary);
     }
 
     [Fact]
@@ -602,7 +712,7 @@ public sealed class PerformanceViewModelTests : IDisposable
 
         var second = new Rig(_directory, _time);
         second.History.Load();
-        var reloaded = new PerformanceViewModel(second.Acceleration, second.TopSpeed, second.History);
+        var reloaded = new PerformanceViewModel(second.Acceleration, second.TopSpeed, second.CarChanges, second.History);
 
         Assert.Single(reloaded.Rows);
         Assert.Equal(CarLabel(1234), reloaded.Rows[0].CarLabel);
@@ -651,7 +761,7 @@ public sealed class PerformanceViewModelTests : IDisposable
     {
         var rig = NewRig();
         var fake = new FakeTelemetrySource();
-        var service = new TelemetryService(() => fake, observers: [rig.Acceleration, rig.TopSpeed]);
+        var service = new TelemetryService(() => fake, observers: [rig.CarChanges, rig.Acceleration, rig.TopSpeed]);
         var shell = new ShellViewModel(service, TimeProvider.System, performancePage: rig.Vm);
 
         shell.NavigateCommand.Execute(PageId.Performance);
@@ -665,7 +775,7 @@ public sealed class PerformanceViewModelTests : IDisposable
     {
         var rig = NewRig();
         var fake = new FakeTelemetrySource();
-        var service = new TelemetryService(() => fake, observers: [rig.Acceleration, rig.TopSpeed]);
+        var service = new TelemetryService(() => fake, observers: [rig.CarChanges, rig.Acceleration, rig.TopSpeed]);
         var shell = new ShellViewModel(service, TimeProvider.System, performancePage: rig.Vm);
         await shell.StartCommand.ExecuteAsync(null);
 

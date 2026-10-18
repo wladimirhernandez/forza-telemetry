@@ -177,11 +177,18 @@ public sealed class LapTracker : IPacketObserver
     {
         double time = packet.LastLap > 0 ? packet.LastLap : _previousCurrentLap;
 
+        // The lap that just ended is the one AFTER the laps completed before it: _lapsCompleted still holds the previous
+        // packet's count here (StartLap moves it on right after this). Numbering by the game's own counter, instead of by
+        // "how many laps are in my list", keeps the list in step with CurrentLapNumber when this tracker joined a race that
+        // was already on lap 4 (a Start in the middle of a race, or a Reset): the hero says "Lap 5" and the lap it finishes
+        // is listed as 5, not as 1.
+        var finishedLapNumber = _lapsCompleted + 1;
+
         if (time <= 0)
         {
             // Unknown duration: list the lap anyway (time 0 = unknown) so numbering stays aligned with
             // LapNumber, but never let it become best/last or a delta reference.
-            _laps = [.. _laps, new LapRecord(_laps.Length + 1, 0, false)];
+            _laps = [.. _laps, new LapRecord(finishedLapNumber, 0, false)];
             return;
         }
 
@@ -203,7 +210,7 @@ public sealed class LapTracker : IPacketObserver
         }
 
         // The array is replaced, never mutated, so snapshots holding the old one stay valid.
-        _laps = [.. _laps, new LapRecord(_laps.Length + 1, time, isBest)];
+        _laps = [.. _laps, new LapRecord(finishedLapNumber, time, isBest)];
     }
 
     private void RecordSample(double distance, double lapTime)

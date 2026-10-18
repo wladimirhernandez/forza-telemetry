@@ -163,7 +163,7 @@ public sealed class PerformanceHistoryStore
         catch (JsonException ex)
         {
             AppLog.PerformanceHistoryCorrupt(_logger, ex, _path);
-            KeepCorruptCopy();
+            AtomicFile.KeepCorruptCopy(_path);
         }
     }
 
@@ -388,16 +388,4 @@ public sealed class PerformanceHistoryStore
             && DateTimeOffset.TryParse(property.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var value)
                 ? value
                 : DateTimeOffset.UnixEpoch;
-
-    private void KeepCorruptCopy()
-    {
-        try
-        {
-            File.Copy(_path, _path + ".corrupt", overwrite: true);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // Nothing more to do: the warning already recorded the corruption.
-        }
-    }
 }

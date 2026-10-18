@@ -5,8 +5,6 @@ using System.Windows;
 using System.Windows.Threading;
 using ForzaTelemetry.App.Services;
 using ForzaTelemetry.Core;
-using ForzaTelemetry.Core.Laps;
-using ForzaTelemetry.Core.Performance;
 using ForzaTelemetry.Udp;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -74,6 +72,9 @@ public partial class App : Application, IAppRestarter
 
         // Settings first: the language must be applied BEFORE anything reads a localized string (see LanguageService).
         // A missing or corrupt file is not an error here: the store logs it and hands back the defaults.
+        // Before anything can change the culture: remember what Windows gave us, so "System" keeps meaning that after Apply.
+        LanguageService.CaptureSystemCulture();
+
         var store = new JsonSettingsStore(JsonSettingsStore.DefaultPath, loggerFactory.CreateLogger<JsonSettingsStore>());
         _settings = new SettingsService(store, store.Load());
         var culture = LanguageService.Apply(_settings.Current.Language);
@@ -87,14 +88,13 @@ public partial class App : Application, IAppRestarter
         var settings = _settings;
 
         // The engines that need EVERY packet (not the 20 Hz sample the screens get): registered with the service, which
-        // calls them from the receive loop; the view models below only read their snapshots.
-        var acceleration = new AccelerationTimer();
-        var topSpeed = new TopSpeedTracker();
-        var laps = new LapTracker();
+        // calls them from the receive loop; the view models below only read their snapshots. They are built together, with
+        // the one ordered list the service is given, so none can be forgotten and the car-change detector runs first.
+        var engines = new TelemetryEngines();
         _telemetryService = new TelemetryService(
             () => new UdpTelemetryListener(settings.Current.UdpPort, logger: listenerLogger),
             loggerFactory.CreateLogger<TelemetryService>(),
-            observers: [acceleration, topSpeed, laps]);
+            observers: engines.Observers);
         _ticker = new DispatcherTimerTicker();
 
         // Manual composition (no DI container): each object is built here with exactly what it needs. The units service
@@ -122,9 +122,10 @@ public partial class App : Application, IAppRestarter
         var history = new PerformanceHistoryStore(
             PerformanceHistoryStore.DefaultPath, TimeProvider.System, loggerFactory.CreateLogger<PerformanceHistoryStore>());
         history.Load();
-        _performance = new PerformanceViewModel(acceleration, topSpeed, history, units, new WpfConfirmationService());
+        _performance = new PerformanceViewModel(
+            engines.Acceleration, engines.TopSpeed, engines.CarChanges, history, units, new WpfConfirmationService());
 
-        var lapsPage = new LapsViewModel(laps);
+        var lapsPage = new LapsViewModel(engines.Laps);
 
         var viewModel = new ShellViewModel(
             _telemetryService,

@@ -129,8 +129,33 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{Binding CurrentLapText}" Style="{StaticResource BigClock}" FontSize="104"
-                                   VerticalAlignment="Center" />
+                        <!--
+                          Two states in one cell. Racing: the huge running clock. Not racing: a calm sentence with the zero time
+                          small and muted beneath it (a 104 px row of dashes read as a broken clock, and it shouted louder than
+                          the real numbers around it). MinHeight is about the height of the big clock, so the card does not jump
+                          taller the moment a lap starts.
+                        -->
+                        <Grid Grid.Column="0" MinHeight="124" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding CurrentLapText}" Style="{StaticResource BigClock}" FontSize="104"
+                                       VerticalAlignment="Center"
+                                       Visibility="{Binding IsRacing, Converter={StaticResource BoolToVisibility}}" />
+                            <StackPanel VerticalAlignment="Center">
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsRacing}" Value="False">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+                                <TextBlock Text="{x:Static res:Strings.LapsNoLapInProgress}" Style="{StaticResource MutedLabel}"
+                                           FontSize="22" />
+                                <TextBlock Text="{Binding CurrentLapText}" Style="{StaticResource NumeralText}" FontSize="34"
+                                           Foreground="{StaticResource MutedBrush}" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Grid>
                         <!-- The live delta. Hidden (not just empty) when there is no reference lap, so no empty pill is drawn. -->
                         <Grid Grid.Column="1" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="28,6,0,0"
                               Visibility="{Binding HasDelta, Converter={StaticResource BoolToVisibility}}"

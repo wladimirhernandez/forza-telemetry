@@ -1470,5 +1470,14 @@ namespace ForzaTelemetry.App.Resources {
             }
         }
         
+        /// <summary>
+        ///   Looks up a localized string similar to No lap in progress.
+        /// </summary>
+        public static string LapsNoLapInProgress {
+            get {
+                return ResourceManager.GetString("LapsNoLapInProgress", resourceCulture)!;
+            }
+        }
+
     }
 }

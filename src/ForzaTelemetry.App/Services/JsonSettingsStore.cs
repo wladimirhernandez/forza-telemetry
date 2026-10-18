@@ -80,7 +80,7 @@ public sealed class JsonSettingsStore : ISettingsStore
         catch (JsonException ex)
         {
             AppLog.SettingsCorrupt(_logger, ex, _path);
-            KeepCorruptCopy();
+            AtomicFile.KeepCorruptCopy(_path);
             return AppSettings.Default;
         }
     }
@@ -121,21 +121,5 @@ public sealed class JsonSettingsStore : ISettingsStore
         }
 
         return node.ToJsonString(SettingsJsonContext.Default.Options);
-    }
-
-    /// <summary>
-    /// Before the defaults overwrite a corrupt file on the next save, keep it next to the original so the user (or a bug
-    /// report) can still see what was in it. Best effort: failing to keep the copy must not stop the app from starting.
-    /// </summary>
-    private void KeepCorruptCopy()
-    {
-        try
-        {
-            File.Copy(_path, _path + ".corrupt", overwrite: true);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // Nothing more to do: the warning above already recorded the corruption.
-        }
     }
 }

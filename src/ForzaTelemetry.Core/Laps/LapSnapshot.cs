@@ -1,7 +1,7 @@
 namespace ForzaTelemetry.Core.Laps;
 
 /// <summary>One finished lap.</summary>
-/// <param name="Number">1-based lap number.</param>
+/// <param name="Number">The lap number as the game counts it (1-based): the same numbering as <see cref="LapSnapshot.CurrentLapNumber"/>, so a tracker that joined a race already on lap 4 lists the first lap it sees finish as lap 5.</param>
 /// <param name="TimeSeconds">Lap time in seconds, as reported by the game.</param>
 /// <param name="IsBest">True when this lap was the fastest of the session at the moment it finished.</param>
 public sealed record LapRecord(int Number, double TimeSeconds, bool IsBest);

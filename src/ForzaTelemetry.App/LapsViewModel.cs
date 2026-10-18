@@ -72,18 +72,27 @@ public sealed partial class LapsViewModel : ObservableObject
         Refresh(null);
     }
 
+    // [NotifyPropertyChangedFor(HeroName)] on the four values the hero sentence is built from: the screen-reader name is
+    // announced as changed exactly when one of them changed, instead of Refresh raising it on every 20 Hz tick.
+
     /// <summary>True while driving packets arrive and a lap clock is running (see the class remarks).</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(EmptyText))]
     [NotifyPropertyChangedFor(nameof(HasEmptyText))]
+    [NotifyPropertyChangedFor(nameof(HeroName))]
     private bool _isRacing;
 
-    /// <summary>The running lap time, <c>m:ss.fff</c>, or a placeholder when not racing.</summary>
+    /// <summary>
+    /// The running lap time, <c>m:ss.fff</c>; while no lap is in progress it is the zero time (<c>0:00.000</c>), which the view
+    /// shows small and muted next to a "no lap in progress" sentence (a huge row of dashes read as a broken clock).
+    /// </summary>
     [ObservableProperty]
-    private string _currentLapText = LapTimeFormatter.Placeholder;
+    [NotifyPropertyChangedFor(nameof(HeroName))]
+    private string _currentLapText = LapTimeFormatter.Zero;
 
     /// <summary>For example <c>Lap 3</c>; empty when not racing.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HeroName))]
     private string _lapNumberText = "";
 
     /// <summary>The live gap to the best lap (<c>+0.412</c> / <c>-0.412</c>), empty when there is no reference.</summary>
@@ -100,6 +109,7 @@ public sealed partial class LapsViewModel : ObservableObject
 
     /// <summary>The delta as a sentence for screen readers ("Behind your best by 0.412 s"); empty when hidden.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HeroName))]
     private string _deltaName = "";
 
     [ObservableProperty]
@@ -160,7 +170,7 @@ public sealed partial class LapsViewModel : ObservableObject
 
         IsRacing = live && (snapshot.CurrentLapSeconds > 0 || snapshot.Laps.Count > 0);
 
-        CurrentLapText = IsRacing ? LapTimeFormatter.Format(snapshot.CurrentLapSeconds) : LapTimeFormatter.Placeholder;
+        CurrentLapText = IsRacing ? LapTimeFormatter.Format(snapshot.CurrentLapSeconds) : LapTimeFormatter.Zero;
         LapNumberText = IsRacing ? string.Format(CultureInfo.CurrentCulture, Strings.LapsLapFormat, snapshot.CurrentLapNumber) : "";
         HasLastLap = snapshot.LastLapSeconds is { };
         LastLapText = snapshot.LastLapSeconds is { } last ? LapTimeFormatter.Format(last) : LapTimeFormatter.Placeholder;
@@ -174,8 +184,6 @@ public sealed partial class LapsViewModel : ObservableObject
             _rowsBuiltFrom = snapshot.Laps;
             Rows = BuildRows(snapshot.Laps);
         }
-
-        OnPropertyChanged(nameof(HeroName));
     }
 
     private void ShowDelta(double? delta)

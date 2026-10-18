@@ -26,6 +26,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Lets the test project reach internal helpers (AtomicFile, the system-culture capture) without making them public API. -->
+    <InternalsVisibleTo Include="ForzaTelemetry.App.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Reused unchanged: the shared telemetry parsing and UDP listener the console app already uses. -->
     <ProjectReference Include="..\ForzaTelemetry.Core\ForzaTelemetry.Core.csproj" />
     <ProjectReference Include="..\ForzaTelemetry.Udp\ForzaTelemetry.Udp.csproj" />

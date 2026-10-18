@@ -484,4 +484,7 @@
   <data name="LapsDeltaEvenName" xml:space="preserve">
     <value>Igual que tu mejor vuelta</value>
   </data>
+  <data name="LapsNoLapInProgress" xml:space="preserve">
+    <value>Ninguna vuelta en curso</value>
+  </data>
 </root>

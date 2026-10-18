@@ -210,6 +210,14 @@ public sealed class TelemetryService : IAsyncDisposable
             // the kind of failure that either crashes the process or vanishes silently depending on
             // the runtime, neither of which is acceptable for "the network hiccuped" in a UI app —
             // recording it as Fault lets ShellViewModel show it instead.
+            //
+            // ORDER MATTERS: the loop is already dead here, so it is marked not-running BEFORE the fault is published.
+            // A reader that sees Fault != null must never also see IsRunning == true: that pair is a state that never
+            // existed (a faulted loop is not running), and it was a real race. The finally below used to be the only
+            // place that cleared IsRunning, so for a moment (the fault write plus the log call) a thread polling
+            // "Fault is not null" could read IsRunning == true. Volatile.Write is a release store, so a reader that
+            // observes the fault (an acquire read) is guaranteed to observe the earlier IsRunning write too.
+            Volatile.Write(ref _isRunning, false);
             Volatile.Write(ref _fault, ex);
             AppLog.LoopFaulted(_logger, ex);
         }

@@ -307,4 +307,34 @@ public class LapTrackerTests
         Assert.Empty(snapshot.Laps);
         Assert.Null(snapshot.BestLapSeconds);
     }
+
+    [Fact]
+    public void Laps_are_numbered_by_the_games_counter_when_the_tracker_joins_a_race_already_in_progress()
+    {
+        var tracker = new LapTracker();
+
+        // The tracker's first packet already says 3 laps are done (a Start or a Reset in the middle of a race).
+        DriveLap(tracker, 3, 20, 3000);
+        tracker.OnPacket(Lap(4, 0.0, 4000, lastLap: 20, bestLap: 20));
+        DriveLap(tracker, 4, 21, 4000, lastLap: 20, bestLap: 20, startAtSeconds: 0.1);
+        tracker.OnPacket(Lap(5, 0.0, 5000, lastLap: 21, bestLap: 20));
+
+        var snap = tracker.Current;
+        Assert.Equal(6, snap.CurrentLapNumber);
+        // The hero says "Lap 6", so the list must call the laps that just finished 4 and 5, never 1 and 2.
+        Assert.Equal([4, 5], snap.Laps.Select(l => l.Number));
+    }
+
+    [Fact]
+    public void A_lap_with_an_unknown_time_keeps_the_games_number()
+    {
+        var tracker = new LapTracker();
+
+        tracker.OnPacket(Lap(7, 0.0, 0));
+        tracker.OnPacket(Lap(8, 0.0, 10)); // no LastLap and a zero CurrentLap before it: the time is unknown
+
+        var lap = Assert.Single(tracker.Current.Laps);
+        Assert.Equal(8, lap.Number);
+        Assert.Equal(0, lap.TimeSeconds);
+    }
 }

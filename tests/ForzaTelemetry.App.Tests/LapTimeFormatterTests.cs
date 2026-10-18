@@ -103,4 +103,25 @@ public class LapTimeFormatterTests
     [InlineData(double.PositiveInfinity)]
     public void A_delta_that_is_not_a_number_shows_the_placeholder(double seconds) =>
         Assert.Equal(LapTimeFormatter.Placeholder, LapTimeFormatter.FormatDelta(seconds));
+
+    [Theory]
+    [InlineData(1e300)] // finite, but its milliseconds overflow a long
+    [InlineData(1e16)]
+    [InlineData(LapTimeFormatter.MaxSeconds + 1)]
+    public void A_time_beyond_a_day_is_not_a_lap_and_shows_the_placeholder(double seconds) =>
+        Assert.Equal(LapTimeFormatter.Placeholder, LapTimeFormatter.Format(seconds));
+
+    [Fact]
+    public void The_largest_sane_time_still_formats()
+    {
+        Assert.Equal("1440:00" + Sep + "000", LapTimeFormatter.Format(LapTimeFormatter.MaxSeconds));
+        Assert.Equal("0:00" + Sep + "000", LapTimeFormatter.Format(0));
+    }
+
+    [Theory]
+    [InlineData(1e300)]
+    [InlineData(-1e300)]
+    [InlineData(LapTimeFormatter.MaxSeconds + 1)]
+    public void A_gap_beyond_a_day_shows_the_bare_placeholder_without_a_sign(double seconds) =>
+        Assert.Equal(LapTimeFormatter.Placeholder, LapTimeFormatter.FormatDelta(seconds));
 }

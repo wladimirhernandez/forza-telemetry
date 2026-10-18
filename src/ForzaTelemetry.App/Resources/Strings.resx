@@ -484,4 +484,7 @@
   <data name="LapsDeltaEvenName" xml:space="preserve">
     <value>Level with your best</value>
   </data>
+  <data name="LapsNoLapInProgress" xml:space="preserve">
+    <value>No lap in progress</value>
+  </data>
 </root>

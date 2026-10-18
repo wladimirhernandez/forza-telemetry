@@ -16,13 +16,32 @@ namespace ForzaTelemetry.App.Services;
 /// </remarks>
 public static class LanguageService
 {
+    // The culture Windows gave this process, captured ONCE (first call wins). See CaptureSystemCulture for why this is a
+    // method that must run before Apply, and not a static initializer.
+    private static CultureInfo? _systemCulture;
+
     /// <summary>
-    /// The UI culture Windows gave this process, captured the first time this class is touched. That is in
-    /// <c>OnStartup</c> BEFORE <see cref="Apply"/> overrides the thread's culture, which is what makes it the answer to
-    /// "what would System mean?" for the rest of the run (afterwards <see cref="CultureInfo.CurrentUICulture"/> reports the
-    /// forced language and the original is gone).
+    /// The UI culture Windows gave this process: what "System" means for the rest of the run (afterwards
+    /// <see cref="CultureInfo.CurrentUICulture"/> reports the forced language and the original is gone).
     /// </summary>
-    public static CultureInfo SystemCulture { get; } = CultureInfo.CurrentUICulture;
+    public static CultureInfo SystemCulture => _systemCulture ?? CaptureSystemCulture();
+
+    /// <summary>
+    /// Remembers the culture Windows gave this process. Idempotent: only the FIRST call records anything, so a later call
+    /// (after <see cref="Apply"/> changed the thread's culture) can never overwrite the original.
+    /// <para>
+    /// <b>Why an explicit call and not a static property initializer.</b> That is what this used to be, and it was wrong in a
+    /// subtle way: a C# static initializer runs lazily, when the type is first TOUCHED, and the first member that touched it
+    /// was often <see cref="Apply"/> itself, whose first statement overrides the culture. Whether the capture ran before or
+    /// after that override depended on how the JIT ordered things, so "System" could silently mean "the language I just
+    /// forced". <c>App.OnStartup</c> now calls this method first, and <see cref="Apply"/> calls it too as a belt, so the order
+    /// no longer depends on anyone remembering.
+    /// </para>
+    /// </summary>
+    public static CultureInfo CaptureSystemCulture() => CaptureOnce(ref _systemCulture, CultureInfo.CurrentUICulture);
+
+    /// <summary>The "first call wins" rule on its own, so it can be tested without touching the process-wide slot.</summary>
+    internal static CultureInfo CaptureOnce(ref CultureInfo? slot, CultureInfo current) => slot ??= current;
 
     /// <summary>
     /// The culture to force for <paramref name="language"/>, or null for "System": leave the process on whatever Windows
@@ -41,6 +60,8 @@ public static class LanguageService
     /// </summary>
     public static CultureInfo Apply(AppLanguage language)
     {
+        CaptureSystemCulture(); // before anything below can change the culture (see that method)
+
         if (ResolveCulture(language) is { } culture)
         {
             CultureInfo.CurrentUICulture = culture;

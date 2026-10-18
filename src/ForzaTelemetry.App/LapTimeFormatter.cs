@@ -11,19 +11,30 @@ namespace ForzaTelemetry.App;
 /// </remarks>
 public static class LapTimeFormatter
 {
+    /// <summary>
+    /// The longest time that is still a lap time: one day. Anything beyond it is a corrupt or uninitialised value, not a lap
+    /// (the longest endurance stints are hours). The bound also protects the formatter itself: converting a huge finite
+    /// number of milliseconds to <see cref="long"/> overflows, and the result of that is unspecified garbage, not an error.
+    /// </summary>
+    public const double MaxSeconds = 24 * 60 * 60;
+
     /// <summary>What an unknown or not-yet-available time looks like (same width as a real one).</summary>
     public static string Placeholder => "--:--" + Separator + "---";
+
+    /// <summary>The zero time, <c>0:00.000</c>: what a clock that is not running shows.</summary>
+    public static string Zero => Format(0);
 
     private static string Separator => CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator;
 
     /// <summary>
     /// <c>m:ss.fff</c>. The value is rounded to whole milliseconds FIRST and the parts are taken from that integer, so 59.9996 s
     /// is <c>1:00.000</c> and never <c>0:60.000</c>. Minutes keep growing past 59 (a 1 h 2 min lap reads <c>62:00.000</c>).
-    /// Negative, NaN and infinite values are not lap times: they show the <see cref="Placeholder"/>.
+    /// Negative, NaN, infinite and absurdly large values (over <see cref="MaxSeconds"/>) are not lap times: they show the
+    /// <see cref="Placeholder"/>.
     /// </summary>
     public static string Format(double seconds)
     {
-        if (!double.IsFinite(seconds) || seconds < 0)
+        if (!double.IsFinite(seconds) || seconds < 0 || seconds > MaxSeconds)
         {
             return Placeholder;
         }
@@ -38,7 +49,8 @@ public static class LapTimeFormatter
 
     /// <summary>
     /// A signed difference: <c>+0.412</c> (slower) or <c>-0.412</c> (faster), three decimals; <c>0.000</c> when it rounds to
-    /// zero (no sign for "level"). A gap of a minute or more reads <c>+1:02.345</c>, the same shape as a lap time.
+    /// zero (no sign for "level"). A gap of a minute or more reads <c>+1:02.345</c>, the same shape as a lap time. A gap larger
+    /// than <see cref="MaxSeconds"/> cannot be real and shows the <see cref="Placeholder"/> (no sign in front of it).
     /// </summary>
     public static string FormatDelta(double seconds)
     {
@@ -54,6 +66,11 @@ public static class LapTimeFormatter
         }
 
         var magnitude = Math.Abs(rounded);
+        if (magnitude > MaxSeconds)
+        {
+            return Placeholder;
+        }
+
         var sign = rounded > 0 ? "+" : "-";
         return magnitude >= 60
             ? sign + Format(magnitude)

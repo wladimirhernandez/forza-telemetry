@@ -149,8 +149,24 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <ContentControl Style="{StaticResource StatusPill}" Tag="{x:Null}" Content="{Binding CarSummary}"
-                                    AutomationProperties.Name="{x:Static res:Strings.PerfCurrentCarLabel}" />
+                    <!--
+                      The current car as separate pills, never one string joined with a separator: the car (or "no car detected
+                      yet"), then, once there is a car, class + index + drivetrain exactly like the top bar's car pill. The
+                      StackPanel is one element for screen readers and speaks the whole car as a sentence.
+                    -->
+                    <StackPanel Orientation="Horizontal" AutomationProperties.Name="{Binding CarSummary}">
+                        <ContentControl Style="{StaticResource StatusPill}" Tag="{x:Null}" Content="{Binding CarText}"
+                                        AutomationProperties.Name="{x:Static res:Strings.PerfCurrentCarLabel}" />
+                        <ContentControl Style="{StaticResource StatusPill}" Margin="10,0,0,0" Tag="{x:Null}"
+                                        Visibility="{Binding HasCar, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding CarClassLabel}" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding CarPerformanceIndex, StringFormat={x:Static res:Strings.CarPerformanceIndexFormat}}"
+                                           Foreground="{StaticResource MutedBrush}" Margin="10,0,0,0" />
+                                <TextBlock Text="{Binding DrivetrainLabel}" Foreground="{StaticResource MutedBrush}" Margin="10,0,0,0" />
+                            </StackPanel>
+                        </ContentControl>
+                    </StackPanel>
                     <Button Style="{StaticResource FormButton}" Margin="10,0,0,0" Command="{Binding ResetRunCommand}"
                             Content="{x:Static res:Strings.PerfResetRun}" ToolTip="{x:Static res:Strings.PerfResetRunTooltip}" />
                 </StackPanel>
@@ -366,17 +382,36 @@
                                                 </Ellipse>
                                                 <StackPanel>
                                                     <TextBlock Text="{Binding CarLabel}" Style="{StaticResource ValueText}" FontSize="15" FontWeight="SemiBold" />
-                                                    <TextBlock Style="{StaticResource MutedLabel}" FontSize="12" Margin="0,1,0,0">
-                                                        <Run Text="{Binding ClassLabel, Mode=OneWay}" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold" />
-                                                        <Run Text="{Binding PerformanceIndexText, Mode=OneWay}" />
-                                                        <Run Text=" · " />
-                                                        <Run Text="{Binding DrivetrainLabel, Mode=OneWay}" />
-                                                    </TextBlock>
+                                                    <!-- Class and index as one muted line; the drivetrain is its own small tag, not text joined on. -->
+                                                    <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                                        <TextBlock Style="{StaticResource MutedLabel}" FontSize="12" VerticalAlignment="Center">
+                                                            <Run Text="{Binding ClassLabel, Mode=OneWay}" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold" />
+                                                            <Run Text="{Binding PerformanceIndexText, Mode=OneWay}" />
+                                                        </TextBlock>
+                                                        <Border BorderBrush="{StaticResource HairlineBrush}" BorderThickness="1" CornerRadius="8"
+                                                                Padding="6,0" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding DrivetrainLabel}" Style="{StaticResource MutedLabel}" FontSize="11" />
+                                                        </Border>
+                                                    </StackPanel>
                                                 </StackPanel>
                                             </StackPanel>
                                             <TextBlock Grid.Column="1" Text="{Binding ZeroTo100Text}" Style="{StaticResource ValueText}" FontSize="15" VerticalAlignment="Center" />
                                             <TextBlock Grid.Column="2" Text="{Binding ZeroTo200Text}" Style="{StaticResource ValueText}" FontSize="15" VerticalAlignment="Center" />
-                                            <TextBlock Grid.Column="3" Text="{Binding QuarterMileText}" Style="{StaticResource ValueText}" FontSize="15" VerticalAlignment="Center" />
+                                            <!-- Time on the first line, the speed at the line muted underneath (collapsed when there is none). -->
+                                            <StackPanel Grid.Column="3" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding QuarterMileText}" Style="{StaticResource ValueText}" FontSize="15" />
+                                                <TextBlock Text="{Binding QuarterMileTrapText}" FontSize="12" Margin="0,1,0,0">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock" BasedOn="{StaticResource MutedLabel}">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding QuarterMileTrapText}" Value="">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </StackPanel>
                                             <TextBlock Grid.Column="4" Text="{Binding TopSpeedText}" Style="{StaticResource ValueText}" FontSize="15" VerticalAlignment="Center" />
                                             <TextBlock Grid.Column="5" Text="{Binding UpdatedText}" Style="{StaticResource MutedLabel}" VerticalAlignment="Center" />
                                         </Grid>

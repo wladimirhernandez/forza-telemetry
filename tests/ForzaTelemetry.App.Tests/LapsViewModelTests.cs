@@ -79,7 +79,7 @@ public class LapsViewModelTests
         var vm = new Rig().Vm;
 
         Assert.False(vm.IsRacing);
-        Assert.Equal(LapTimeFormatter.Placeholder, vm.CurrentLapText);
+        Assert.Equal(LapTimeFormatter.Zero, vm.CurrentLapText);
         Assert.Equal(LapTimeFormatter.Placeholder, vm.LastLapText);
         Assert.Equal(LapTimeFormatter.Placeholder, vm.BestLapText);
         Assert.False(vm.HasLastLap);
@@ -128,7 +128,7 @@ public class LapsViewModelTests
         rig.Feed(2, 4.0, 2190, raceOn: false);
 
         Assert.False(rig.Vm.IsRacing);
-        Assert.Equal(LapTimeFormatter.Placeholder, rig.Vm.CurrentLapText);
+        Assert.Equal(LapTimeFormatter.Zero, rig.Vm.CurrentLapText);
         Assert.False(rig.Vm.HasDelta);
         Assert.Equal(2, rig.Vm.Rows.Count); // what was driven stays readable
         Assert.True(rig.Vm.HasLastLap);
@@ -143,7 +143,7 @@ public class LapsViewModelTests
         rig.Vm.Refresh(null);
 
         Assert.False(rig.Vm.IsRacing);
-        Assert.Equal(LapTimeFormatter.Placeholder, rig.Vm.CurrentLapText);
+        Assert.Equal(LapTimeFormatter.Zero, rig.Vm.CurrentLapText);
     }
 
     // ---- Last, best, list --------------------------------------------------------------------------------
@@ -330,7 +330,7 @@ public class LapsViewModelTests
         Assert.Equal(2, rig.Vm.Rows.Count);
         Assert.Equal(Time(20.3), rig.Vm.BestLapText);
         Assert.False(rig.Vm.IsRacing);
-        Assert.Equal(LapTimeFormatter.Placeholder, rig.Vm.CurrentLapText);
+        Assert.Equal(LapTimeFormatter.Zero, rig.Vm.CurrentLapText);
     }
 
     // ---- Shell wiring ------------------------------------------------------------------------------------
@@ -370,7 +370,7 @@ public class LapsViewModelTests
         shell.Refresh();
 
         Assert.False(rig.Vm.IsRacing);
-        Assert.Equal(LapTimeFormatter.Placeholder, rig.Vm.CurrentLapText);
+        Assert.Equal(LapTimeFormatter.Zero, rig.Vm.CurrentLapText);
 
         await shell.StopCommand.ExecuteAsync(null);
     }
@@ -388,5 +388,64 @@ public class LapsViewModelTests
 
         Assert.False(rig.Vm.HasLaps);
         await shell.StopCommand.ExecuteAsync(null);
+    }
+
+    // ---- Idle clock and notifications ---------------------------------------------------------------------
+
+    [Fact]
+    public void When_no_lap_is_in_progress_the_clock_is_the_zero_time_not_a_row_of_dashes()
+    {
+        var rig = new Rig();
+
+        Assert.False(rig.Vm.IsRacing);
+        Assert.Equal("0:00" + Sep + "000", rig.Vm.CurrentLapText);
+        Assert.NotEqual(LapTimeFormatter.Placeholder, rig.Vm.CurrentLapText);
+    }
+
+    [Fact]
+    public void The_no_lap_in_progress_sentence_exists_in_both_languages()
+    {
+        foreach (var culture in new[] { CultureInfo.InvariantCulture, CultureInfo.GetCultureInfo("es") })
+        {
+            Assert.False(string.IsNullOrWhiteSpace(Strings.ResourceManager.GetString(nameof(Strings.LapsNoLapInProgress), culture)));
+        }
+    }
+
+    [Fact]
+    public void A_refresh_that_changes_nothing_raises_no_hero_name_notification()
+    {
+        var rig = new Rig();
+        rig.Feed(0, 5.0, 100);
+        var raised = new List<string?>();
+        rig.Vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        rig.Feed(0, 5.0, 100); // identical values
+
+        Assert.DoesNotContain(nameof(LapsViewModel.HeroName), raised);
+    }
+
+    [Fact]
+    public void The_hero_name_is_announced_as_changed_when_the_clock_moves()
+    {
+        var rig = new Rig();
+        rig.Feed(0, 5.0, 100);
+        var raised = new List<string?>();
+        rig.Vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        rig.Feed(0, 6.0, 200);
+
+        Assert.Contains(nameof(LapsViewModel.HeroName), raised);
+        Assert.Contains(Time(6.0), rig.Vm.HeroName);
+    }
+
+    [Fact]
+    public void A_tracker_that_joins_a_race_on_lap_four_lists_the_games_lap_numbers()
+    {
+        var rig = new Rig();
+        rig.DriveLap(3, 20, 3000);
+        rig.Feed(4, 0.0, 4000, lastLap: 20, bestLap: 20);
+
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture, Strings.LapsLapFormat, 5), rig.Vm.LapNumberText);
+        Assert.Equal("4", Assert.Single(rig.Vm.Rows).NumberText); // the lap that just ended is lap 4, as the game counts it
     }
 }

@@ -74,9 +74,59 @@ public class TelemetryServiceTests
         fake.FailNextReadWith(new InvalidOperationException("simulated mid-stream failure"));
         fake.Publish(TestPackets.Sample());
 
+        // Fault alone is a sufficient condition: the service publishes "not running" before it publishes the fault (see
+        // the next test for why that order is the contract), so asserting IsRunning right after is not a race.
         Assert.True(await Wait.UntilAsync(() => service.Fault is not null));
         Assert.False(service.IsRunning);
         Assert.IsType<InvalidOperationException>(service.Fault);
+    }
+
+    /// <summary>Logger that parks the calling thread inside an Error log call until the test releases it.</summary>
+    private sealed class ParkingErrorLogger : ILogger<TelemetryService>
+    {
+        private readonly TaskCompletionSource _reached = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly ManualResetEventSlim _release = new(false);
+
+        public Task Reached => _reached.Task;
+
+        public void Release() => _release.Set();
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Error)
+            {
+                _reached.TrySetResult();
+                _release.Wait(TimeSpan.FromSeconds(10));
+            }
+        }
+    }
+
+    [Fact]
+    public async Task A_published_fault_is_never_seen_together_with_IsRunning_true()
+    {
+        // Root cause of the flaky A_mid_stream_exception... test: the loop used to write Fault first and clear IsRunning only
+        // in its finally block, so a reader polling Fault could still read IsRunning == true for a moment. Rather than hoping
+        // to hit that window, this test STOPS the loop thread inside the window: the logger is called right after the fault is
+        // published, and it does not return until the assertions ran. With the old order this fails every time, not 1 in 4.
+        var fake = new FakeTelemetrySource();
+        var logger = new ParkingErrorLogger();
+        var service = new TelemetryService(() => fake, logger);
+
+        await service.StartAsync();
+        fake.FailNextReadWith(new InvalidOperationException("simulated mid-stream failure"));
+        fake.Publish(TestPackets.Sample());
+        await logger.Reached.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.NotNull(service.Fault);
+        Assert.False(service.IsRunning);
+
+        logger.Release();
+        await service.StopAsync();
     }
 
     [Fact]

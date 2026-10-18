@@ -465,14 +465,16 @@ public sealed partial class ShellViewModel : ObservableObject
         {
             await RunExclusiveAsync(async () =>
             {
+                // continuesSession: moving the port is the SAME listening session on another port. The laps, the bests and
+                // the charts are what the user is looking at; wiping them because a setting changed would be a data loss.
                 if (_telemetryService.IsRunning)
                 {
                     await StopCoreAsync();
-                    await StartCoreAsync();
+                    await StartCoreAsync(continuesSession: true);
                 }
                 else if (_telemetryService.Fault is not null)
                 {
-                    await StartCoreAsync(); // nothing to stop: a failed start left no listener behind
+                    await StartCoreAsync(continuesSession: true); // nothing to stop: a failed start left no listener behind
                 }
             });
         }
@@ -488,7 +490,7 @@ public sealed partial class ShellViewModel : ObservableObject
     // [RelayCommand]: CommunityToolkit.Mvvm's source generator turns this method into a public
     // `StartCommand` property (an IAsyncRelayCommand) that can be bound to a Button.Command.
     [RelayCommand(CanExecute = nameof(CanStart))]
-    private Task StartAsync() => RunExclusiveAsync(StartCoreAsync);
+    private Task StartAsync() => RunExclusiveAsync(() => StartCoreAsync());
 
     [RelayCommand(CanExecute = nameof(CanStop))]
     private Task StopAsync() => RunExclusiveAsync(StopCoreAsync);
@@ -500,7 +502,11 @@ public sealed partial class ShellViewModel : ObservableObject
     private Task ToggleListeningAsync() =>
         RunExclusiveAsync(() => _telemetryService.IsRunning ? StopCoreAsync() : StartCoreAsync());
 
-    private async Task StartCoreAsync()
+    /// <param name="continuesSession">
+    /// True when this Start only moves the listener (a port change): the session the screens show goes on, so they are not
+    /// reset. False for the user's own Start, which begins a new one.
+    /// </param>
+    private async Task StartCoreAsync(bool continuesSession = false)
     {
         await DataOut.RefreshAsync(); // The user may have changed network since the last Start.
 
@@ -509,10 +515,18 @@ public sealed partial class ShellViewModel : ObservableObject
         await _telemetryService.StartAsync();
 
         // After the service started (it dropped its own stale Latest) and on the UI thread (this continuation
-        // resumes there, so no tick can interleave): wipe the previous session from the screen.
+        // resumes there, so no tick can interleave): wipe the previous session's LIVE values from the dashboard.
         ResetSessionState();
-        Performance?.BeginSession();
-        Laps?.BeginSession();
+
+        // A NEW session (the screens' own data: laps, bests, charts) begins only when listening really began. A Start that
+        // failed (port in use) started nothing, so the previous session's laps and results, which the user may still be
+        // reading, must survive it; and a port move continues the session instead of beginning one (see the parameter).
+        if (!continuesSession && _telemetryService.IsRunning && _telemetryService.Fault is null)
+        {
+            Performance?.BeginSession();
+            Laps?.BeginSession();
+        }
+
         Refresh(); // Show the result (running, or a friendly fault) immediately, without waiting for the next tick.
     }
 
