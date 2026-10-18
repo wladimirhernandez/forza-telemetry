@@ -50,6 +50,9 @@ public sealed class UdpTelemetryListener : ITelemetrySource
     /// </summary>
     private static readonly TimeSpan SocketErrorBackoff = TimeSpan.FromMilliseconds(100);
 
+    /// <summary>After the first failure of a datagram observer, log again only every this many failures.</summary>
+    private const int DatagramObserverLogEvery = 600;
+
     private readonly UdpClient _udpClient;
     private readonly ILogger<UdpTelemetryListener> _logger;
     private readonly HeartbeatOptions _heartbeatOptions;
@@ -76,6 +79,11 @@ public sealed class UdpTelemetryListener : ITelemetrySource
     private readonly Stopwatch _silenceStopwatch = Stopwatch.StartNew();
 
     private long _discardedCount;
+
+    // Fixed at construction, like the app's packet observers, so the receive loop can iterate it without a lock.
+    // The failure counters are only touched by that loop (one enumerator at a time).
+    private readonly IDatagramObserver[] _datagramObservers;
+    private readonly int[] _datagramObserverFailures;
 
     /// <summary>
     /// Running count of <see cref="SocketException"/>s seen on receive, used only to rate-limit
@@ -130,11 +138,17 @@ public sealed class UdpTelemetryListener : ITelemetrySource
     /// <see cref="HeartbeatOptions.Default"/> (5 s, then every further 10 s); tests pass short
     /// values here instead of waiting on the real production thresholds.
     /// </param>
+    /// <param name="datagramObservers">
+    /// Hooks that see every RAW datagram, before it is parsed, on the receive thread (see <see cref="IDatagramObserver"/>;
+    /// the session recorder is the one that matters). Called in the given order; one that throws is logged and skipped for
+    /// that datagram, it never ends the receive loop nor starves the others.
+    /// </param>
     public UdpTelemetryListener(
         int port = DefaultPort,
         IPAddress? bindAddress = null,
         ILogger<UdpTelemetryListener>? logger = null,
-        HeartbeatOptions? heartbeatOptions = null)
+        HeartbeatOptions? heartbeatOptions = null,
+        IEnumerable<IDatagramObserver>? datagramObservers = null)
     {
         // Bind first: if the port is already in use, this throws SocketException before anything
         // else (like the logger) is touched — the caller (the console app) is expected to catch
@@ -142,6 +156,8 @@ public sealed class UdpTelemetryListener : ITelemetrySource
         _udpClient = new UdpClient(new IPEndPoint(bindAddress ?? IPAddress.Any, port));
 
         _logger = logger ?? NullLogger<UdpTelemetryListener>.Instance;
+        _datagramObservers = datagramObservers?.ToArray() ?? [];
+        _datagramObserverFailures = new int[_datagramObservers.Length];
         _heartbeatOptions = heartbeatOptions ?? HeartbeatOptions.Default;
         _nextHeartbeatThreshold = _heartbeatOptions.InitialSilence;
         _receive = ct => _udpClient.ReceiveAsync(ct);
@@ -226,6 +242,10 @@ public sealed class UdpTelemetryListener : ITelemetrySource
                 yield break;
             }
 
+            // The raw tap: BEFORE anything downstream (the parser in ReadPacketsAsync, a consumer) sees the datagram, and on
+            // this same receive thread, so a recording keeps even the datagrams the parser would reject, in arrival order.
+            NotifyDatagramObservers(datagram.Value);
+
             yield return datagram.Value;
         }
     }
@@ -262,6 +282,31 @@ public sealed class UdpTelemetryListener : ITelemetrySource
                 if (discardedCount <= 5 || discardedCount % 100 == 0)
                 {
                     Log.WrongSizeDatagram(_logger, datagram.Length, _lastRemoteEndPoint, TelemetryParser.PacketSize, discardedCount);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Hands one raw datagram to every observer, each in its own try/catch: an exception from one (a bug, a full disk behind a
+    /// recorder) must not propagate into the receive loop, where it would end the whole enumeration and silently stop the
+    /// live dashboard. Logging is throttled per observer like the other warnings here: the first failure, then every 600th
+    /// (about every 10 s at 60 datagrams per second).
+    /// </summary>
+    private void NotifyDatagramObservers(ReadOnlyMemory<byte> datagram)
+    {
+        for (var i = 0; i < _datagramObservers.Length; i++)
+        {
+            try
+            {
+                _datagramObservers[i].OnDatagram(datagram);
+            }
+            catch (Exception ex)
+            {
+                var failures = ++_datagramObserverFailures[i];
+                if (failures == 1 || failures % DatagramObserverLogEvery == 0)
+                {
+                    Log.DatagramObserverFailed(_logger, ex, _datagramObservers[i].GetType().Name, failures);
                 }
             }
         }

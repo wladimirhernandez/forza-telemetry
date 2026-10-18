@@ -45,4 +45,10 @@ internal static partial class Log
 
     [LoggerMessage(EventId = 6, Level = LogLevel.Information, Message = "Datagrams flowing again.")]
     public static partial void DatagramsFlowingAgain(ILogger logger);
+
+    [LoggerMessage(
+        EventId = 7,
+        Level = LogLevel.Error,
+        Message = "Datagram observer {Observer} threw (failure number {Failures}); the receive loop continues.")]
+    public static partial void DatagramObserverFailed(ILogger logger, Exception exception, string observer, int failures);
 }
