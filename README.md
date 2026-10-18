@@ -8,18 +8,18 @@ A live telemetry app for Forza Horizon 6 on Windows. See your car, tires, shift 
 
 ## Features
 
-Eight tabs, each one keyboard-reachable with Ctrl+1 to Ctrl+8. Cars show their real names from a community-maintained list, and you can rename any car.
+Eight tabs, each one keyboard-reachable with Ctrl+1 to Ctrl+8. Cars show their real names from a community-maintained list, and you can rename any car. A guided "Connect your game" setup with a live checklist helps on first run, and a compact always-on-top mini mode (Ctrl+M) shows gear, speed, shift lights and your lap delta over the game.
 
 | Tab | What it does |
 | --- | --- |
 | **Dashboard** | The car at a glance: tire temperatures, shift lights, gear and speed, pedal and steering inputs, G-force, engine gauges. |
-| **Performance** | Times 0-100 and 0-200 km/h, the quarter mile and your top speed, and keeps the best of each per car. Export CSV saves every car's bests for a spreadsheet. |
+| **Performance** | Times 0-100, 0-200 and 100-200 km/h (or 0-60 and 60-130 mph), the quarter mile, your top speed and the braking distance from 100 km/h (or 60 mph) to a stop, and keeps the best of each per car. Export CSV saves every car's bests for a spreadsheet. |
 | **Laps** | Best, last and current lap with a live delta against your best, and the list of every lap. Export CSV saves them (time and gap to best) for a spreadsheet. |
 | **Sessions** | Records what the game sends to a file and plays it back later at 0.5x to 4x, driving every other tab as if it were live. Rename, delete and open the folder from here, or export a recording to CSV (one row per packet: time, speed, RPM, gear, inputs, position, lap). |
 | **Analysis** | Live speed, RPM, throttle, brake and steering traces over the last seconds, stacked on one time axis; or switch to Lap comparison to lay the lap you are driving over your best lap, by distance, with a time-gap lane. |
 | **Map** | The path you drove, colored by speed, with braking points marked. Works on live data and on replays. |
 | **Tuning** | Power and torque curves captured from your full-throttle pulls, plus understeer and oversteer, tire temperature and suspension bottoming hints. |
-| **Settings** | UDP port, units (km/h or mph, Celsius or Fahrenheit), language (English or Spanish), listening on launch, this PC's IP address and a step-by-step Data Out guide, with a warning if Windows treats your network as Public. |
+| **Settings** | UDP port, units (km/h or mph, Celsius or Fahrenheit, kW or hp, psi or bar), language (English or Spanish), listening on launch, this PC's IP address and a step-by-step Data Out guide, with a warning if Windows treats your network as Public. |
 
 ## Screenshots
 
