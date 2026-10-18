@@ -1,7 +1,8 @@
 namespace ForzaTelemetry.Core.Performance;
 
 /// <summary>
-/// Measures 0-100 km/h, 0-200 km/h and the quarter mile (with trap speed) from a stream of packets.
+/// Measures 0-100 km/h, 0-200 km/h, 100-200 km/h, 0-60 mph, 60-130 mph and the quarter mile (with trap speed)
+/// from a stream of packets. All windows come from ONE run and one interpolation routine.
 /// </summary>
 /// <remarks>
 /// <para><b>State machine.</b> Idle -> Armed (race on and speed under 1 km/h) -> Running (first movement,
@@ -37,6 +38,14 @@ public sealed class AccelerationTimer : IPacketObserver
     private const double Target100Ms = 100.0 / 3.6;
     private const double Target200Ms = 200.0 / 3.6;
 
+    /// <summary>Kilometers per hour in one mile per hour (exact by definition of the international mile).</summary>
+    public const double KmhPerMph = 1.609344;
+
+    // The mph windows share the SAME run and the same interpolation as the km/h ones: only the target speeds
+    // differ. 130 mph (209.2 km/h) is above 200 km/h, so the run now stays open until it is crossed.
+    private const double Target60MphMs = 60.0 * KmhPerMph / 3.6;
+    private const double Target130MphMs = 130.0 * KmhPerMph / 3.6;
+
     /// <summary>A quarter mile in meters.</summary>
     public const double QuarterMileMeters = 402.336;
 
@@ -51,6 +60,8 @@ public sealed class AccelerationTimer : IPacketObserver
     private double _startDistance;
     private double? _zeroTo100;
     private double? _zeroTo200;
+    private double? _zeroTo60Mph;
+    private double? _zeroTo130Mph;
     private double? _quarterTime;
     private double? _quarterTrap;
     private double _latestTimeMs;
@@ -63,13 +74,7 @@ public sealed class AccelerationTimer : IPacketObserver
             lock (_gate)
             {
                 return _state == AccelerationState.Running
-                    ? new AccelerationSnapshot(
-                        AccelerationState.Running,
-                        Math.Max(0, (_latestTimeMs - _startTimeMs) / 1000.0),
-                        _zeroTo100,
-                        _zeroTo200,
-                        _quarterTime,
-                        _quarterTrap)
+                    ? Build(AccelerationState.Running, Math.Max(0, (_latestTimeMs - _startTimeMs) / 1000.0))
                     : _published;
             }
         }
@@ -222,6 +227,16 @@ public sealed class AccelerationTimer : IPacketObserver
             _zeroTo200 = CrossingTimeSeconds(previous, intervalMs, v0, v1, Target200Ms);
         }
 
+        if (_zeroTo60Mph is null && v0 < Target60MphMs && v1 >= Target60MphMs)
+        {
+            _zeroTo60Mph = CrossingTimeSeconds(previous, intervalMs, v0, v1, Target60MphMs);
+        }
+
+        if (_zeroTo130Mph is null && v0 < Target130MphMs && v1 >= Target130MphMs)
+        {
+            _zeroTo130Mph = CrossingTimeSeconds(previous, intervalMs, v0, v1, Target130MphMs);
+        }
+
         var d0 = previous.DistanceTraveled - _startDistance;
         var d1 = current.DistanceTraveled - _startDistance;
         if (_quarterTime is null && d0 < QuarterMileMeters && d1 >= QuarterMileMeters && d1 > d0)
@@ -240,7 +255,7 @@ public sealed class AccelerationTimer : IPacketObserver
 
     private void UpdateRunning(TelemetryPacket current)
     {
-        if (_quarterTime is not null && _zeroTo200 is not null)
+        if (_quarterTime is not null && _zeroTo200 is not null && _zeroTo130Mph is not null)
         {
             Finish();
             return;
@@ -253,8 +268,7 @@ public sealed class AccelerationTimer : IPacketObserver
     private void Finish()
     {
         _state = AccelerationState.Done;
-        _lastCompleted = new AccelerationSnapshot(
-            AccelerationState.Done, 0, _zeroTo100, _zeroTo200, _quarterTime, _quarterTrap);
+        _lastCompleted = Build(AccelerationState.Done, 0);
         Publish(_lastCompleted);
     }
 
@@ -267,7 +281,7 @@ public sealed class AccelerationTimer : IPacketObserver
     {
         if (_state == AccelerationState.Running)
         {
-            if (_zeroTo100 is not null || _zeroTo200 is not null || _quarterTime is not null)
+            if (_zeroTo100 is not null || _zeroTo200 is not null || _zeroTo60Mph is not null || _quarterTime is not null)
             {
                 Finish();
                 if (standstill)
@@ -295,9 +309,29 @@ public sealed class AccelerationTimer : IPacketObserver
     {
         _zeroTo100 = null;
         _zeroTo200 = null;
+        _zeroTo60Mph = null;
+        _zeroTo130Mph = null;
         _quarterTime = null;
         _quarterTrap = null;
     }
+
+    /// <summary>
+    /// Builds a snapshot from the run's raw crossing times. Windows that start above 0 km/h (100-200 km/h,
+    /// 60-130 mph) are DIFFERENCES of two crossings of the same run, so they need no clock of their own:
+    /// the common start offset cancels out.
+    /// </summary>
+    private AccelerationSnapshot Build(AccelerationState state, double elapsedSeconds) => new(
+        state,
+        elapsedSeconds,
+        _zeroTo100,
+        _zeroTo200,
+        _quarterTime,
+        _quarterTrap,
+        HundredTo200KmhSeconds: Window(_zeroTo100, _zeroTo200),
+        ZeroTo60MphSeconds: _zeroTo60Mph,
+        SixtyTo130MphSeconds: Window(_zeroTo60Mph, _zeroTo130Mph));
+
+    private static double? Window(double? from, double? to) => from is not null && to is not null ? to - from : null;
 
     private void Publish(AccelerationSnapshot snapshot) => _published = snapshot;
 }
