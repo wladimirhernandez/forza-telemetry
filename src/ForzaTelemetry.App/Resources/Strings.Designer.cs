@@ -76,11 +76,20 @@ namespace ForzaTelemetry.App.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Maximize or restore.
+        ///   Looks up a localized string similar to Maximize.
         /// </summary>
         public static string MaximizeTooltip {
             get {
                 return ResourceManager.GetString("MaximizeTooltip", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Restore.
+        /// </summary>
+        public static string RestoreTooltip {
+            get {
+                return ResourceManager.GetString("RestoreTooltip", resourceCulture)!;
             }
         }
         

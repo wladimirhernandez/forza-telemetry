@@ -258,6 +258,13 @@ public sealed partial class MainViewModel : ObservableObject
         Refresh(); // Show the result (running, or a friendly fault) immediately, without waiting for the next tick.
     }
 
+    // One command for the single Start/Stop toggle button: it does whatever the CURRENT state allows. The button's
+    // label/icon/look are switched by the view from IsRunning, so no text lives here. It has no CanExecute of its own:
+    // an [RelayCommand] async method disables itself while it is running, which also blocks a double click.
+    // StartCommand and StopCommand stay public (tests and any future shortcut use them).
+    [RelayCommand]
+    private Task ToggleListeningAsync() => IsRunning ? StopAsync() : StartAsync();
+
     [RelayCommand(CanExecute = nameof(CanStop))]
     private async Task StopAsync()
     {

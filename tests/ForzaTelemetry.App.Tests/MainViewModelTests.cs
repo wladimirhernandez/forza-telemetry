@@ -232,6 +232,29 @@ public class MainViewModelTests
     }
 
     [Fact]
+    public async Task ToggleListening_starts_when_stopped_and_stops_when_running()
+    {
+        var firstSource = new FakeTelemetrySource();
+        var secondSource = new FakeTelemetrySource();
+        var sourcesToHandOut = new Queue<ITelemetrySource>([firstSource, secondSource]);
+        var service = new TelemetryService(() => sourcesToHandOut.Dequeue());
+        var vm = new MainViewModel(service, TimeProvider.System);
+
+        await vm.ToggleListeningCommand.ExecuteAsync(null);
+        Assert.True(vm.IsRunning);
+
+        await vm.ToggleListeningCommand.ExecuteAsync(null);
+        Assert.False(vm.IsRunning);
+        Assert.Equal(ConnectionState.Stopped, vm.ConnectionState);
+
+        // The toggle can start again after a stop (it rebuilds the listener through the factory).
+        await vm.ToggleListeningCommand.ExecuteAsync(null);
+        Assert.True(vm.IsRunning);
+
+        await vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [Fact]
     public void Design_time_constructor_populates_sample_values_for_the_previewer()
     {
         var vm = new MainViewModel();

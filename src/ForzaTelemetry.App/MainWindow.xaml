@@ -89,12 +89,13 @@
             </Grid.RowDefinitions>
 
             <!-- Title bar: the transparent-background Grid is what receives the mouse for dragging. -->
-            <Grid Grid.Row="0" Background="Transparent" MouseLeftButtonDown="OnDragAreaMouseDown"
+            <Grid Grid.Row="0" Background="Transparent" KeyboardNavigation.TabIndex="1" MouseLeftButtonDown="OnDragAreaMouseDown"
                   MouseMove="OnDragAreaMouseMove" MouseLeftButtonUp="OnDragAreaMouseUp" LostMouseCapture="OnDragAreaLostCapture">
                 <TextBlock Text="{x:Static res:Strings.AppTitle}" Style="{StaticResource MutedLabel}"
                            VerticalAlignment="Center" Margin="28,0,0,0" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"
                             Margin="0,0,14,0">
+                    <!-- Icon-only buttons: ToolTip is for the mouse, AutomationProperties.Name is what screen readers announce. -->
                     <Button Style="{StaticResource WindowGlyphButton}" Click="OnMinimizeClick"
                             ToolTip="{x:Static res:Strings.MinimizeTooltip}"
                             AutomationProperties.Name="{x:Static res:Strings.MinimizeTooltip}">
@@ -102,14 +103,37 @@
                               Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                               StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
                     </Button>
-                    <Button Margin="4,0,0,0" Style="{StaticResource WindowGlyphButton}" Click="OnMaximizeClick"
-                            ToolTip="{x:Static res:Strings.MaximizeTooltip}"
-                            AutomationProperties.Name="{x:Static res:Strings.MaximizeTooltip}">
-                        <Path Data="{StaticResource MaximizeIcon}"
-                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
-                              StrokeThickness="1.5" StrokeLineJoin="Round" />
+                    <!-- Maximize and restore are one button: while maximized the glyph, tooltip and name all switch. -->
+                    <Button Margin="4,0,0,0" Click="OnMaximizeClick">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource WindowGlyphButton}">
+                                <Setter Property="ToolTip" Value="{x:Static res:Strings.MaximizeTooltip}" />
+                                <Setter Property="AutomationProperties.Name" Value="{x:Static res:Strings.MaximizeTooltip}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                 Value="Maximized">
+                                        <Setter Property="ToolTip" Value="{x:Static res:Strings.RestoreTooltip}" />
+                                        <Setter Property="AutomationProperties.Name" Value="{x:Static res:Strings.RestoreTooltip}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <Path Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.5" StrokeLineJoin="Round">
+                            <Path.Style>
+                                <Style TargetType="Path">
+                                    <Setter Property="Data" Value="{StaticResource MaximizeIcon}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                     Value="Maximized">
+                                            <Setter Property="Data" Value="{StaticResource RestoreIcon}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Path.Style>
+                        </Path>
                     </Button>
-                    <Button Margin="4,0,0,0" Style="{StaticResource WindowGlyphButton}" Click="OnCloseClick"
+                    <Button Margin="4,0,0,0" Style="{StaticResource CloseGlyphButton}" Click="OnCloseClick"
                             ToolTip="{x:Static res:Strings.CloseTooltip}"
                             AutomationProperties.Name="{x:Static res:Strings.CloseTooltip}">
                         <Path Data="{StaticResource CloseIcon}"
@@ -120,7 +144,8 @@
             </Grid>
 
             <!-- Top bar: status pills on the left, actions on the right. -->
-            <Grid Grid.Row="1" Margin="28,4,28,0">
+            <!-- Tab order: the primary action first, then the window buttons (TabIndex orders sibling containers). -->
+            <Grid Grid.Row="1" Margin="28,4,28,0" KeyboardNavigation.TabIndex="0">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                     <!--
                       Connection pill. The dot color comes from a DataTrigger per ConnectionState: the view model
@@ -156,12 +181,37 @@
                                     Content="{x:Static res:Strings.CarInfoPill}" />
                 </StackPanel>
 
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button Style="{StaticResource PrimaryButton}" Command="{Binding StartCommand}"
-                            Content="{x:Static res:Strings.StartButton}" />
-                    <Button Style="{StaticResource GhostButton}" Command="{Binding StopCommand}" Margin="10,0,0,0"
-                            Content="{x:Static res:Strings.StopButton}" />
-                </StackPanel>
+                <Button Style="{StaticResource ToggleListeningButton}" HorizontalAlignment="Right"
+                        Command="{Binding ToggleListeningCommand}">
+                    <StackPanel Orientation="Horizontal">
+                        <!-- Icon and label follow IsRunning; both read the button Foreground, which the style also switches. -->
+                        <Path Margin="0,0,9,0" VerticalAlignment="Center" Stretch="None"
+                              Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}">
+                            <Path.Style>
+                                <Style TargetType="Path">
+                                    <Setter Property="Data" Value="{StaticResource PlayIcon}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                                            <Setter Property="Data" Value="{StaticResource StopIcon}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Path.Style>
+                        </Path>
+                        <TextBlock VerticalAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Text" Value="{x:Static res:Strings.StartButton}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                                            <Setter Property="Text" Value="{x:Static res:Strings.StopButton}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+                </Button>
             </Grid>
 
             <!--

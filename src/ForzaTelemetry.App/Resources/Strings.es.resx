@@ -19,7 +19,10 @@
     <value>Minimizar</value>
   </data>
   <data name="MaximizeTooltip" xml:space="preserve">
-    <value>Maximizar o restaurar</value>
+    <value>Maximizar</value>
+  </data>
+  <data name="RestoreTooltip" xml:space="preserve">
+    <value>Restaurar</value>
   </data>
   <data name="CloseTooltip" xml:space="preserve">
     <value>Cerrar</value>
