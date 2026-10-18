@@ -9,7 +9,7 @@ namespace ForzaTelemetry.App.Services;
 /// <b>Why sample at a fixed rate instead of updating the UI on every packet:</b> WPF has the
 /// same rule as WinForms/most UI frameworks — ONLY the UI thread may touch bound properties or
 /// controls. FH6 sends telemetry at ~30 packets/sec (60 in performance mode), so naively marshalling
-/// EVERY packet onto the UI thread (e.g. via <c>Dispatcher.Post</c> from the receive loop) would mean
+/// EVERY packet onto the UI thread (e.g. via <c>Dispatcher.BeginInvoke</c>/<c>InvokeAsync</c> from the receive loop) would mean
 /// 30-60 dispatcher messages per second. That is wasteful — a human cannot perceive UI updates that
 /// fast anyway — and under load it risks the dispatcher queue backing up behind other UI work
 /// (input, layout, rendering), making the whole app feel less responsive, not more "live".
@@ -31,7 +31,11 @@ public sealed class DispatcherTimerTicker : IUiTicker
     {
         Stop();
 
-        _timer = new DispatcherTimer
+        // Explicit priority on purpose: the parameterless DispatcherTimer uses DispatcherPriority.Background,
+        // which is BELOW input and render, so while the user drags or resizes the window the timer starves and
+        // the 20 Hz refresh freezes. Normal runs ahead of input/render work, and Refresh is cheap (it only copies
+        // the latest packet into bound properties), so it cannot hog the UI thread.
+        _timer = new DispatcherTimer(DispatcherPriority.Normal)
         {
             Interval = interval
         };

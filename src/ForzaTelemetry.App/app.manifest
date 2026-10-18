@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <!--
+    WHY this manifest exists: without a DPI declaration WPF is only system-DPI-aware, so when the window sits on a
+    monitor whose scale differs from the primary one Windows bitmap-stretches it and the whole UI looks blurry.
+    PerMonitorV2 makes WPF re-layout and re-render crisply at each monitor's own scale (including when dragged
+    between monitors).
+  -->
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <!-- Legacy fallback for older Windows 10 builds that do not know PerMonitorV2 (they read "true/pm"). -->
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+    </windowsSettings>
+  </application>
+
+  <!-- Declares Windows 10/11 support so the OS does not apply older-version compatibility shims. -->
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}" />
+    </application>
+  </compatibility>
+</assembly>

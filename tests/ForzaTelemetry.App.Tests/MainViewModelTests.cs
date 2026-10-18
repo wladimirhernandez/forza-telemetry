@@ -127,7 +127,7 @@ public class MainViewModelTests
     [Fact]
     public async Task A_ManualTicker_wired_like_the_composition_root_drives_Refresh()
     {
-        // Demonstrates the real wiring pattern from App.axaml.cs (ticker.Start(interval,
+        // Demonstrates the real wiring pattern from App.xaml.cs OnStartup (ticker.Start(interval,
         // vm.Refresh)) without needing WPF's real DispatcherTimer/UI thread — the test decides
         // exactly when a "tick" happens by calling ManualTicker.Tick() itself.
         var fake = new FakeTelemetrySource();

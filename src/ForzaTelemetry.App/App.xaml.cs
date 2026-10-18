@@ -17,6 +17,8 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        RegisterGlobalExceptionHandlers();
+
         // The factory (not an instance) lets Stop/Start rebuild the UDP listener and rebind the port.
         _telemetryService = new TelemetryService(() => new UdpTelemetryListener(UdpTelemetryListener.DefaultPort));
         _ticker = new DispatcherTimerTicker();
@@ -38,8 +40,32 @@ public partial class App : Application
         // Blocking here is safe: StopAsync awaits with ConfigureAwait(false) all the way down, so it never needs
         // the UI thread to resume (no sync-over-async deadlock), and the process is exiting anyway. Waiting
         // guarantees the receive loop has ended and the UDP socket is released before the process goes away.
-        _telemetryService?.StopAsync().GetAwaiter().GetResult();
+        // StopAsync is serialized, so even if a Stop from the UI is still in flight, this call waits for it.
+        // Wrapped in try/catch so a failing dispose can never skip base.OnExit (which finishes shutdown).
+        try
+        {
+            _telemetryService?.StopAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception)
+        {
+            // Nothing useful to do while exiting; logging arrives in T4.
+        }
 
         base.OnExit(e);
+    }
+
+    private void RegisterGlobalExceptionHandlers()
+    {
+        // An exception thrown on the UI thread (e.g. in a bound property or Refresh) would otherwise tear down
+        // the whole app. Show it and keep running: the dashboard is a live monitor, and losing the window over
+        // one bad tick is worse than a message. Logging arrives in T4.
+        DispatcherUnhandledException += (_, args) =>
+        {
+            MessageBox.Show(args.Exception.Message, "Unexpected error", MessageBoxButton.OK, MessageBoxImage.Error);
+            args.Handled = true;
+        };
+
+        // A faulted Task nobody awaited: mark it observed so it is not silently dropped/escalated.
+        TaskScheduler.UnobservedTaskException += (_, args) => args.SetObserved();
     }
 }

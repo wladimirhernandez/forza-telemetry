@@ -113,4 +113,29 @@ public class TelemetryServiceTests
         Assert.False(service.IsRunning);
         Assert.Null(service.Latest);
     }
+
+    [Fact]
+    public async Task A_second_concurrent_StopAsync_does_not_complete_before_the_source_is_disposed()
+    {
+        // OnExit's Stop can overlap the Stop button's Stop; the later caller must still only return once
+        // the socket is really released.
+        var disposeGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var fake = new FakeTelemetrySource { DisposeGate = disposeGate };
+        var service = new TelemetryService(() => fake);
+        await service.StartAsync();
+
+        var firstStop = service.StopAsync();
+        var secondStop = service.StopAsync();
+
+        // Give a (buggy) early return every chance to show up while the dispose is still blocked.
+        await Task.Delay(100);
+        Assert.False(secondStop.IsCompleted);
+        Assert.False(fake.IsDisposed);
+
+        disposeGate.SetResult();
+        await Task.WhenAll(firstStop, secondStop);
+
+        Assert.True(fake.IsDisposed);
+        Assert.False(service.IsRunning);
+    }
 }

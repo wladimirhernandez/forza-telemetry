@@ -9,6 +9,8 @@
     <RootNamespace>ForzaTelemetry.App</RootNamespace>
     <!-- English is the neutral resource language (a Spanish satellite assembly can be added later). -->
     <NeutralLanguage>en</NeutralLanguage>
+    <!-- Declares per-monitor DPI awareness (see app.manifest for why). -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>

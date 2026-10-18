@@ -47,6 +47,13 @@ public sealed class TelemetryService : IAsyncDisposable
 {
     private readonly Func<ITelemetrySource> _sourceFactory;
 
+    // Serializes Start and Stop. Stop nulls the shared fields BEFORE it awaits the loop and the dispose, so
+    // without this a second Stop (e.g. App.OnExit while the Stop button's Stop is still in flight) would see
+    // "nothing to do" and return immediately — while the first Stop is still releasing the UDP socket. With the
+    // gate, the second caller waits until the first has fully finished, so "StopAsync returned" always means
+    // "loop ended and source disposed". A SemaphoreSlim (not a lock) because it must be held across awaits.
+    private readonly SemaphoreSlim _gate = new(1, 1);
+
     private ITelemetrySource? _source;
     private CancellationTokenSource? _cts;
     private Task? _loopTask;
@@ -90,6 +97,19 @@ public sealed class TelemetryService : IAsyncDisposable
     /// </summary>
     public async Task StartAsync()
     {
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await StartCoreAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task StartCoreAsync()
+    {
         if (IsRunning)
         {
             return;
@@ -99,7 +119,7 @@ public sealed class TelemetryService : IAsyncDisposable
         // RunLoopAsync only flips IsRunning. Release them before building a new source — for the
         // real UDP adapter the old socket still holds the port, so the new listener would otherwise
         // fail with "address already in use" and the user could never recover without a restart.
-        await StopAsync().ConfigureAwait(false);
+        await StopCoreAsync().ConfigureAwait(false);
 
         Volatile.Write(ref _fault, null);
 
@@ -121,11 +141,15 @@ public sealed class TelemetryService : IAsyncDisposable
         }
 
         _source = source;
-        _cts = new CancellationTokenSource();
+        var cts = new CancellationTokenSource();
+        _cts = cts;
         Volatile.Write(ref _isRunning, true);
 
-        // See the class remarks for why this loop must run off the calling thread.
-        _loopTask = Task.Run(() => RunLoopAsync(source, _cts.Token));
+        // See the class remarks for why this loop must run off the calling thread. The token is read into a local
+        // BEFORE Task.Run: the lambda runs later on a pool thread, and reading _cts there could see null if a
+        // Stop ran in between (a NullReferenceException that would fault the loop task).
+        var token = cts.Token;
+        _loopTask = Task.Run(() => RunLoopAsync(source, token));
     }
 
     private async Task RunLoopAsync(ITelemetrySource source, CancellationToken ct)
@@ -164,6 +188,21 @@ public sealed class TelemetryService : IAsyncDisposable
     /// can rebind it. A no-op if never started (or already stopped).
     /// </summary>
     public async Task StopAsync()
+    {
+        // Concurrent callers queue here and each runs after the previous one fully finished (see _gate).
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await StopCoreAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    // Must only be called while holding _gate.
+    private async Task StopCoreAsync()
     {
         var cts = _cts;
         var loopTask = _loopTask;

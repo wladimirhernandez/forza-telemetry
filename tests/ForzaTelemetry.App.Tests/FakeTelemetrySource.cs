@@ -46,10 +46,21 @@ internal sealed class FakeTelemetrySource : ITelemetrySource
     /// <summary>True once <see cref="DisposeAsync"/> ran — lets a test prove a source was released.</summary>
     public bool IsDisposed { get; private set; }
 
-    public ValueTask DisposeAsync()
+    /// <summary>
+    /// When set, <see cref="DisposeAsync"/> does not finish until the test completes this source —
+    /// simulates a slow socket release so a test can observe what happens DURING a dispose.
+    /// </summary>
+    public TaskCompletionSource? DisposeGate { get; init; }
+
+    public async ValueTask DisposeAsync()
     {
-        IsDisposed = true;
         _channel.Writer.TryComplete();
-        return ValueTask.CompletedTask;
+
+        if (DisposeGate is not null)
+        {
+            await DisposeGate.Task.ConfigureAwait(false);
+        }
+
+        IsDisposed = true;
     }
 }

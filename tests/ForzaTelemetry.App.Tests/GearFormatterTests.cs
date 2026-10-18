@@ -1,4 +1,3 @@
-
 namespace ForzaTelemetry.App.Tests;
 
 public class GearFormatterTests
