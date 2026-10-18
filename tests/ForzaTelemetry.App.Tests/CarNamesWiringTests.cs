@@ -24,6 +24,8 @@ public sealed class CarNamesWiringTests : IDisposable
 
     private CarNameStore NewStore() => new(Path.Combine(_directory, "cars.json"));
 
+    private static CarNames Names(CarNameStore store) => new(store: store);
+
     private static string Unnamed(int ordinal) => string.Format(CultureInfo.CurrentCulture, Strings.PerfCarOrdinalFormat, ordinal);
 
     // ---- Display name ---------------------------------------------------------------------------------------
@@ -33,13 +35,13 @@ public sealed class CarNamesWiringTests : IDisposable
     {
         var store = NewStore();
 
-        Assert.Equal(Unnamed(2211), CarDisplayName.For(2211, store));
+        Assert.Equal(Unnamed(2211), CarDisplayName.For(2211, Names(store)));
         Assert.Equal(Unnamed(2211), CarDisplayName.For(2211, null)); // no store at all (tests, designer)
 
         store.TrySet(2211, "Daily GT");
 
-        Assert.Equal("Daily GT", CarDisplayName.For(2211, store));
-        Assert.Equal(Unnamed(77), CarDisplayName.For(77, store));
+        Assert.Equal("Daily GT", CarDisplayName.For(2211, Names(store)));
+        Assert.Equal(Unnamed(77), CarDisplayName.For(77, Names(store)));
     }
 
     // ---- The rename box ---------------------------------------------------------------------------------------
@@ -54,7 +56,7 @@ public sealed class CarNamesWiringTests : IDisposable
         box.Begin(2211);
 
         Assert.True(box.IsOpen);
-        Assert.Equal(string.Format(CultureInfo.CurrentCulture, CarNameStrings.CarRenameTitle, 2211), box.Title);
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture, CarNameStrings.CarRenameTitle, "Daily GT"), box.Title);
         Assert.Equal("Daily GT", box.Text);
         Assert.True(box.HasNickname);
         Assert.True(box.SaveCommand.CanExecute(null));
@@ -207,7 +209,7 @@ public sealed class CarNamesWiringTests : IDisposable
     {
         var store = NewStore();
         var box = new CarRenameViewModel(store);
-        var dashboard = new DashboardViewModel(carNames: store) { CarRename = box };
+        var dashboard = new DashboardViewModel(carNames: Names(store)) { CarRename = box };
         Assert.False(dashboard.RenameCarCommand.CanExecute(null)); // no car yet
 
         dashboard.Apply(TestPackets.Sample(carOrdinal: 2211, performanceIndex: 780));
@@ -230,7 +232,7 @@ public sealed class CarNamesWiringTests : IDisposable
     public void The_pill_has_no_name_and_no_rename_while_idle()
     {
         var store = NewStore();
-        var dashboard = new DashboardViewModel(carNames: store);
+        var dashboard = new DashboardViewModel(carNames: Names(store));
         dashboard.Apply(TestPackets.Sample(carOrdinal: 2211, performanceIndex: 780));
 
         dashboard.ResetLive();
@@ -243,7 +245,7 @@ public sealed class CarNamesWiringTests : IDisposable
     [Fact]
     public void A_menu_packet_without_a_real_car_cannot_be_named()
     {
-        var dashboard = new DashboardViewModel(carNames: NewStore());
+        var dashboard = new DashboardViewModel(carNames: Names(NewStore()));
 
         dashboard.Apply(TestPackets.Sample(carOrdinal: 2211, performanceIndex: 0));
 
@@ -260,7 +262,7 @@ public sealed class CarNamesWiringTests : IDisposable
             History = new PerformanceHistoryStore(Path.Combine(directory, "performance.json"));
             CarChanges = new CarChangeDetector(TopSpeed, Acceleration);
             Box = new CarRenameViewModel(names);
-            Vm = new PerformanceViewModel(Acceleration, TopSpeed, CarChanges, History, null, null, names, Box);
+            Vm = new PerformanceViewModel(Acceleration, TopSpeed, CarChanges, History, null, null, new CarNames(store: names), Box);
         }
 
         public AccelerationTimer Acceleration { get; } = new();
@@ -336,7 +338,7 @@ public sealed class CarNamesWiringTests : IDisposable
     public async Task The_recordings_list_shows_the_nickname_and_updates_when_a_car_is_renamed()
     {
         var store = NewStore();
-        using var rig = new SessionsRig(carNames: store);
+        using var rig = new SessionsRig(carNames: Names(store));
         await rig.AddRecordingAsync("monza", car: 2211);
         var row = Assert.Single(await rig.LoadLibraryAsync());
         Assert.Equal(Unnamed(2211), row.CarsText);
@@ -359,7 +361,7 @@ public sealed class CarNamesWiringTests : IDisposable
 
         Assert.Equal(
             string.Format(CultureInfo.CurrentCulture, SessionsStrings.SessionsCarsMoreFormat, "Daily GT", 2),
-            SessionFormat.Cars([5, 77, 9], store));
+            SessionFormat.Cars([5, 77, 9], Names(store)));
     }
 
     // ---- Tuning --------------------------------------------------------------------------------------------------
@@ -370,7 +372,7 @@ public sealed class CarNamesWiringTests : IDisposable
         var store = NewStore();
         var time = new FakeTimeProvider(new DateTimeOffset(2026, 10, 18, 12, 0, 0, TimeSpan.Zero));
         var dyno = new DynoCapture();
-        var vm = new TuningViewModel(dyno, new TelemetryHistory(), new SuspensionBottomingCounter(), new UnitsService(), time, store);
+        var vm = new TuningViewModel(dyno, new TelemetryHistory(), new SuspensionBottomingCounter(), new UnitsService(), time, Names(store));
         dyno.OnPacket(InsightPackets.Pull(4000, powerWatts: 160_000f, torque: 300, carOrdinal: 2211, performanceIndex: 612));
         vm.Refresh();
         Assert.Equal(Unnamed(2211), vm.CarText);
@@ -393,7 +395,7 @@ public sealed class CarNamesWiringTests : IDisposable
         var shell = new ShellViewModel(
             new TelemetryService(() => new FakeTelemetrySource()),
             TimeProvider.System,
-            dashboard: new DashboardViewModel(carNames: store),
+            dashboard: new DashboardViewModel(carNames: Names(store)),
             carRename: box);
 
         Assert.Same(box, shell.CarRename);

@@ -160,7 +160,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
     // The last top speed folded into the history for the current car.
     private double _mergedTopSpeedKmh;
 
-    private readonly CarNameStore? _carNames;
+    private readonly CarNames? _carNames;
     private readonly CarRenameViewModel? _carRename;
     private readonly CsvExportRunner? _export;
     private readonly TimeProvider _time;
@@ -198,7 +198,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
         PerformanceHistoryStore history,
         UnitsService? units = null,
         IConfirmationService? confirmation = null,
-        CarNameStore? carNames = null,
+        CarNames? carNames = null,
         CarRenameViewModel? carRename = null,
         BrakingTest? braking = null,
         IFileSaveDialog? saveDialog = null,
@@ -548,11 +548,15 @@ public sealed partial class PerformanceViewModel : ObservableObject
     private async Task ExportCsvAsync()
     {
         var records = _history.Records;
-        // A snapshot: the store is UI-thread-only and the write runs on another thread. One lookup per car.
+        // A snapshot: the store is UI-thread-only and the write runs on another thread. One lookup per car. Only REAL names go in the
+        // file (nickname, else catalog); an unknown car is left out so its cell stays empty, never the translated "Car #N" placeholder.
         var names = new Dictionary<int, string>();
         foreach (var ordinal in records.Select(r => r.Car.CarOrdinal).Distinct())
         {
-            names[ordinal] = CarDisplayName.For(ordinal, _carNames); // nickname, else the real name, else "Car #N"
+            if (_carNames?.RealName(ordinal) is { } real)
+            {
+                names[ordinal] = real;
+            }
         }
         await _export!.RunAsync(
             CsvExportRunner.SuggestedName(ExportStrings.ExportPerformanceFileName, _time.GetLocalNow()),

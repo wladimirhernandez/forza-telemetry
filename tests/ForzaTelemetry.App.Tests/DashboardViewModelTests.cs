@@ -172,7 +172,7 @@ public class DashboardViewModelTests
         {
             var names = new CarNameStore(System.IO.Path.Combine(directory, "cars.json"));
             names.TrySet(11, "Daily GT");
-            var dashboard = new DashboardViewModel(carNames: names);
+            var dashboard = new DashboardViewModel(carNames: new CarNames(store: names));
             TelemetryPacket Drive(int ordinal) => TestPackets.Sample(carOrdinal: ordinal, performanceIndex: 700);
 
             dashboard.Apply(Drive(11));

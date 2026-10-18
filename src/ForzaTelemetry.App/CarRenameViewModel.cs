@@ -17,10 +17,16 @@ namespace ForzaTelemetry.App;
 /// </remarks>
 public sealed partial class CarRenameViewModel : ObservableObject
 {
-    private readonly CarNameStore _names;
+    private readonly CarNameStore _store;
+    private readonly CarNames _names;
 
-    /// <param name="names">Where the name is saved.</param>
-    public CarRenameViewModel(CarNameStore names) => _names = names;
+    /// <param name="store">Where the name is saved.</param>
+    /// <param name="names">What cars are called now (nickname over catalog); optional, by default nicknames only.</param>
+    public CarRenameViewModel(CarNameStore store, CarNames? names = null)
+    {
+        _store = store;
+        _names = names ?? new CarNames(store: store);
+    }
 
     /// <summary>The box is on screen.</summary>
     [ObservableProperty]
@@ -29,7 +35,7 @@ public sealed partial class CarRenameViewModel : ObservableObject
     /// <summary>The car being named.</summary>
     public int CarOrdinal { get; private set; }
 
-    /// <summary>What the box asks: "Name car #1234" (the car's number is what the game calls it, so it identifies the car).</summary>
+    /// <summary>What the box asks: "Name 2024 BMW X6 M" (the name the car has now, so it identifies the car; "Name Car #1234" when nothing knows it).</summary>
     [ObservableProperty]
     private string _title = "";
 
@@ -37,6 +43,7 @@ public sealed partial class CarRenameViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Error))]
     [NotifyPropertyChangedFor(nameof(HasError))]
+    [NotifyPropertyChangedFor(nameof(HelpText))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     private string _text = "";
 
@@ -44,14 +51,22 @@ public sealed partial class CarRenameViewModel : ObservableObject
     [ObservableProperty]
     private bool _hasNickname;
 
-    /// <summary>"Default name: 2024 BMW X6 M" when the bundled list knows the car, else empty (then the default is just "Car #1234").</summary>
+    /// <summary>"If you leave this empty, it shows as 2024 BMW X6 M" when the bundled list knows the car, else empty (no line: the car then
+    /// shows as "Car #1234", which says nothing worth explaining).</summary>
     [ObservableProperty]
     private string _defaultNameText = "";
 
     /// <summary>The default-name line is showing.</summary>
     public bool HasDefaultName => DefaultNameText.Length > 0;
 
-    partial void OnDefaultNameTextChanged(string value) => OnPropertyChanged(nameof(HasDefaultName));
+    partial void OnDefaultNameTextChanged(string value)
+    {
+        OnPropertyChanged(nameof(HasDefaultName));
+        OnPropertyChanged(nameof(HelpText));
+    }
+
+    /// <summary>What a screen reader announces after the text box's name: the error when there is one, else the default-name hint (null when neither).</summary>
+    public string? HelpText => Error ?? (HasDefaultName ? DefaultNameText : null);
 
     /// <summary>The localized reason the text cannot be saved, or null when it can.</summary>
     public string? Error => Problem == CarNameProblem.None ? null : CarNameStore.Describe(Problem);
@@ -82,8 +97,8 @@ public sealed partial class CarRenameViewModel : ObservableObject
         }
 
         CarOrdinal = carOrdinal;
-        Title = string.Format(CultureInfo.CurrentCulture, CarNameStrings.CarRenameTitle, carOrdinal);
-        var existing = _names.Find(carOrdinal);
+        Title = string.Format(CultureInfo.CurrentCulture, CarNameStrings.CarRenameTitle, _names.Display(carOrdinal));
+        var existing = _names.Nickname(carOrdinal);
         HasNickname = existing is not null;
         DefaultNameText = _names.CatalogName(carOrdinal) is { } real
             ? string.Format(CultureInfo.CurrentCulture, CarNameStrings.CarRenameDefaultName, real)
@@ -92,6 +107,7 @@ public sealed partial class CarRenameViewModel : ObservableObject
         _touched = false; // set after the text: assigning it counts as typing
         OnPropertyChanged(nameof(Error));
         OnPropertyChanged(nameof(HasError));
+        OnPropertyChanged(nameof(HelpText));
         SaveCommand.NotifyCanExecuteChanged();
         IsOpen = true;
     }
@@ -104,7 +120,7 @@ public sealed partial class CarRenameViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanSave))]
     private void Save()
     {
-        if (_names.TrySet(CarOrdinal, Text) == CarNameProblem.None)
+        if (_store.TrySet(CarOrdinal, Text) == CarNameProblem.None)
         {
             IsOpen = false;
         }
@@ -118,7 +134,7 @@ public sealed partial class CarRenameViewModel : ObservableObject
     [RelayCommand]
     private void UseDefault()
     {
-        _names.Remove(CarOrdinal);
+        _store.Remove(CarOrdinal);
         IsOpen = false;
     }
 }

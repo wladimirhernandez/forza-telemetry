@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.IO;
 using System.Text;
+using ForzaTelemetry.App.Resources;
 using ForzaTelemetry.App.Services;
 
 namespace ForzaTelemetry.App.Tests;
@@ -19,7 +21,7 @@ public sealed class CarCatalogTests : IDisposable
 
     private static CarCatalog From(string json) => CarCatalog.Load(new MemoryStream(Encoding.UTF8.GetBytes(json)));
 
-    private CarNameStore Store(CarCatalog? catalog) => new(Path.Combine(_directory, "cars.json"), catalog: catalog);
+    private CarNameStore Store() => new(Path.Combine(_directory, "cars.json"));
 
     [Fact]
     public void The_shipped_list_loads_and_knows_the_car_the_player_checked_in_game()
@@ -99,49 +101,116 @@ public sealed class CarCatalogTests : IDisposable
     [Fact]
     public void The_display_name_is_the_nickname_then_the_catalog_name_then_the_number()
     {
-        var store = Store(From("""{ "cars": { "3983": "2024 BMW X6 M" } }"""));
+        var store = Store();
+        var names = new CarNames(From("""{ "cars": { "3983": "2024 BMW X6 M" } }"""), store);
 
-        Assert.Equal("2024 BMW X6 M", CarDisplayName.For(3983, store));
-        Assert.Equal(CarDisplayName.Unnamed(77), CarDisplayName.For(77, store));
+        Assert.Equal("2024 BMW X6 M", CarDisplayName.For(3983, names));
+        Assert.Equal(CarDisplayName.Unnamed(77), CarDisplayName.For(77, names));
 
         store.TrySet(3983, "School run");
-        Assert.Equal("School run", CarDisplayName.For(3983, store));
-        Assert.Equal("2024 BMW X6 M", CarDisplayName.Default(3983, store)); // what "Use the default name" returns to
+        Assert.Equal("School run", CarDisplayName.For(3983, names));
+        Assert.Equal("School run", names.RealName(3983));
+        Assert.Equal("2024 BMW X6 M", names.CatalogName(3983)); // what the rename box's default hint shows
 
         store.Remove(3983);
-        Assert.Equal("2024 BMW X6 M", CarDisplayName.For(3983, store));
+        Assert.Equal("2024 BMW X6 M", CarDisplayName.For(3983, names));
     }
 
     [Fact]
-    public void Without_a_catalog_the_store_falls_back_to_the_number()
+    public void The_real_name_is_never_the_placeholder_and_the_display_name_always_is_a_fallback()
     {
-        var store = Store(null);
+        var names = new CarNames(From("""{ "cars": { "3983": "2024 BMW X6 M" } }"""), Store());
 
-        Assert.Null(store.CatalogName(3983));
-        Assert.Equal(CarDisplayName.Unnamed(3983), CarDisplayName.For(3983, store));
+        Assert.Null(names.RealName(77));
+        Assert.Null(names.CatalogName(77));
+        Assert.Equal(CarDisplayName.Unnamed(77), names.Display(77));
+    }
+
+    [Fact]
+    public void Without_a_store_the_catalog_names_still_show()
+    {
+        var names = new CarNames(From("""{ "cars": { "3983": "2024 BMW X6 M" } }"""));
+
+        Assert.Equal("2024 BMW X6 M", CarDisplayName.For(3983, names));
+        Assert.Null(names.Nickname(3983));
+    }
+
+    [Fact]
+    public void Without_a_catalog_or_a_store_the_number_is_all_there_is()
+    {
+        var names = new CarNames();
+
+        Assert.Null(names.RealName(3983));
+        Assert.Equal(CarDisplayName.Unnamed(3983), CarDisplayName.For(3983, names));
         Assert.Equal(CarDisplayName.Unnamed(3983), CarDisplayName.For(3983, null));
     }
 
     [Fact]
-    public void The_rename_box_shows_the_catalog_name_as_the_default_and_use_default_restores_it()
+    public void The_resolver_forwards_nickname_changes()
     {
-        var store = Store(From("""{ "cars": { "3983": "2024 BMW X6 M" } }"""));
-        var box = new CarRenameViewModel(store);
+        var store = Store();
+        var names = new CarNames(store: store);
+        var raised = 0;
+        names.Changed += (_, _) => raised++;
+
+        store.TrySet(5, "Daily GT");
+
+        Assert.Equal(1, raised);
+    }
+
+    // ---- The rename box -------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void The_rename_box_titles_with_the_display_name_and_hints_the_catalog_name_as_the_default()
+    {
+        var store = Store();
+        var names = new CarNames(From("""{ "cars": { "3983": "2024 BMW X6 M" } }"""), store);
+        var box = new CarRenameViewModel(store, names);
 
         box.Begin(3983);
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture, CarNameStrings.CarRenameTitle, "2024 BMW X6 M"), box.Title);
         Assert.True(box.HasDefaultName);
         Assert.Contains("2024 BMW X6 M", box.DefaultNameText);
-        Assert.Equal("", box.Text); // no nickname: the box is empty, the default is a hint
+        Assert.False(box.HasNickname); // no nickname: no "use the default" action, and the box is empty
+        Assert.Equal("", box.Text);
+        Assert.Equal(box.DefaultNameText, box.HelpText); // the hint reaches the text box's accessible help
 
         box.Text = "School run";
         box.SaveCommand.Execute(null);
-        Assert.Equal("School run", CarDisplayName.For(3983, store));
+        Assert.Equal("School run", CarDisplayName.For(3983, names));
 
         box.Begin(3983);
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture, CarNameStrings.CarRenameTitle, "School run"), box.Title);
+        Assert.True(box.HasNickname);
         box.UseDefaultCommand.Execute(null);
-        Assert.Equal("2024 BMW X6 M", CarDisplayName.For(3983, store));
+        Assert.Equal("2024 BMW X6 M", CarDisplayName.For(3983, names));
+    }
 
-        box.Begin(77); // a car the list does not know: no default line
+    [Fact]
+    public void The_rename_box_help_text_is_the_error_while_there_is_one_and_the_hint_otherwise()
+    {
+        var store = Store();
+        var box = new CarRenameViewModel(store, new CarNames(From("""{ "cars": { "3983": "2024 BMW X6 M" } }"""), store));
+        box.Begin(3983);
+
+        box.Text = new string('x', CarNameStore.MaxLength + 1);
+        Assert.Equal(box.Error, box.HelpText);
+        Assert.NotNull(box.HelpText);
+
+        box.Text = "ok";
+        Assert.Equal(box.DefaultNameText, box.HelpText);
+    }
+
+    [Fact]
+    public void The_rename_box_has_no_default_line_for_a_car_the_list_does_not_know()
+    {
+        var store = Store();
+        var box = new CarRenameViewModel(store, new CarNames(From("""{ "cars": { "3983": "2024 BMW X6 M" } }"""), store));
+
+        box.Begin(77);
+
         Assert.False(box.HasDefaultName);
+        Assert.Null(box.HelpText);
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture, CarNameStrings.CarRenameTitle, CarDisplayName.Unnamed(77)), box.Title);
     }
 }

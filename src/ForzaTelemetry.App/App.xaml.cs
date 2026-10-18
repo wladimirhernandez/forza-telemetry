@@ -132,11 +132,12 @@ public partial class App : Application, IAppRestarter
         // The player's car nicknames: read once here (a missing or damaged file is not an error), shared by every screen that shows a
         // car, with one rename box for all the places that offer to change a name.
         // The bundled real car names: the fallback under a nickname. Tolerant (a missing or damaged list is just empty), read once.
-        var carCatalog = CarCatalog.Empty;
-        StartupGuard.Run(_logger, "load car catalog", () => carCatalog = CarCatalog.LoadEmbedded(loggerFactory.CreateLogger<CarCatalog>()));
-        var carNames = new CarNameStore(CarNameStore.DefaultPath, loggerFactory.CreateLogger<CarNameStore>(), carCatalog);
-        StartupGuard.Run(_logger, "load car names", carNames.Load);
-        var carRename = new CarRenameViewModel(carNames);
+        var carCatalog = StartupGuard.Run(
+            _logger, "load car catalog", () => CarCatalog.LoadEmbedded(loggerFactory.CreateLogger<CarCatalog>()), CarCatalog.Empty);
+        var carNameStore = new CarNameStore(CarNameStore.DefaultPath, loggerFactory.CreateLogger<CarNameStore>());
+        StartupGuard.Run(_logger, "load car names", carNameStore.Load);
+        var carNames = new CarNames(carCatalog, carNameStore); // read-only view for the screens; only the rename box gets the store
+        var carRename = new CarRenameViewModel(carNameStore, carNames);
         var clipboard = new WpfClipboardService();
 
         // The data-out object reads the adapters once (and logs what it read, now and on every later Start), so this

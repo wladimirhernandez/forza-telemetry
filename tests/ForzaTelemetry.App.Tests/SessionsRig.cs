@@ -46,7 +46,7 @@ internal sealed class SessionsRig : IDisposable
 
     public SessionsRig(
         bool confirmDelete = true, bool pauseReplayAtStart = false, double replaySpeed = ReplaySpeed.Max, bool withPerformance = false,
-        CarNameStore? carNames = null, IFileSaveDialog? saveDialog = null)
+        CarNames? carNames = null, IFileSaveDialog? saveDialog = null)
     {
         Folder = Path.Combine(_root, "recordings");
         Engines = new TelemetryEngines();

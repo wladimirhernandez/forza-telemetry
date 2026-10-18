@@ -61,8 +61,9 @@ public sealed class CarCatalog
 
             return Load(stream, logger);
         }
-        catch (Exception ex) when (ex is IOException or InvalidOperationException)
+        catch (Exception ex)
         {
+            // Everything: the list is a convenience, so no failure here (permissions, a bad stream, an odd assembly) may cost the app.
             AppLog.CarCatalogUnreadable(logger, ex);
             return Empty;
         }

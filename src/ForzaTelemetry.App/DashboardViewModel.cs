@@ -44,7 +44,7 @@ public sealed partial class DashboardViewModel : ObservableObject
     private int? _namedCarOrdinal;
 
     private readonly UnitsService _units;
-    private readonly CarNameStore? _carNames;
+    private readonly CarNames? _carNames;
 
     // Telemetry numbers read best with a space as thousands separator ("7 439"), regardless of the user's culture.
     private static readonly NumberFormatInfo SpacedNumbers = new() { NumberGroupSeparator = " ", NumberDecimalDigits = 0 };
@@ -226,7 +226,7 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     /// <param name="units">Converts and labels speed and tire temperature; optional (metric) for tests and the designer.</param>
     /// <param name="carNames">The player's car nicknames, shown in the car pill; optional (the pill then shows "Car #1234").</param>
-    public DashboardViewModel(UnitsService? units = null, CarNameStore? carNames = null)
+    public DashboardViewModel(UnitsService? units = null, CarNames? carNames = null)
     {
         _units = units ?? new UnitsService();
         _carNames = carNames;

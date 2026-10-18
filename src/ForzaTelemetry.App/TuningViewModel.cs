@@ -43,7 +43,7 @@ public sealed partial class TuningViewModel : ObservableObject, IRefreshablePage
     private readonly SuspensionBottomingCounter _bottoming;
     private readonly UnitsService _units;
     private readonly TimeProvider _time;
-    private readonly CarNameStore? _carNames;
+    private readonly CarNames? _carNames;
     private readonly float[] _temps = new float[4];
     private readonly float[] _shownTemps = new float[4];
     private TemperatureUnit _shownTempUnit = (TemperatureUnit)(-1);
@@ -68,7 +68,7 @@ public sealed partial class TuningViewModel : ObservableObject, IRefreshablePage
     public TuningViewModel(
         DynoCapture dyno, TelemetryHistory history, SuspensionBottomingCounter bottoming, UnitsService units,
         TimeProvider? timeProvider = null,
-        CarNameStore? carNames = null)
+        CarNames? carNames = null)
     {
         _carNames = carNames;
         if (carNames is not null)

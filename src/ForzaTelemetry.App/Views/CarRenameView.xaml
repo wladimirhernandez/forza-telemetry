@@ -10,7 +10,7 @@
              d:DesignWidth="1300" d:DesignHeight="800"
              IsVisibleChanged="OnIsVisibleChanged">
     <!--
-      The "Name car #1234" box: a small modal card over the window (the host places this control over every row and shows it while
+      The "Name <car>" box: a small modal card over the window (the host places this control over every row and shows it while
       CarRenameViewModel.IsOpen). One box serves every "rename" button of the app. Enter saves, Esc cancels (both are key bindings on the
       text box, where the focus is while typing), and the message under the box follows the typing.
     -->
@@ -35,7 +35,7 @@
                 <TextBox x:Name="NameBox" Style="{StaticResource InputTextBox}" Margin="0,16,0,0"
                          Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" Tag="{Binding HasError}"
                          AutomationProperties.Name="{x:Static res:CarNameStrings.CarRenameBoxName}"
-                         AutomationProperties.HelpText="{Binding Error}">
+                         AutomationProperties.HelpText="{Binding HelpText}">
                     <TextBox.InputBindings>
                         <KeyBinding Key="Return" Command="{Binding SaveCommand}" />
                         <KeyBinding Key="Escape" Command="{Binding CancelCommand}" />

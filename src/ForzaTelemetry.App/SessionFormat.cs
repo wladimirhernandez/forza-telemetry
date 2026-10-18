@@ -60,7 +60,7 @@ public static class SessionFormat
     /// recording does not store the performance index, so only the ordinal can be shown. A recording with no race in it
     /// (only menus) says so instead of showing an empty cell.
     /// </summary>
-    public static string Cars(IReadOnlyList<int> ordinals, CarNameStore? names = null)
+    public static string Cars(IReadOnlyList<int> ordinals, CarNames? names = null)
     {
         if (ordinals.Count == 0)
         {

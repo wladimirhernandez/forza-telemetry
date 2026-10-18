@@ -12,7 +12,7 @@ namespace ForzaTelemetry.App.Services;
 /// <c>brake_100_to_0_kmh_m</c>...), independent of the display setting. A value the car never measured is an empty cell.
 /// </para>
 /// <para>
-/// <c>car_name</c> is the name the app shows for the car (the player's nickname, else the real name from the bundled list, else "Car #N"); the game's id, <c>car_ordinal</c>, is the stable key.
+/// <c>car_name</c> is the car's real name (the player's nickname, else the name from the bundled list) and is EMPTY for a car nobody has a name for: the screen's "Car #N" placeholder is translated and would make the file differ by language, so it is never exported. The game's id, <c>car_ordinal</c>, is the stable key.
 /// <c>updated_at</c> is ISO 8601 with its offset.
 /// </para>
 /// </remarks>

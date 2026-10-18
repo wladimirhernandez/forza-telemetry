@@ -13,13 +13,13 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="CarRenameTitle" xml:space="preserve">
-    <value>Name car #{0}</value>
+    <value>Name {0}</value>
   </data>
   <data name="CarRenameHint" xml:space="preserve">
     <value>A nickname only for you. It shows on every screen and in the recordings list.</value>
   </data>
   <data name="CarRenameDefaultName" xml:space="preserve">
-    <value>Default name: {0}</value>
+    <value>If you leave this empty, it shows as {0}</value>
   </data>
   <data name="CarRenameBoxName" xml:space="preserve">
     <value>Car name</value>

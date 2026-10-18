@@ -13,13 +13,13 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="CarRenameTitle" xml:space="preserve">
-    <value>Nombre del coche n.º {0}</value>
+    <value>Nombre de {0}</value>
   </data>
   <data name="CarRenameHint" xml:space="preserve">
     <value>Un apodo solo para ti. Se muestra en todas las pantallas y en la lista de grabaciones.</value>
   </data>
   <data name="CarRenameDefaultName" xml:space="preserve">
-    <value>Nombre por defecto: {0}</value>
+    <value>Si lo dejas vacío, se muestra como {0}</value>
   </data>
   <data name="CarRenameBoxName" xml:space="preserve">
     <value>Nombre del coche</value>

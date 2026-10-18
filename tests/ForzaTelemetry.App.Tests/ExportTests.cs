@@ -546,7 +546,7 @@ public class ExportTests
         var dialog = new FakeFileSaveDialog(folder.File("perf.csv"));
         var units = new UnitsService { SpeedUnit = SpeedUnit.Mph }; // the table is in mph...
         var vm = new PerformanceViewModel(
-            acceleration, topSpeed, new CarChangeDetector(topSpeed, acceleration, braking), history, units, carNames: names,
+            acceleration, topSpeed, new CarChangeDetector(topSpeed, acceleration, braking), history, units, carNames: new CarNames(store: names),
             braking: braking, saveDialog: dialog);
         history.Merge(new CarKey(2211, 780), 5, 2, new PerformanceResult(3.5, null, null, null, 300, ZeroTo60MphSeconds: 3.3));
         Assert.True(vm.ExportCsvCommand.CanExecute(null));
@@ -563,12 +563,13 @@ public class ExportTests
     }
 
     [Fact]
-    public async Task The_performance_export_car_name_is_the_nickname_then_the_catalog_name_then_the_number()
+    public async Task The_performance_export_car_name_is_the_nickname_then_the_catalog_name_and_empty_when_unknown()
     {
         using var folder = new TempFolder();
         var catalog = CarCatalog.Load(new MemoryStream("""{ "cars": { "3983": "2024 BMW X6 M", "500": "1999 Test Car" } }"""u8.ToArray()));
-        var names = new CarNameStore(folder.File("cars.json"), catalog: catalog);
-        names.TrySet(500, "Mine");
+        var store = new CarNameStore(folder.File("cars.json"));
+        store.TrySet(500, "Mine");
+        var names = new CarNames(catalog, store);
         var history = new PerformanceHistoryStore(folder.File("performance.json"));
         var topSpeed = new TopSpeedTracker();
         var acceleration = new AccelerationTimer();
@@ -585,7 +586,7 @@ public class ExportTests
         await vm.ExportCsvCommand.ExecuteAsync(null);
 
         var lines = Lines(Decode(await File.ReadAllBytesAsync(folder.File("perf.csv"))));
-        Assert.StartsWith("77," + CarDisplayName.Unnamed(77) + ",700,", lines[1]);
+        Assert.StartsWith("77,,700,", lines[1]); // unknown: empty, never the translated "Car #77" placeholder
         Assert.StartsWith("500,Mine,700,", lines[2]);
         Assert.StartsWith("3983,2024 BMW X6 M,700,", lines[3]);
     }

@@ -246,7 +246,7 @@ public sealed partial class SessionsViewModel : ObservableObject
     private Task _libraryRefresh = Task.CompletedTask;
 
     /// <summary>The player's car nicknames; null when the page was built without them.</summary>
-    internal CarNameStore? CarNames { get; }
+    internal CarNames? CarNames { get; }
 
     /// <param name="service">The telemetry service (live or replay), read in <see cref="Refresh"/>.</param>
     /// <param name="recorder">The recorder the listener feeds with raw datagrams.</param>
@@ -263,7 +263,7 @@ public sealed partial class SessionsViewModel : ObservableObject
         IConfirmationService? confirmation = null,
         IFolderOpener? folderOpener = null,
         ILogger? logger = null,
-        CarNameStore? carNames = null,
+        CarNames? carNames = null,
         IFileSaveDialog? saveDialog = null)
     {
         _saveDialog = saveDialog;
