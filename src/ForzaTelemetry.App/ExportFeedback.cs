@@ -36,6 +36,9 @@ public sealed partial class ExportFeedback : ObservableObject
     public void Failed(string path, string reason) => Show(
         string.Format(CultureInfo.CurrentCulture, ExportStrings.ExportFailed, Path.GetFileName(path), reason), null, isError: true);
 
+    /// <summary>The export was stopped before it finished (nothing was written, the old file is untouched).</summary>
+    public void Cancelled() => Show(ExportStrings.ExportCancelled, "", isError: false);
+
     /// <summary>Empties the line (a new action starts, or the data it was about is gone).</summary>
     public void Clear() => Show("", "", isError: false);
 

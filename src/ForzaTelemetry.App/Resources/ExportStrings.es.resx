@@ -54,6 +54,9 @@
   <data name="ExportSavedPackets" xml:space="preserve">
     <value>Guardado {0} ({1} paquetes)</value>
   </data>
+  <data name="ExportSavedPacketsTruncated" xml:space="preserve">
+    <value>Guardado {0} ({1} paquetes). La grabación quedó cortada, así que solo se exportaron sus paquetes completos.</value>
+  </data>
   <data name="ExportFailed" xml:space="preserve">
     <value>No se pudo guardar {0}: {1}</value>
   </data>

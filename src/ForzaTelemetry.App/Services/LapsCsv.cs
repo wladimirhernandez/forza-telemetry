@@ -22,12 +22,12 @@ public static class LapsCsv
         using var csv = CsvWriter.Create(stream, leaveOpen: true);
         csv.Row(Columns);
 
-        // The fastest lap with a real time; ties go to the earlier lap, like the page (a lap with time 0 has no time at all).
-        var best = laps.Where(lap => lap.TimeSeconds > 0).MinBy(lap => lap.TimeSeconds);
+        // The very same pick as the page (a lap with time 0 has no time at all): the file cannot disagree with the table.
+        var best = LapsViewModel.BestLapOf(laps);
 
         foreach (var lap in laps.OrderBy(lap => lap.Number))
         {
-            var hasTime = lap.TimeSeconds > 0 && best is not null;
+            var hasTime = lap.TimeSeconds > 0; // then a best lap exists: this lap itself qualifies
             csv.Field(lap.Number)
                 .Field(hasTime ? lap.TimeSeconds : null, "0.000")
                 .Field(hasTime ? lap.TimeSeconds - best!.TimeSeconds : null, "0.000")

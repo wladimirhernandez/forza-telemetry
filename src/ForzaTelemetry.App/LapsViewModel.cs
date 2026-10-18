@@ -249,10 +249,16 @@ public sealed partial class LapsViewModel : ObservableObject
         };
     }
 
+    /// <summary>
+    /// The fastest lap with a real time, or null when no lap has one. A lap whose time is unknown (0) can neither be best nor have a
+    /// gap. Ties go to the earlier lap. Shared with <see cref="LapsCsv"/> so the table and the file always agree on which lap is best.
+    /// </summary>
+    internal static LapRecord? BestLapOf(IReadOnlyList<LapRecord> laps) =>
+        laps.Where(lap => lap.TimeSeconds > 0).MinBy(lap => lap.TimeSeconds);
+
     private static List<LapRow> BuildRows(IReadOnlyList<LapRecord> laps)
     {
-        // The fastest lap with a real time. A lap whose time is unknown (0) can neither be best nor have a gap.
-        var best = laps.Where(lap => lap.TimeSeconds > 0).MinBy(lap => lap.TimeSeconds); // ties: the earlier lap
+        var best = BestLapOf(laps);
 
         // Newest first: the lap that just finished is the one the user wants to see.
         return laps

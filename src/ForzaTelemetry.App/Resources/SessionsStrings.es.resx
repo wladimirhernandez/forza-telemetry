@@ -132,6 +132,9 @@
   <data name="SessionsInUseTooltip" xml:space="preserve">
     <value>Se está reproduciendo: detén la reproducción primero.</value>
   </data>
+  <data name="SessionsExportingTooltip" xml:space="preserve">
+    <value>Se está exportando a CSV: espera a que termine.</value>
+  </data>
   <data name="SessionsRowName" xml:space="preserve">
     <value>{0}, {1}, {2}, {3}</value>
   </data>

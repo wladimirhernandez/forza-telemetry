@@ -63,6 +63,9 @@ public static class ExportStrings
     /// <summary>"Saved {0} ({1} packets)"</summary>
     public static string ExportSavedPackets => ResourceManager.GetString("ExportSavedPackets", Culture)!;
 
+    /// <summary>"Saved {0} ({1} packets). The recording was cut off, so only its complete packets were exported."</summary>
+    public static string ExportSavedPacketsTruncated => ResourceManager.GetString("ExportSavedPacketsTruncated", Culture)!;
+
     /// <summary>"Could not save {0}: {1}"</summary>
     public static string ExportFailed => ResourceManager.GetString("ExportFailed", Culture)!;
 

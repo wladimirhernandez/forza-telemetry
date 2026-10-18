@@ -141,6 +141,9 @@ public static class SessionsStrings
     /// <summary>"It is playing now: stop the replay first."</summary>
     public static string SessionsInUseTooltip => ResourceManager.GetString("SessionsInUseTooltip", Culture)!;
 
+    /// <summary>"It is being exported to CSV: wait for it to finish."</summary>
+    public static string SessionsExportingTooltip => ResourceManager.GetString("SessionsExportingTooltip", Culture)!;
+
     /// <summary>"{0}, {1}, {2}, {3}"</summary>
     public static string SessionsRowName => ResourceManager.GetString("SessionsRowName", Culture)!;
 

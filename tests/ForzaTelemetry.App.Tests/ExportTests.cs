@@ -678,4 +678,112 @@ public class ExportTests
 
         Assert.False(rig.Sessions.IsExporting);
     }
+
+    // ---- The runner: no exception escapes, whatever the writer throws ------------------------------------
+
+    [Fact]
+    public async Task A_writer_that_throws_anything_becomes_the_red_message_not_an_exception()
+    {
+        using var folder = new TempFolder();
+        var runner = new CsvExportRunner(new FakeFileSaveDialog(folder.File("out.csv")), new ExportFeedback());
+
+        var written = await runner.RunAsync("out.csv", _ => throw new InvalidOperationException("bug in the writer")); // not an IOException
+
+        Assert.False(written);
+        Assert.True(runner.Feedback.IsError);
+        Assert.Contains("bug in the writer", runner.Feedback.Text);
+        Assert.False(File.Exists(folder.File("out.csv")));
+        Assert.False(File.Exists(folder.File("out.csv.tmp")));
+    }
+
+    [Fact]
+    public async Task A_cancelled_writer_says_cancelled_and_is_not_an_error()
+    {
+        using var folder = new TempFolder();
+        var runner = new CsvExportRunner(new FakeFileSaveDialog(folder.File("out.csv")), new ExportFeedback());
+
+        var written = await runner.RunAsync("out.csv", _ => throw new OperationCanceledException());
+
+        Assert.False(written);
+        Assert.False(runner.Feedback.IsError);
+        Assert.Equal(ExportStrings.ExportCancelled, runner.Feedback.Text);
+        Assert.False(File.Exists(folder.File("out.csv")));
+    }
+
+    // ---- Sessions page: truncated recordings and rows being exported ------------------------------------
+
+    [Fact]
+    public async Task Exporting_a_recording_cut_off_by_a_crash_says_so()
+    {
+        using var folder = new TempFolder();
+        using var rig = new SessionsRig(saveDialog: new FakeFileSaveDialog(folder.File("out.csv")));
+        var path = await rig.AddRecordingAsync("drive", packets: 12);
+        var row = Assert.Single(await rig.LoadLibraryAsync());
+        var bytes = await File.ReadAllBytesAsync(path);
+        await File.WriteAllBytesAsync(path, bytes[..^5]); // the app died in the middle of the last record
+
+        await row.ExportCommand.ExecuteAsync(null);
+
+        Assert.False(rig.Sessions.NoticeIsError);
+        Assert.Equal(
+            string.Format(CultureInfo.CurrentCulture, ExportStrings.ExportSavedPacketsTruncated, "out.csv", 11),
+            rig.Sessions.Notice);
+    }
+
+    [Fact]
+    public async Task A_row_being_exported_cannot_be_renamed_or_deleted_until_the_export_ends()
+    {
+        using var folder = new TempFolder();
+        using var rig = new SessionsRig(saveDialog: new FakeFileSaveDialog(folder.File("out.csv")));
+        await rig.AddRecordingAsync("drive");
+        var row = Assert.Single(await rig.LoadLibraryAsync());
+        Assert.True(row.CanModify);
+
+        // The export runs on another thread, so look at the row at the moment it is flagged, on this (the UI) thread.
+        bool? modifiableWhileExporting = null;
+        bool? editingWhileExporting = null;
+        string? renameTooltip = null;
+        rig.Sessions.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(SessionsViewModel.IsExporting) && rig.Sessions.IsExporting)
+            {
+                modifiableWhileExporting = row.CanModify;
+                row.BeginRenameCommand.Execute(null);
+                editingWhileExporting = row.IsEditing;
+                renameTooltip = row.RenameTooltip;
+            }
+        };
+
+        await row.ExportCommand.ExecuteAsync(null);
+
+        Assert.False(modifiableWhileExporting);
+        Assert.False(editingWhileExporting);
+        Assert.Equal(SessionsStrings.SessionsExportingTooltip, renameTooltip);
+        Assert.True(row.CanModify); // free again
+        Assert.Equal(SessionsStrings.SessionsRename, row.RenameTooltip);
+    }
+
+    [Fact]
+    public async Task A_row_rebuilt_while_its_file_is_being_exported_is_still_locked()
+    {
+        using var folder = new TempFolder();
+        using var rig = new SessionsRig(saveDialog: new FakeFileSaveDialog(folder.File("out.csv")));
+        await rig.AddRecordingAsync("drive");
+        await rig.LoadLibraryAsync();
+
+        bool? rebuiltRowModifiable = null;
+        rig.Sessions.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(SessionsViewModel.IsExporting) && rig.Sessions.IsExporting)
+            {
+                // What a library re-read does: new row objects for the same files.
+                var rebuilt = new RecordingRowViewModel(rig.Sessions.Rows[0].Item, rig.Sessions, isPlaying: false);
+                rebuiltRowModifiable = rebuilt.CanModify;
+            }
+        };
+
+        await rig.Sessions.Rows[0].ExportCommand.ExecuteAsync(null);
+
+        Assert.False(rebuiltRowModifiable);
+    }
 }

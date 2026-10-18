@@ -111,14 +111,24 @@ public sealed partial class RecordingRowViewModel : ObservableObject
     private bool _isPlaying;
 
     /// <summary>
-    /// Rename and delete are only offered while nothing has the file open. A replay streams the file from disk, and Windows
-    /// refuses to rename or delete an open file, so the honest thing is to say so up front instead of failing afterwards.
+    /// This recording is being converted to CSV right now. Asked of the page by path, not stored on the row: the list is rebuilt
+    /// whenever the library is re-read, and a new row object for the same file must still know it is being read.
     /// </summary>
-    public bool CanModify => !IsPlaying;
+    public bool IsExporting => _owner.IsExportingFile(Path);
 
-    public string RenameTooltip => IsPlaying ? SessionsStrings.SessionsInUseTooltip : SessionsStrings.SessionsRename;
+    /// <summary>
+    /// Rename and delete are only offered while nothing has the file open. A replay or a CSV export streams the file from disk, and
+    /// Windows refuses to rename or delete an open file (and a renamed file would pull the path from under the export), so the
+    /// honest thing is to say so up front instead of failing afterwards.
+    /// </summary>
+    public bool CanModify => !IsPlaying && !IsExporting;
 
-    public string DeleteTooltip => IsPlaying ? SessionsStrings.SessionsInUseTooltip : SessionsStrings.SessionsDelete;
+    public string RenameTooltip => InUseTooltip ?? SessionsStrings.SessionsRename;
+
+    public string DeleteTooltip => InUseTooltip ?? SessionsStrings.SessionsDelete;
+
+    private string? InUseTooltip =>
+        IsPlaying ? SessionsStrings.SessionsInUseTooltip : IsExporting ? SessionsStrings.SessionsExportingTooltip : null;
 
     /// <summary>The name is being edited in place.</summary>
     [ObservableProperty]
@@ -169,6 +179,10 @@ public sealed partial class RecordingRowViewModel : ObservableObject
         ExportCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanExport));
         OnPropertyChanged(nameof(ExportTooltip));
+        OnPropertyChanged(nameof(IsExporting));
+        OnPropertyChanged(nameof(CanModify));
+        OnPropertyChanged(nameof(RenameTooltip));
+        OnPropertyChanged(nameof(DeleteTooltip));
     }
 
     [RelayCommand(CanExecute = nameof(CanExport))]
@@ -741,6 +755,12 @@ public sealed partial class SessionsViewModel : ObservableObject
             return;
         }
 
+        if (!row.CanModify)
+        {
+            CancelRename(row); // an export started while the name was being typed: the file is open, a rename would fail
+            return;
+        }
+
         var name = RecordingNameValidator.Normalize(row.EditName);
         var invalid = RecordingNameValidator.Validate(name);
         if (invalid != RecordingNameError.None)
@@ -817,6 +837,12 @@ public sealed partial class SessionsViewModel : ObservableObject
     /// <summary>The per-recording Export buttons are usable: there is a dialog to ask with and no export is running.</summary>
     public bool CanExport => _saveDialog is not null && !IsExporting;
 
+    // The file being converted, so its row (and any row rebuilt for it) can refuse rename and delete while it is read.
+    private string? _exportingPath;
+
+    internal bool IsExportingFile(string path) =>
+        _exportingPath is { } exporting && string.Equals(exporting, path, StringComparison.OrdinalIgnoreCase);
+
     partial void OnIsExportingChanged(bool value)
     {
         foreach (var row in Rows)
@@ -850,6 +876,7 @@ public sealed partial class SessionsViewModel : ObservableObject
         Notice = "";
         ExportProgress = 0;
         ExportText = ProgressText(row.Name, 0);
+        _exportingPath = row.Path; // before the flag: its change handler makes every row ask
         IsExporting = true;
 
         // Progress<T> posts to the context it was created on (the UI thread), so the bar moves without any marshaling here. A
@@ -867,9 +894,12 @@ public sealed partial class SessionsViewModel : ObservableObject
         {
             var result = await Task.Run(() => RecordingCsv.ExportFileAsync(row.Path, path, progress, cts.Token), cts.Token);
             Log(logger => AppLog.ExportSaved(logger, path));
+
+            // A recording cut off by a crash exports every complete packet; the notice says so, or the file would look whole.
             SetNotice(
                 string.Format(
-                    CultureInfo.CurrentCulture, ExportStrings.ExportSavedPackets,
+                    CultureInfo.CurrentCulture,
+                    result.IsTruncated ? ExportStrings.ExportSavedPacketsTruncated : ExportStrings.ExportSavedPackets,
                     System.IO.Path.GetFileName(path), result.Rows.ToString("N0", CultureInfo.CurrentCulture)),
                 isError: false);
         }
@@ -892,6 +922,7 @@ public sealed partial class SessionsViewModel : ObservableObject
         finally
         {
             _exportCts = null;
+            _exportingPath = null;
             IsExporting = false;
             ExportProgress = 0;
         }

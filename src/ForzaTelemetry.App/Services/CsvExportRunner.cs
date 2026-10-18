@@ -12,7 +12,7 @@ namespace ForzaTelemetry.App.Services;
 /// <remarks>
 /// One class so the two pages cannot drift apart: the same dialog wording, the same atomic write (see <see cref="ExportFile"/>),
 /// the same message on success and on failure, and no exception can reach the global error dialog (a disk or permission problem is a
-/// normal outcome of exporting, so it becomes the red message next to the button).
+/// normal outcome of exporting, and so is a bug in the writer: both become the red message next to the button).
 /// </remarks>
 public sealed class CsvExportRunner
 {
@@ -40,7 +40,7 @@ public sealed class CsvExportRunner
     /// </summary>
     /// <param name="suggestedFileName">The name offered in the dialog, with <c>.csv</c>.</param>
     /// <param name="write">Writes the table into the stream it is given. It must only touch data it owns (a snapshot), never UI state.</param>
-    /// <returns>True when a file was written; false when the user cancelled the dialog or the write failed (the line says which).</returns>
+    /// <returns>True when a file was written; false when the user cancelled the dialog or the write was cancelled or failed (the line says which).</returns>
     public async Task<bool> RunAsync(string suggestedFileName, Action<Stream> write)
     {
         var path = _dialog.PickSavePath(ExportStrings.ExportDialogTitle, suggestedFileName, Filter);
@@ -62,8 +62,17 @@ public sealed class CsvExportRunner
             Feedback.Saved(path);
             return true;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
+        catch (OperationCanceledException)
         {
+            // The write was told to stop (a cancelled delegate): the user's own decision, not a failure, so no red message.
+            AppLog.ExportCancelled(_logger, path);
+            Feedback.Cancelled();
+            return false;
+        }
+        catch (Exception ex)
+        {
+            // Any other exception, not only I/O ones: the write delegate is page code, and a bug in it (or in the data it reads)
+            // must become the red message next to the button, not an unhandled exception from an async command that closes the app.
             AppLog.ExportFailed(_logger, ex, path);
             Feedback.Failed(path, ex.Message);
             return false;

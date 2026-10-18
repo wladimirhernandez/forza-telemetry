@@ -548,7 +548,15 @@ public sealed partial class PerformanceViewModel : ObservableObject
     private async Task ExportCsvAsync()
     {
         var records = _history.Records;
-        var names = records.Select(r => r.Car.CarOrdinal).Distinct().Where(o => _carNames?.Find(o) is not null).ToDictionary(o => o, o => _carNames!.Find(o)); // a snapshot: the store is UI-thread-only
+        // A snapshot: the store is UI-thread-only and the write runs on another thread. One lookup per car.
+        var names = new Dictionary<int, string>();
+        foreach (var ordinal in records.Select(r => r.Car.CarOrdinal).Distinct())
+        {
+            if (_carNames?.Find(ordinal) is { } name)
+            {
+                names[ordinal] = name;
+            }
+        }
         await _export!.RunAsync(
             CsvExportRunner.SuggestedName(ExportStrings.ExportPerformanceFileName, _time.GetLocalNow()),
             stream => PerformanceCsv.Write(stream, records, names.GetValueOrDefault));

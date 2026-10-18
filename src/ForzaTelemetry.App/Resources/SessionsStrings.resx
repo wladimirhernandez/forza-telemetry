@@ -132,6 +132,9 @@
   <data name="SessionsInUseTooltip" xml:space="preserve">
     <value>It is playing now: stop the replay first.</value>
   </data>
+  <data name="SessionsExportingTooltip" xml:space="preserve">
+    <value>It is being exported to CSV: wait for it to finish.</value>
+  </data>
   <data name="SessionsRowName" xml:space="preserve">
     <value>{0}, {1}, {2}, {3}</value>
   </data>

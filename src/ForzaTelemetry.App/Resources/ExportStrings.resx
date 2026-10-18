@@ -54,6 +54,9 @@
   <data name="ExportSavedPackets" xml:space="preserve">
     <value>Saved {0} ({1} packets)</value>
   </data>
+  <data name="ExportSavedPacketsTruncated" xml:space="preserve">
+    <value>Saved {0} ({1} packets). The recording was cut off, so only its complete packets were exported.</value>
+  </data>
   <data name="ExportFailed" xml:space="preserve">
     <value>Could not save {0}: {1}</value>
   </data>
