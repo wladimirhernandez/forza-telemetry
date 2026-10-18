@@ -42,6 +42,13 @@ Runtime payload (ships in the installer)
    License: Apache-2.0
    https://github.com/serilog/serilog-sinks-file
 
+7. Forza Horizon 6 car ordinal list (data, bundled as Resources/CarCatalog.fh6.json)
+   Community-maintained list of car ordinals and names by HDR, as of 13.10.26
+   https://gist.github.com/HDR/0659d1717bc61504bf83750628963f4f
+   Car names are factual identifiers, used only to label cars in the app. Forza and
+   Forza Horizon are trademarks of Microsoft Corporation; this app is not affiliated with
+   or endorsed by Microsoft or Playground Games.
+
 Development and tooling only (NOT shipped in the installer)
 -----------------------------------------------------------
 

@@ -44,6 +44,15 @@ public sealed partial class CarRenameViewModel : ObservableObject
     [ObservableProperty]
     private bool _hasNickname;
 
+    /// <summary>"Default name: 2024 BMW X6 M" when the bundled list knows the car, else empty (then the default is just "Car #1234").</summary>
+    [ObservableProperty]
+    private string _defaultNameText = "";
+
+    /// <summary>The default-name line is showing.</summary>
+    public bool HasDefaultName => DefaultNameText.Length > 0;
+
+    partial void OnDefaultNameTextChanged(string value) => OnPropertyChanged(nameof(HasDefaultName));
+
     /// <summary>The localized reason the text cannot be saved, or null when it can.</summary>
     public string? Error => Problem == CarNameProblem.None ? null : CarNameStore.Describe(Problem);
 
@@ -76,6 +85,9 @@ public sealed partial class CarRenameViewModel : ObservableObject
         Title = string.Format(CultureInfo.CurrentCulture, CarNameStrings.CarRenameTitle, carOrdinal);
         var existing = _names.Find(carOrdinal);
         HasNickname = existing is not null;
+        DefaultNameText = _names.CatalogName(carOrdinal) is { } real
+            ? string.Format(CultureInfo.CurrentCulture, CarNameStrings.CarRenameDefaultName, real)
+            : "";
         Text = existing ?? "";
         _touched = false; // set after the text: assigning it counts as typing
         OnPropertyChanged(nameof(Error));
@@ -102,7 +114,7 @@ public sealed partial class CarRenameViewModel : ObservableObject
     [RelayCommand]
     private void Cancel() => IsOpen = false;
 
-    /// <summary>Forgets the nickname, so the car shows as "Car #1234" again, and closes the box.</summary>
+    /// <summary>Forgets the nickname, so the car shows its real name (or "Car #1234" when the list does not know it) again, and closes the box.</summary>
     [RelayCommand]
     private void UseDefault()
     {

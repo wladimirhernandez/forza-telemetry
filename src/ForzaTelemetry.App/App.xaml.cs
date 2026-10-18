@@ -131,7 +131,10 @@ public partial class App : Application, IAppRestarter
 
         // The player's car nicknames: read once here (a missing or damaged file is not an error), shared by every screen that shows a
         // car, with one rename box for all the places that offer to change a name.
-        var carNames = new CarNameStore(CarNameStore.DefaultPath, loggerFactory.CreateLogger<CarNameStore>());
+        // The bundled real car names: the fallback under a nickname. Tolerant (a missing or damaged list is just empty), read once.
+        var carCatalog = CarCatalog.Empty;
+        StartupGuard.Run(_logger, "load car catalog", () => carCatalog = CarCatalog.LoadEmbedded(loggerFactory.CreateLogger<CarCatalog>()));
+        var carNames = new CarNameStore(CarNameStore.DefaultPath, loggerFactory.CreateLogger<CarNameStore>(), carCatalog);
         StartupGuard.Run(_logger, "load car names", carNames.Load);
         var carRename = new CarRenameViewModel(carNames);
         var clipboard = new WpfClipboardService();

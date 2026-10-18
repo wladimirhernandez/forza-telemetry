@@ -109,7 +109,8 @@
                         <TextBlock Text="{x:Static res:InsightsStrings.DynoTitle}" Style="{StaticResource CardTitle}" FontSize="20" />
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                             <Border Style="{StaticResource MetaPill}">
-                                <TextBlock Text="{Binding CarText}" Style="{StaticResource MutedLabel}" FontSize="12" />
+                                <TextBlock Text="{Binding CarText}" ToolTip="{Binding CarText}" Style="{StaticResource MutedLabel}" FontSize="12"
+                                           MaxWidth="260" TextTrimming="CharacterEllipsis" />
                             </Border>
                             <Border Style="{StaticResource MetaPill}" Margin="6,0,0,0"
                                     Visibility="{Binding HasCar, Converter={StaticResource BoolToVisibility}}">

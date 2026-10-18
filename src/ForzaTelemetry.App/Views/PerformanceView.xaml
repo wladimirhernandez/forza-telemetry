@@ -150,8 +150,11 @@
                       read its three fragments after the sentence; the sentence is what carries the meaning.
                     -->
                     <StackPanel Orientation="Horizontal">
-                        <ContentControl Style="{StaticResource StatusPill}" Tag="{x:Null}" Content="{Binding CarText}"
-                                        AutomationProperties.Name="{Binding CarSummary}" />
+                        <ContentControl Style="{StaticResource StatusPill}" Tag="{x:Null}"
+                                        AutomationProperties.Name="{Binding CarSummary}">
+                            <!-- Trimmed when long, with the full name as a tooltip. -->
+                            <TextBlock Text="{Binding CarText}" ToolTip="{Binding CarText}" MaxWidth="280" TextTrimming="CharacterEllipsis" />
+                        </ContentControl>
                         <Button Style="{StaticResource WindowGlyphButton}" Width="28" Height="28" Margin="6,0,0,0" VerticalAlignment="Center"
                                 Command="{Binding RenameCurrentCarCommand}"
                                 ToolTip="{x:Static res:CarNameStrings.CarRenameTooltip}"
@@ -504,7 +507,7 @@
                                                 </Ellipse>
                                                 <StackPanel>
                                                     <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="{Binding CarLabel}" Style="{StaticResource ValueText}" FontSize="15"
+                                                        <TextBlock Text="{Binding CarLabel}" ToolTip="{Binding CarLabel}" Style="{StaticResource ValueText}" FontSize="15"
                                                                    FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="260"
                                                                    VerticalAlignment="Center" />
                                                         <!-- "Rename": opens the shared rename box for this car. The command lives on the page, not on the row. -->

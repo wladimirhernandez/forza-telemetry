@@ -12,7 +12,7 @@ namespace ForzaTelemetry.App.Services;
 /// <c>brake_100_to_0_kmh_m</c>...), independent of the display setting. A value the car never measured is an empty cell.
 /// </para>
 /// <para>
-/// <c>car_name</c> is the player's own nickname (empty when none); the game's id, <c>car_ordinal</c>, is the stable key.
+/// <c>car_name</c> is the name the app shows for the car (the player's nickname, else the real name from the bundled list, else "Car #N"); the game's id, <c>car_ordinal</c>, is the stable key.
 /// <c>updated_at</c> is ISO 8601 with its offset.
 /// </para>
 /// </remarks>
@@ -30,7 +30,7 @@ public static class PerformanceCsv
     /// <summary>Writes the table (header and rows) to <paramref name="stream"/>, which stays open.</summary>
     /// <param name="stream">The destination.</param>
     /// <param name="records">The stored bests, in any order (rows are written by car id, then performance index).</param>
-    /// <param name="carName">Looks up the player's nickname of a car id (null or empty when it has none); optional. The store behind it is
+    /// <param name="carName">Looks up the display name of a car id (null or empty when unknown); optional. The store behind it is
     /// UI-thread-only, so a caller that writes on another thread passes a lookup over a snapshot.</param>
     public static void Write(Stream stream, IEnumerable<CarPerformanceRecord> records, Func<int, string?>? carName = null)
     {

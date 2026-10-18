@@ -563,6 +563,34 @@ public class ExportTests
     }
 
     [Fact]
+    public async Task The_performance_export_car_name_is_the_nickname_then_the_catalog_name_then_the_number()
+    {
+        using var folder = new TempFolder();
+        var catalog = CarCatalog.Load(new MemoryStream("""{ "cars": { "3983": "2024 BMW X6 M", "500": "1999 Test Car" } }"""u8.ToArray()));
+        var names = new CarNameStore(folder.File("cars.json"), catalog: catalog);
+        names.TrySet(500, "Mine");
+        var history = new PerformanceHistoryStore(folder.File("performance.json"));
+        var topSpeed = new TopSpeedTracker();
+        var acceleration = new AccelerationTimer();
+        var braking = new BrakingTest();
+        var dialog = new FakeFileSaveDialog(folder.File("perf.csv"));
+        var vm = new PerformanceViewModel(
+            acceleration, topSpeed, new CarChangeDetector(topSpeed, acceleration, braking), history, carNames: names,
+            braking: braking, saveDialog: dialog);
+        foreach (var ordinal in new[] { 3983, 500, 77 })
+        {
+            history.Merge(new CarKey(ordinal, 700), 5, 2, new PerformanceResult(3.5, null, null, null, 300));
+        }
+
+        await vm.ExportCsvCommand.ExecuteAsync(null);
+
+        var lines = Lines(Decode(await File.ReadAllBytesAsync(folder.File("perf.csv"))));
+        Assert.StartsWith("77," + CarDisplayName.Unnamed(77) + ",700,", lines[1]);
+        Assert.StartsWith("500,Mine,700,", lines[2]);
+        Assert.StartsWith("3983,2024 BMW X6 M,700,", lines[3]);
+    }
+
+    [Fact]
     public void The_performance_export_is_disabled_until_there_is_a_history()
     {
         using var folder = new TempFolder();

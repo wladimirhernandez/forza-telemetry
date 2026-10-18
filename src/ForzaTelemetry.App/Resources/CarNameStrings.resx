@@ -18,6 +18,9 @@
   <data name="CarRenameHint" xml:space="preserve">
     <value>A nickname only for you. It shows on every screen and in the recordings list.</value>
   </data>
+  <data name="CarRenameDefaultName" xml:space="preserve">
+    <value>Default name: {0}</value>
+  </data>
   <data name="CarRenameBoxName" xml:space="preserve">
     <value>Car name</value>
   </data>

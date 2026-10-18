@@ -408,7 +408,7 @@
 
                                             <TextBlock Grid.Column="1" Text="{Binding DurationText}" Style="{StaticResource ValueText}" FontSize="15" VerticalAlignment="Center" />
                                             <TextBlock Grid.Column="2" Text="{Binding SizeText}" Style="{StaticResource ValueText}" FontSize="15" VerticalAlignment="Center" />
-                                            <TextBlock Grid.Column="3" Text="{Binding CarsText}" Style="{StaticResource ValueText}" FontSize="15" VerticalAlignment="Center"
+                                            <TextBlock Grid.Column="3" Text="{Binding CarsText}" ToolTip="{Binding CarsText}" Style="{StaticResource ValueText}" FontSize="15" VerticalAlignment="Center"
                                                        TextTrimming="CharacterEllipsis" Margin="0,0,12,0" />
 
                                             <!-- Actions. Rename and Delete are disabled (with a tooltip that says why) for the recording playing now. -->

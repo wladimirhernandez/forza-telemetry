@@ -8,7 +8,7 @@ A live telemetry app for Forza Horizon 6 on Windows. See your car, tires, shift 
 
 ## Features
 
-Eight tabs, each one keyboard-reachable with Ctrl+1 to Ctrl+8:
+Eight tabs, each one keyboard-reachable with Ctrl+1 to Ctrl+8. Cars show their real names from a community-maintained list, and you can rename any car.
 
 | Tab | What it does |
 | --- | --- |
