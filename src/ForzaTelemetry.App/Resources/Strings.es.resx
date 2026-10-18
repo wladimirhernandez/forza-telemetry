@@ -289,6 +289,9 @@
   <data name="LanguageSpanish" xml:space="preserve">
     <value>Español</value>
   </data>
+  <data name="SettingsNotSavedWarning" xml:space="preserve">
+    <value>Ahora mismo no se pueden guardar los ajustes: no se pudo leer {0}. Los cambios se aplican hasta que cierres la app.</value>
+  </data>
   <data name="LanguageRestartNote" xml:space="preserve">
     <value>El idioma nuevo se aplica la próxima vez que abras la app.</value>
   </data>

@@ -26,6 +26,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly IFolderOpener? _folderOpener;
     private readonly IAppRestarter? _restarter;
     private readonly ConnectionGuideViewModel? _guide;
+    private readonly string? _settingsPath;
 
     // The language that is actually on screen right now: it was applied at startup, so a different SELECTED language only
     // takes effect after a restart (see LanguageChangePending).
@@ -41,6 +42,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <param name="restarter">Restarts the app for a language change; optional (the restart button is then hidden).</param>
     /// <param name="systemCulture">The culture "System" means; optional (the one Windows gave the process at startup).</param>
     /// <param name="guide">The "Connect your game" guide the Connection card opens; optional (the button then does nothing).</param>
+    /// <param name="settingsPath">The settings file, quoted by the warning shown when it could not be read; optional (a generic file name is shown).</param>
     public SettingsViewModel(
         SettingsService settings,
         DataOutViewModel dataOut,
@@ -48,10 +50,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         IFolderOpener? folderOpener = null,
         IAppRestarter? restarter = null,
         CultureInfo? systemCulture = null,
-        ConnectionGuideViewModel? guide = null)
+        ConnectionGuideViewModel? guide = null,
+        string? settingsPath = null)
     {
         _settings = settings;
         _guide = guide;
+        _settingsPath = settingsPath;
         DataOut = dataOut;
         LogDirectory = logDirectory;
         _folderOpener = folderOpener;
@@ -159,6 +163,19 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     partial void OnTemperatureUnitChanged(TemperatureUnit value) => _settings.Update(s => s with { TemperatureUnit = value });
 
+    // ---- Settings file that could not be read --------------------------------------------------
+
+    /// <summary>
+    /// True when the settings file exists but could not be read at startup: every change applies for this run only (see
+    /// <see cref="SettingsService.IsPersistenceSuspended"/>). The page says so, because silently not saving looks like a bug.
+    /// </summary>
+    public bool IsPersistenceSuspended => _settings.IsPersistenceSuspended;
+
+    /// <summary>The warning sentence quoting the file, empty when settings are being saved normally.</summary>
+    public string PersistenceWarning => IsPersistenceSuspended
+        ? string.Format(CultureInfo.CurrentCulture, Strings.SettingsNotSavedWarning, _settingsPath ?? "settings.json")
+        : "";
+
     // ---- Language -----------------------------------------------------------------------------
 
     public IReadOnlyList<ChoiceOption<AppLanguage>> LanguageOptions { get; } =
@@ -178,9 +195,10 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>
     /// True when the chosen language would show DIFFERENT text from the one on screen, so the "applies after restart" note
     /// shows. It compares what each choice resolves to, not the enum: "System" and "English" are the same on an English PC.
+    /// Never true while settings cannot be saved: the choice would be lost at the restart, so "applies next time" would be a lie.
     /// </summary>
     public bool LanguageChangePending =>
-        !LanguageService.ResolvesToSameDisplayLanguage(Language, _activeLanguage, _systemCulture);
+        !IsPersistenceSuspended && !LanguageService.ResolvesToSameDisplayLanguage(Language, _activeLanguage, _systemCulture);
 
     /// <summary>True when a restart can be offered (a language change is pending and the app can restart itself).</summary>
     public bool CanRestart => LanguageChangePending && _restarter is not null;

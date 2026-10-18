@@ -60,14 +60,30 @@
     -->
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
         <Grid Margin="28,6,28,28">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="1.35*" />
                 <ColumnDefinition Width="14" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
+            <!--
+              Shown only when the settings file could not be read at startup: nothing is saved this run, so the page says it instead
+              of letting changes quietly vanish. Amber like the other "not fatal" warnings; a polite live region so a screen reader
+              announces it when the page opens.
+            -->
+            <Border Grid.Row="0" Grid.ColumnSpan="3" Style="{StaticResource CardStyle}" Margin="0,0,0,14"
+                    Visibility="{Binding IsPersistenceSuspended, Converter={StaticResource BoolToVisibility}}"
+                    AutomationProperties.Name="{Binding PersistenceWarning}" AutomationProperties.LiveSetting="Polite">
+                <TextBlock Text="{Binding PersistenceWarning}" Foreground="{StaticResource WarmBrush}" FontSize="14"
+                           TextWrapping="Wrap" />
+            </Border>
+
             <!-- ===== Connection ===== -->
-            <Border Grid.Column="0" Style="{StaticResource CardStyle}" VerticalAlignment="Top"
+            <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource CardStyle}" VerticalAlignment="Top"
                     AutomationProperties.Name="{x:Static res:Strings.ConnectionTitle}">
                 <StackPanel>
                     <TextBlock Text="{x:Static res:Strings.ConnectionTitle}" Style="{StaticResource SectionTitle}" />
@@ -183,7 +199,7 @@
             </Border>
 
             <!-- ===== Preferences ===== -->
-            <StackPanel Grid.Column="2">
+            <StackPanel Grid.Row="1" Grid.Column="2">
                 <!-- Units -->
                 <Border Style="{StaticResource CardStyle}" AutomationProperties.Name="{x:Static res:Strings.UnitsTitle}">
                     <StackPanel>

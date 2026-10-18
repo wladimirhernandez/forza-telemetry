@@ -886,6 +886,15 @@ namespace ForzaTelemetry.App.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Settings can't be saved right now: {0} could not be read. Changes apply until you close the app..
+        /// </summary>
+        public static string SettingsNotSavedWarning {
+            get {
+                return ResourceManager.GetString("SettingsNotSavedWarning", resourceCulture)!;
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The new language applies the next time the app opens..
         /// </summary>
         public static string LanguageRestartNote {

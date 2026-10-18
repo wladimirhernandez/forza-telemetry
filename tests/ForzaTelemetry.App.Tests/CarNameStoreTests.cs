@@ -280,6 +280,39 @@ public sealed class CarNameStoreTests : IDisposable
     }
 
     [Fact]
+    public void A_corrupt_file_whose_copy_cannot_be_made_is_never_written_over()
+    {
+        Directory.CreateDirectory(_directory);
+        const string damaged = "this is not json";
+        File.WriteAllText(CarsPath, damaged);
+        Directory.CreateDirectory(CarsPath + ".corrupt"); // the backup cannot be written: its name is taken by a folder
+        var logger = new ListLogger<CarNameStore>();
+        var store = new CarNameStore(CarsPath, logger);
+        store.Load();
+
+        var problem = store.TrySet(77, "Track toy");
+
+        Assert.Equal(CarNameProblem.None, problem);
+        Assert.Equal("Track toy", store.Find(77)); // still works for this session
+        Assert.Equal(damaged, File.ReadAllText(CarsPath)); // and the only copy of the damaged file stays untouched
+    }
+
+    [Fact]
+    public void Fields_of_a_file_that_failed_to_parse_are_not_written_into_the_next_save()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(CarsPath, """{ "stray": 1, "cars": [1, 2] }""");
+        var store = new CarNameStore(CarsPath, new ListLogger<CarNameStore>());
+        store.Load();
+
+        store.TrySet(77, "Track toy");
+
+        var saved = File.ReadAllText(CarsPath);
+        Assert.DoesNotContain("stray", saved); // read before the file turned out to be unusable, so never kept
+        Assert.Contains("Track toy", saved);
+    }
+
+    [Fact]
     public void A_failed_save_is_logged_and_the_name_still_applies_for_this_run()
     {
         // The "folder" the file should live in is occupied by a file, so the save cannot succeed.

@@ -142,7 +142,8 @@ public class StartupRobustnessTests
     [InlineData(null, "true", true)]
     [InlineData(null, "TRUE", true)]
     [InlineData(null, " 1 ", true)]
-    [InlineData(false, "true", true)] // the environment variable counts even when the switch is explicitly off
+    [InlineData(false, "true", false)] // an explicit runtimeconfig "false" wins: the runtime never reads the variable then
+    [InlineData(false, "1", false)]
     [InlineData(null, "false", false)]
     [InlineData(null, "0", false)]
     [InlineData(null, "", false)]

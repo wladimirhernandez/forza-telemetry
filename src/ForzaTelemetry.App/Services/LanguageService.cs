@@ -45,7 +45,7 @@ public static class LanguageService
 
     /// <summary>The detection with its three inputs passed in, so a test can supply each one.</summary>
     /// <param name="switchValue">The runtimeconfig/AppContext switch, or null when it is not set.</param>
-    /// <param name="environmentValue">The raw <c>DOTNET_SYSTEM_GLOBALIZATION_INVARIANT</c> value; "true" (any casing) and "1" mean on.</param>
+    /// <param name="environmentValue">The raw <c>DOTNET_SYSTEM_GLOBALIZATION_INVARIANT</c> value; "true" (any casing) and "1" mean on. Not consulted when the switch is explicitly false.</param>
     /// <param name="lookup">The culture lookup the probe asks for a culture that always exists when culture data does.</param>
     internal static bool DetectInvariantGlobalization(bool? switchValue, string? environmentValue, Func<string, CultureInfo> lookup)
     {
@@ -54,7 +54,9 @@ public static class LanguageService
             return true;
         }
 
-        var text = environmentValue?.Trim();
+        // An explicit "false" in runtimeconfig wins over the environment: the runtime reads the switch first and only falls back to the
+        // variable when the switch is absent, so a false switch means culture data IS in use whatever the variable says.
+        var text = switchValue is null ? environmentValue?.Trim() : null;
         if (string.Equals(text, "true", StringComparison.OrdinalIgnoreCase) || text == "1")
         {
             return true;

@@ -33,7 +33,8 @@ public enum CarNameProblem
 /// <b>The file.</b> <c>{ "schemaVersion": 1, "cars": { "2211": "Daily GT" } }</c>: ordinal to name, one entry per car MODEL (an upgraded
 /// version of the same car keeps its name). Same care as the other JSON files (see <see cref="AtomicFile"/>): writes go through a temp file,
 /// so an interruption cannot leave half a file; reads are tolerant, so one bad entry costs only that entry, and a file that is not JSON at
-/// all is kept next to the original as <c>.corrupt</c> and replaced by an empty list on the next save.
+/// all is kept next to the original as <c>.corrupt</c> and replaced by an empty list on the next save (when even that copy cannot be made, nothing is written
+/// for the session, like a file that could not be read).
 /// </para>
 /// <para>
 /// <b>Newer files.</b> Same rule as the settings file: a top-level field this build does not know (written by a newer version) is kept
@@ -145,7 +146,11 @@ public sealed class CarNameStore
 
         try
         {
-            _names = Parse(json, out var skipped, out _unknownFields, out var fileVersion);
+            // Locals first, fields only once the whole file parsed: a file that fails half-way (say a "cars" that is not an object) must
+            // not leave its unknown top-level fields behind to be written into the next save.
+            var names = Parse(json, out var skipped, out var unknownFields, out var fileVersion);
+            _names = names;
+            _unknownFields = unknownFields;
             if (fileVersion > SchemaVersion)
             {
                 AppLog.CarNamesFromNewerVersion(_logger, fileVersion, SchemaVersion);
@@ -164,6 +169,7 @@ public sealed class CarNameStore
             if (!AtomicFile.KeepCorruptCopy(_path))
             {
                 AppLog.CorruptCopyFailed(_logger, _path);
+                _writeSuspended = true; // the damaged file has no copy: replacing it would destroy the only evidence (same rule as the settings)
             }
         }
     }

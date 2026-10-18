@@ -152,7 +152,8 @@ public partial class App : Application, IAppRestarter
             _logging.LogDirectory ?? AppLogging.DefaultLogDirectory,
             folderOpener,
             this,
-            guide: guide);
+            guide: guide,
+            settingsPath: JsonSettingsStore.DefaultPath);
 
         // The recordings folder, created on demand (%APPDATA%/ForzaTelemetry/recordings), and the page that records into it and
         // replays from it. The page asks the shell (below) to start and stop replays; the shell attaches itself to it.

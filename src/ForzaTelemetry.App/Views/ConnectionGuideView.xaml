@@ -16,14 +16,6 @@
       (right). Every state change comes from the view model, so there is no logic here beyond mapping states to icons.
     -->
     <UserControl.Resources>
-        <Style x:Key="BodyText" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-            <Setter Property="FontFamily" Value="{StaticResource LabelFont}" />
-            <Setter Property="FontSize" Value="14" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="LineHeight" Value="20" />
-        </Style>
-
         <!-- One numbered in-game step (the same badge look as the Settings guide). Tag carries the number. -->
         <Style x:Key="GuideStep" TargetType="ContentControl">
             <Setter Property="IsTabStop" Value="False" />

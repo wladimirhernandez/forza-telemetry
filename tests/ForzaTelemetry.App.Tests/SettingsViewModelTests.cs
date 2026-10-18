@@ -263,6 +263,37 @@ public class SettingsViewModelTests
     }
 
     [Fact]
+    public void While_settings_cannot_be_saved_the_page_warns_with_the_path_and_offers_no_restart_for_a_language()
+    {
+        var store = new MemoryStore();
+        var settings = new SettingsService(store, AppSettings.Default, persistenceSuspended: true);
+        var vm = new SettingsViewModel(
+            settings,
+            new DataOutViewModel(5300),
+            @"C:\logs",
+            restarter: new FakeRestarter(),
+            systemCulture: CultureInfo.GetCultureInfo("en-US"),
+            settingsPath: @"C:\data\settings.json");
+
+        vm.Language = AppLanguage.Spanish;
+
+        Assert.True(vm.IsPersistenceSuspended);
+        Assert.Contains(@"C:\data\settings.json", vm.PersistenceWarning);
+        Assert.False(vm.LanguageChangePending); // the choice is lost at the restart, so "applies next time" would be false
+        Assert.False(vm.CanRestart);
+        Assert.Null(store.LastSaved); // and nothing was written
+    }
+
+    [Fact]
+    public void With_settings_saved_normally_there_is_no_warning()
+    {
+        var f = new Fixture();
+
+        Assert.False(f.Vm.IsPersistenceSuspended);
+        Assert.Equal("", f.Vm.PersistenceWarning);
+    }
+
+    [Fact]
     public void Choosing_the_language_the_PC_already_uses_needs_no_restart()
     {
         var englishPc = CultureInfo.GetCultureInfo("en-US");
