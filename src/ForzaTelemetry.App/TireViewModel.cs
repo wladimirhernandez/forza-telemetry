@@ -35,4 +35,13 @@ public sealed partial class TireViewModel : ObservableObject
         Slip = combinedSlip;
         Suspension = suspensionTravel;
     }
+
+    /// <summary>Back to the "no telemetry yet" look (dash readout, neutral color), e.g. when a new session starts.</summary>
+    public void Reset()
+    {
+        TemperatureC = 0;
+        Band = TireTempBand.Unknown;
+        Slip = 0;
+        Suspension = 0;
+    }
 }

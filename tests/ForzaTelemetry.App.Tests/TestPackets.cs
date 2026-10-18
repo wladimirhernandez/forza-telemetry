@@ -37,9 +37,10 @@ internal static class TestPackets
         int carOrdinal = 0,
         int carClass = 0,
         int performanceIndex = 0,
-        int drivetrain = 1) => new()
+        int drivetrain = 1,
+        bool isRaceOn = true) => new()
     {
-        IsRaceOn = true,
+        IsRaceOn = isRaceOn,
         TimestampMS = 0,
 
         EngineMaxRpm = engineMaxRpm,

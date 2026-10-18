@@ -50,8 +50,22 @@ public sealed class GForceMeter : FrameworkElement
         nameof(DotBrush), typeof(Brush), typeof(GForceMeter),
         new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
 
+    /// <summary>Bound to a counter in the view model: every change empties the trail (new session, new car).</summary>
+    public static readonly DependencyProperty TrailResetTokenProperty = DependencyProperty.Register(
+        nameof(TrailResetToken), typeof(int), typeof(GForceMeter),
+        new FrameworkPropertyMetadata(0, FrameworkPropertyMetadataOptions.AffectsRender, OnTrailResetTokenChanged));
+
     private readonly PointTrail _trail = new(TrailLength);
     private Pen? _ringPen;
+
+    public int TrailResetToken
+    {
+        get => (int)GetValue(TrailResetTokenProperty);
+        set => SetValue(TrailResetTokenProperty, value);
+    }
+
+    private static void OnTrailResetTokenChanged(DependencyObject d, DependencyPropertyChangedEventArgs e) =>
+        ((GForceMeter)d)._trail.Clear();
 
     /// <summary>Acceleration to the right, in g (negative = left).</summary>
     public double LateralG

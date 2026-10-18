@@ -144,4 +144,25 @@
   <data name="RpmUnit" xml:space="preserve">
     <value>rpm</value>
   </data>
+  <data name="StatusStopped" xml:space="preserve">
+    <value>Detenido</value>
+  </data>
+  <data name="StatusListening" xml:space="preserve">
+    <value>Escuchando en UDP {0}, esperando datos (conduce en el juego)</value>
+  </data>
+  <data name="StatusNoData" xml:space="preserve">
+    <value>Sin datos desde hace {0:F0} s</value>
+  </data>
+  <data name="StatusReceiving" xml:space="preserve">
+    <value>Recibiendo</value>
+  </data>
+  <data name="ErrorPortInUse" xml:space="preserve">
+    <value>Error: el puerto {0} ya está en uso. ¿Hay otra instancia abierta?</value>
+  </data>
+  <data name="ErrorSocket" xml:space="preserve">
+    <value>Error: {0} ({1})</value>
+  </data>
+  <data name="ErrorGeneric" xml:space="preserve">
+    <value>Error: {0}</value>
+  </data>
 </root>

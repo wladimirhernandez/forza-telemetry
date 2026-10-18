@@ -138,4 +138,27 @@ public class TelemetryServiceTests
         Assert.True(fake.IsDisposed);
         Assert.False(service.IsRunning);
     }
+
+    [Fact]
+    public async Task Latest_is_cleared_on_Stop_and_on_Start_but_ReceivedCount_is_kept()
+    {
+        var firstSource = new FakeTelemetrySource();
+        var secondSource = new FakeTelemetrySource();
+        var sources = new Queue<ITelemetrySource>([firstSource, secondSource]);
+        var service = new TelemetryService(() => sources.Dequeue());
+
+        await service.StartAsync();
+        firstSource.Publish(TestPackets.Sample(gear: 4));
+        Assert.True(await Wait.UntilAsync(() => service.ReceivedCount == 1));
+        Assert.NotNull(service.Latest);
+
+        await service.StopAsync();
+        Assert.Null(service.Latest);
+        Assert.Equal(1, service.ReceivedCount);
+
+        await service.StartAsync();
+        Assert.Null(service.Latest);
+
+        await service.StopAsync();
+    }
 }

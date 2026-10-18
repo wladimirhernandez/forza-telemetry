@@ -384,7 +384,8 @@
                             <!-- A FrameworkElement that draws itself measures to 0 x 0, so it must STRETCH to the cell (Center would collapse it);
                                  it then draws a centered circle as large as the cell allows. -->
                             <controls:GForceMeter Grid.Column="0"
-                                                  LateralG="{Binding LateralG}" LongitudinalG="{Binding LongitudinalG}" />
+                                                  LateralG="{Binding LateralG}" LongitudinalG="{Binding LongitudinalG}"
+                                                  TrailResetToken="{Binding TrailResetToken}" />
                             <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,0,0">
                                 <TextBlock Text="{x:Static res:Strings.GForceLateralLabel}" Style="{StaticResource MutedLabel}" FontSize="12" />
                                 <TextBlock Style="{StaticResource NumeralText}" FontSize="26" Margin="0,0,0,10">

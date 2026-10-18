@@ -68,7 +68,7 @@ public sealed class TelemetryService : IAsyncDisposable
         _sourceFactory = sourceFactory;
     }
 
-    /// <summary>Most recently received packet, or null if none has arrived yet.</summary>
+    /// <summary>Most recently received packet of the CURRENT session, or null if none has arrived yet (cleared on Start and Stop).</summary>
     public TelemetryPacket? Latest => Volatile.Read(ref _latest);
 
     /// <summary>Total packets received since this service was constructed (Stop/Start does not reset it).</summary>
@@ -122,6 +122,9 @@ public sealed class TelemetryService : IAsyncDisposable
         await StopCoreAsync().ConfigureAwait(false);
 
         Volatile.Write(ref _fault, null);
+
+        // Latest is also cleared on Stop; repeated here as a belt for a loop that faulted (no Stop ran).
+        Volatile.Write(ref _latest, null);
 
         ITelemetrySource source;
         try
@@ -232,6 +235,11 @@ public sealed class TelemetryService : IAsyncDisposable
         {
             await source.DisposeAsync().ConfigureAwait(false);
         }
+
+        // The session is over: drop its last packet, or a stopped dashboard keeps re-reading it as if it were live
+        // (stale RPM/speed, a shift light stuck blinking). The loop has ended, so nothing writes Latest any more.
+        // ReceivedCount is NOT reset: it is a lifetime counter and consumers derive rates from its deltas.
+        Volatile.Write(ref _latest, null);
 
         cts.Dispose();
         Volatile.Write(ref _isRunning, false);

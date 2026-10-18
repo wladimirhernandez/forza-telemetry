@@ -451,5 +451,68 @@ namespace ForzaTelemetry.App.Resources {
             }
         }
         
+        /// <summary>
+        ///   Looks up a localized string similar to Stopped.
+        /// </summary>
+        public static string StatusStopped {
+            get {
+                return ResourceManager.GetString("StatusStopped", resourceCulture)!;
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Listening on UDP {0}, waiting for data (drive in-game).
+        /// </summary>
+        public static string StatusListening {
+            get {
+                return ResourceManager.GetString("StatusListening", resourceCulture)!;
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No data for {0:F0}s.
+        /// </summary>
+        public static string StatusNoData {
+            get {
+                return ResourceManager.GetString("StatusNoData", resourceCulture)!;
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Receiving.
+        /// </summary>
+        public static string StatusReceiving {
+            get {
+                return ResourceManager.GetString("StatusReceiving", resourceCulture)!;
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Error: port {0} already in use. Is another instance running?.
+        /// </summary>
+        public static string ErrorPortInUse {
+            get {
+                return ResourceManager.GetString("ErrorPortInUse", resourceCulture)!;
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Error: {0} ({1}).
+        /// </summary>
+        public static string ErrorSocket {
+            get {
+                return ResourceManager.GetString("ErrorSocket", resourceCulture)!;
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Error: {0}.
+        /// </summary>
+        public static string ErrorGeneric {
+            get {
+                return ResourceManager.GetString("ErrorGeneric", resourceCulture)!;
+            }
+        }
+
     }
 }

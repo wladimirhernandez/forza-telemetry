@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net.Sockets;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using ForzaTelemetry.App.Resources;
 using ForzaTelemetry.App.Services;
 using ForzaTelemetry.Core;
 using ForzaTelemetry.Udp;
@@ -29,6 +30,9 @@ public sealed partial class MainViewModel : ObservableObject
 {
     /// <summary>How stale the latest packet must be before the status line switches to "No data for Ns".</summary>
     private static readonly TimeSpan NoDataThreshold = TimeSpan.FromSeconds(2);
+
+    private const float DefaultMaxRpm = 9000f;
+    private const string NoGearLabel = "-";
 
     private readonly TelemetryService _telemetryService;
     private readonly TimeProvider _timeProvider;
@@ -66,21 +70,21 @@ public sealed partial class MainViewModel : ObservableObject
     // since different cars in FH6 have very different actual redlines.
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(RpmReadout))]
-    private float _maxRpm = 9000f;
+    private float _maxRpm = DefaultMaxRpm;
 
     [ObservableProperty]
     private float _speedKmh;
 
     [ObservableProperty]
-    private string _gearLabel = "-";
+    private string _gearLabel = NoGearLabel;
 
     [ObservableProperty]
     private double _packetsPerSecond;
 
-    // TODO(localization): the status sentences below are still English literals produced by the view model;
-    // the view's own text already comes from Resources/Strings.resx.
+    // Human-readable status sentence. Its text comes from Resources/Strings*.resx (same as the view's own text);
+    // ConnectionState below is the language-neutral version the view and the tests can rely on.
     [ObservableProperty]
-    private string _status = "Stopped";
+    private string _status = Strings.StatusStopped;
 
     /// <summary>Closed-set version of <see cref="Status"/> that the view maps to the status dot colour.</summary>
     [ObservableProperty]
@@ -111,6 +115,13 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>Acceleration forward in g (negative = braking); the packet's car-local Z axis.</summary>
     [ObservableProperty]
     private double _longitudinalG;
+
+    /// <summary>
+    /// Changes whenever the G-force trail must be wiped (new session, car change). The trail lives inside the
+    /// control, so the view observes this counter (a plain "something happened" signal, its value is meaningless).
+    /// </summary>
+    [ObservableProperty]
+    private int _trailResetToken;
 
     // ---- Inputs (all normalized: pedals 0..1, steering -1..1) -------------------
 
@@ -198,7 +209,7 @@ public sealed partial class MainViewModel : ObservableObject
         SpeedKmh = 128f;
         GearLabel = "4";
         PacketsPerSecond = 29.7;
-        Status = "Receiving";
+        Status = Strings.StatusReceiving;
         IsRunning = true;
         ConnectionState = ConnectionState.Receiving;
 
@@ -261,7 +272,11 @@ public sealed partial class MainViewModel : ObservableObject
         var fault = _telemetryService.Fault;
         if (fault is not null)
         {
+            // Early return: do not sample packets/s or the latest packet while faulted. But the early return must
+            // not leave the last live-looking numbers on screen either (a frozen "29 packets/s" next to an error,
+            // a shift light still blinking), so show the idle dashboard.
             IsRunning = false;
+            ResetLiveValues();
             ConnectionState = ConnectionState.Error;
             Status = DescribeFault(fault);
             return;
@@ -271,7 +286,15 @@ public sealed partial class MainViewModel : ObservableObject
         UpdatePacketsPerSecond();
 
         var latest = _telemetryService.Latest;
-        if (latest is not null)
+        if (latest is { IsRaceOn: false })
+        {
+            // Menus, pause and rewind send packets with IsRaceOn = false and (mostly) zeroed fields. They prove the
+            // game is still talking (the arrival clock above already counted them), but their values are not driving
+            // data: showing them would flash zeros, and their car ordinal would wrongly reset the per-car gauge
+            // scale. So show the idle dashboard and leave the per-car state (peaks, ordinal) alone.
+            ResetLiveValues();
+        }
+        else if (latest is not null)
         {
             Rpm = latest.CurrentEngineRpm;
 
@@ -291,6 +314,72 @@ public sealed partial class MainViewModel : ObservableObject
         var silenceSoFar = _timeProvider.GetUtcNow() - _lastPacketArrivalAt;
         ConnectionState = DetermineState(IsRunning, latest, silenceSoFar);
         Status = DescribeStatus(ConnectionState, silenceSoFar);
+    }
+
+    /// <summary>
+    /// Idle dashboard: zero/placeholder readouts, no tire colors, no car pill, shift light off. Keeps the per-car
+    /// gauge scales and the clocks, so it is safe to call repeatedly (every tick while faulted or paused).
+    /// </summary>
+    private void ResetLiveValues()
+    {
+        Rpm = 0;
+        MaxRpm = DefaultMaxRpm;
+        SpeedKmh = 0;
+        GearLabel = NoGearLabel;
+        PacketsPerSecond = 0;
+
+        IsRedline = false;
+        LateralG = 0;
+        LongitudinalG = 0;
+        ThrottleInput = 0;
+        BrakeInput = 0;
+        ClutchInput = 0;
+        HandBrakeInput = 0;
+        SteerInput = 0;
+
+        PowerKw = 0;
+        PowerHp = 0;
+        TorqueNm = 0;
+        BoostPsi = 0;
+        FuelPercent = 0;
+        PowerRatio = 0;
+        TorqueRatio = 0;
+        BoostRatio = 0;
+        FuelRatio = 0;
+
+        HasCarInfo = false;
+        CarClassLabel = "";
+        CarPerformanceIndex = 0;
+        DrivetrainLabel = "";
+
+        FrontLeft.Reset();
+        FrontRight.Reset();
+        RearLeft.Reset();
+        RearRight.Reset();
+    }
+
+    /// <summary>
+    /// Forgets everything the previous session produced (Start, Stop): the idle dashboard plus fresh gauge scales,
+    /// an empty G-force trail, and the packets/s and silence clocks re-anchored to "now" and to the service's
+    /// current counter (which Stop/Start never resets).
+    /// </summary>
+    private void ResetSessionState()
+    {
+        ResetLiveValues();
+
+        _currentCarOrdinal = null;
+        _peakPowerKw = PeakPowerFloorKw;
+        _peakTorqueNm = PeakTorqueFloorNm;
+        _peakBoostPsi = PeakBoostFloorPsi;
+        TrailResetToken++;
+
+        // Re-anchor the clocks. Without this the silence timer would still count from the previous session's last
+        // packet (a fresh Start would instantly read "No data for 40 s"), and the next packets/s would divide the
+        // whole backlog of the old counter by a stale interval.
+        var now = _timeProvider.GetUtcNow();
+        _lastRefreshAt = now;
+        _lastPacketArrivalAt = now;
+        _receivedCountAtLastRefresh = _telemetryService.ReceivedCount;
     }
 
     private void UpdateTires(TelemetryPacket p)
@@ -319,6 +408,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (_currentCarOrdinal != p.CarOrdinal)
         {
             _currentCarOrdinal = p.CarOrdinal;
+            TrailResetToken++; // the old car's G history means nothing for the new one
             _peakPowerKw = PeakPowerFloorKw;
             _peakTorqueNm = PeakTorqueFloorNm;
             _peakBoostPsi = PeakBoostFloorPsi;
@@ -384,18 +474,19 @@ public sealed partial class MainViewModel : ObservableObject
 
     private static string DescribeStatus(ConnectionState state, TimeSpan silenceSoFar) => state switch
     {
-        ConnectionState.Listening => $"Listening on UDP {UdpTelemetryListener.DefaultPort} — waiting for data (drive in-game)",
-        ConnectionState.NoData => $"No data for {silenceSoFar.TotalSeconds:F0}s",
-        ConnectionState.Receiving => "Receiving",
-        _ => "Stopped"
+        ConnectionState.Listening => string.Format(CultureInfo.CurrentCulture, Strings.StatusListening, UdpTelemetryListener.DefaultPort),
+        ConnectionState.NoData => string.Format(CultureInfo.CurrentCulture, Strings.StatusNoData, silenceSoFar.TotalSeconds),
+        ConnectionState.Receiving => Strings.StatusReceiving,
+        _ => Strings.StatusStopped
     };
 
     private static string DescribeFault(Exception fault) => fault switch
     {
         SocketException { SocketErrorCode: SocketError.AddressAlreadyInUse } =>
-            $"Error: port {UdpTelemetryListener.DefaultPort} already in use — is another instance running?",
-        SocketException socketEx => $"Error: {socketEx.SocketErrorCode} ({socketEx.Message})",
-        _ => $"Error: {fault.Message}"
+            string.Format(CultureInfo.CurrentCulture, Strings.ErrorPortInUse, UdpTelemetryListener.DefaultPort),
+        SocketException socketEx =>
+            string.Format(CultureInfo.CurrentCulture, Strings.ErrorSocket, socketEx.SocketErrorCode, socketEx.Message),
+        _ => string.Format(CultureInfo.CurrentCulture, Strings.ErrorGeneric, fault.Message)
     };
 
     private bool CanStart() => !IsRunning;
@@ -412,6 +503,10 @@ public sealed partial class MainViewModel : ObservableObject
     private async Task StartAsync()
     {
         await _telemetryService.StartAsync();
+
+        // After the service started (it dropped its own stale Latest) and on the UI thread (this continuation
+        // resumes there, so no tick can interleave): wipe the previous session from the screen.
+        ResetSessionState();
         Refresh(); // Show the result (running, or a friendly fault) immediately, without waiting for the next tick.
     }
 
@@ -426,6 +521,9 @@ public sealed partial class MainViewModel : ObservableObject
     private async Task StopAsync()
     {
         await _telemetryService.StopAsync();
+
+        // A stopped dashboard must look idle: no frozen RPM, no shift light blinking at a redline that is long gone.
+        ResetSessionState();
         Refresh();
     }
 }
