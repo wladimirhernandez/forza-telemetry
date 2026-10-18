@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Threading;
 using ForzaTelemetry.App.Services;
 using ForzaTelemetry.Core;
+using ForzaTelemetry.Core.Laps;
 using ForzaTelemetry.Core.Performance;
 using ForzaTelemetry.Udp;
 using Microsoft.Extensions.Logging;
@@ -89,10 +90,11 @@ public partial class App : Application, IAppRestarter
         // calls them from the receive loop; the view models below only read their snapshots.
         var acceleration = new AccelerationTimer();
         var topSpeed = new TopSpeedTracker();
+        var laps = new LapTracker();
         _telemetryService = new TelemetryService(
             () => new UdpTelemetryListener(settings.Current.UdpPort, logger: listenerLogger),
             loggerFactory.CreateLogger<TelemetryService>(),
-            observers: [acceleration, topSpeed]);
+            observers: [acceleration, topSpeed, laps]);
         _ticker = new DispatcherTimerTicker();
 
         // Manual composition (no DI container): each object is built here with exactly what it needs. The units service
@@ -122,6 +124,8 @@ public partial class App : Application, IAppRestarter
         history.Load();
         _performance = new PerformanceViewModel(acceleration, topSpeed, history, units, new WpfConfirmationService());
 
+        var lapsPage = new LapsViewModel(laps);
+
         var viewModel = new ShellViewModel(
             _telemetryService,
             TimeProvider.System,
@@ -131,7 +135,8 @@ public partial class App : Application, IAppRestarter
             dataOut: dataOut,
             settings: _settings,
             settingsPage: settingsPage,
-            performancePage: _performance);
+            performancePage: _performance,
+            lapsPage: lapsPage);
 
         // The ticker runs on the UI thread and calls Refresh, which pulls the latest packet into the bound properties.
         _refresh = viewModel.Refresh;

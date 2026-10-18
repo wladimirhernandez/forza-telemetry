@@ -1344,5 +1344,131 @@ namespace ForzaTelemetry.App.Resources {
             }
         }
         
+        /// <summary>
+        ///   Looks up a localized string similar to Lap {0}.
+        /// </summary>
+        public static string LapsLapFormat {
+            get {
+                return ResourceManager.GetString("LapsLapFormat", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Current lap.
+        /// </summary>
+        public static string LapsCurrentTitle {
+            get {
+                return ResourceManager.GetString("LapsCurrentTitle", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Last lap.
+        /// </summary>
+        public static string LapsLastTitle {
+            get {
+                return ResourceManager.GetString("LapsLastTitle", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Best lap.
+        /// </summary>
+        public static string LapsBestTitle {
+            get {
+                return ResourceManager.GetString("LapsBestTitle", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Session laps.
+        /// </summary>
+        public static string LapsListTitle {
+            get {
+                return ResourceManager.GetString("LapsListTitle", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Lap.
+        /// </summary>
+        public static string LapsColLap {
+            get {
+                return ResourceManager.GetString("LapsColLap", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Time.
+        /// </summary>
+        public static string LapsColTime {
+            get {
+                return ResourceManager.GetString("LapsColTime", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to vs best.
+        /// </summary>
+        public static string LapsColDelta {
+            get {
+                return ResourceManager.GetString("LapsColDelta", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Best.
+        /// </summary>
+        public static string LapsBestTag {
+            get {
+                return ResourceManager.GetString("LapsBestTag", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Lap times appear here once you start a race or time trial..
+        /// </summary>
+        public static string LapsEmptyNotRacing {
+            get {
+                return ResourceManager.GetString("LapsEmptyNotRacing", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Complete a lap to see it here..
+        /// </summary>
+        public static string LapsEmptyNoLapsYet {
+            get {
+                return ResourceManager.GetString("LapsEmptyNoLapsYet", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Ahead of your best by {0} s.
+        /// </summary>
+        public static string LapsDeltaAheadName {
+            get {
+                return ResourceManager.GetString("LapsDeltaAheadName", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Behind your best by {0} s.
+        /// </summary>
+        public static string LapsDeltaBehindName {
+            get {
+                return ResourceManager.GetString("LapsDeltaBehindName", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Level with your best.
+        /// </summary>
+        public static string LapsDeltaEvenName {
+            get {
+                return ResourceManager.GetString("LapsDeltaEvenName", resourceCulture)!;
+            }
+        }
+        
     }
 }

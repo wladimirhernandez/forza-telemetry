@@ -442,4 +442,46 @@
   <data name="PerfSortByFormat" xml:space="preserve">
     <value>Ordenar por {0}</value>
   </data>
+  <data name="LapsLapFormat" xml:space="preserve">
+    <value>Vuelta {0}</value>
+  </data>
+  <data name="LapsCurrentTitle" xml:space="preserve">
+    <value>Vuelta actual</value>
+  </data>
+  <data name="LapsLastTitle" xml:space="preserve">
+    <value>Última vuelta</value>
+  </data>
+  <data name="LapsBestTitle" xml:space="preserve">
+    <value>Mejor vuelta</value>
+  </data>
+  <data name="LapsListTitle" xml:space="preserve">
+    <value>Vueltas de la sesión</value>
+  </data>
+  <data name="LapsColLap" xml:space="preserve">
+    <value>Vuelta</value>
+  </data>
+  <data name="LapsColTime" xml:space="preserve">
+    <value>Tiempo</value>
+  </data>
+  <data name="LapsColDelta" xml:space="preserve">
+    <value>vs mejor</value>
+  </data>
+  <data name="LapsBestTag" xml:space="preserve">
+    <value>Mejor</value>
+  </data>
+  <data name="LapsEmptyNotRacing" xml:space="preserve">
+    <value>Los tiempos por vuelta aparecen aquí cuando empiezas una carrera o una contrarreloj.</value>
+  </data>
+  <data name="LapsEmptyNoLapsYet" xml:space="preserve">
+    <value>Completa una vuelta para verla aquí.</value>
+  </data>
+  <data name="LapsDeltaAheadName" xml:space="preserve">
+    <value>{0} s por delante de tu mejor vuelta</value>
+  </data>
+  <data name="LapsDeltaBehindName" xml:space="preserve">
+    <value>{0} s por detrás de tu mejor vuelta</value>
+  </data>
+  <data name="LapsDeltaEvenName" xml:space="preserve">
+    <value>Igual que tu mejor vuelta</value>
+  </data>
 </root>

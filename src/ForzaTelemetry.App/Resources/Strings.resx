@@ -442,4 +442,46 @@
   <data name="PerfSortByFormat" xml:space="preserve">
     <value>Sort by {0}</value>
   </data>
+  <data name="LapsLapFormat" xml:space="preserve">
+    <value>Lap {0}</value>
+  </data>
+  <data name="LapsCurrentTitle" xml:space="preserve">
+    <value>Current lap</value>
+  </data>
+  <data name="LapsLastTitle" xml:space="preserve">
+    <value>Last lap</value>
+  </data>
+  <data name="LapsBestTitle" xml:space="preserve">
+    <value>Best lap</value>
+  </data>
+  <data name="LapsListTitle" xml:space="preserve">
+    <value>Session laps</value>
+  </data>
+  <data name="LapsColLap" xml:space="preserve">
+    <value>Lap</value>
+  </data>
+  <data name="LapsColTime" xml:space="preserve">
+    <value>Time</value>
+  </data>
+  <data name="LapsColDelta" xml:space="preserve">
+    <value>vs best</value>
+  </data>
+  <data name="LapsBestTag" xml:space="preserve">
+    <value>Best</value>
+  </data>
+  <data name="LapsEmptyNotRacing" xml:space="preserve">
+    <value>Lap times appear here once you start a race or time trial.</value>
+  </data>
+  <data name="LapsEmptyNoLapsYet" xml:space="preserve">
+    <value>Complete a lap to see it here.</value>
+  </data>
+  <data name="LapsDeltaAheadName" xml:space="preserve">
+    <value>Ahead of your best by {0} s</value>
+  </data>
+  <data name="LapsDeltaBehindName" xml:space="preserve">
+    <value>Behind your best by {0} s</value>
+  </data>
+  <data name="LapsDeltaEvenName" xml:space="preserve">
+    <value>Level with your best</value>
+  </data>
 </root>

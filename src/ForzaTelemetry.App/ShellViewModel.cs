@@ -105,6 +105,7 @@ public sealed partial class ShellViewModel : ObservableObject
     /// </param>
     /// <param name="settingsPage">The Settings screen's view model; when omitted that tab shows the "coming soon" placeholder.</param>
     /// <param name="performancePage">The Performance screen's view model; when omitted that tab shows the placeholder.</param>
+    /// <param name="lapsPage">The Laps screen's view model; when omitted that tab shows the placeholder.</param>
     public ShellViewModel(
         TelemetryService telemetryService,
         TimeProvider timeProvider,
@@ -115,7 +116,8 @@ public sealed partial class ShellViewModel : ObservableObject
         DataOutViewModel? dataOut = null,
         SettingsService? settings = null,
         SettingsViewModel? settingsPage = null,
-        PerformanceViewModel? performancePage = null)
+        PerformanceViewModel? performancePage = null,
+        LapsViewModel? lapsPage = null)
     {
         _telemetryService = telemetryService;
         _timeProvider = timeProvider;
@@ -126,7 +128,8 @@ public sealed partial class ShellViewModel : ObservableObject
             ?? new DataOutViewModel(settings?.Current.UdpPort ?? UdpTelemetryListener.DefaultPort, networkInfo, clipboard, logger);
 
         Performance = performancePage;
-        Tabs = BuildTabs(Dashboard, performancePage, settingsPage);
+        Laps = lapsPage;
+        Tabs = BuildTabs(Dashboard, performancePage, lapsPage, settingsPage);
         _selectedTab = Tabs[0];
 
         if (settings is not null)
@@ -159,6 +162,9 @@ public sealed partial class ShellViewModel : ObservableObject
 
     /// <summary>The Performance screen's values; null when the shell was built without one (tests).</summary>
     public PerformanceViewModel? Performance { get; }
+
+    /// <summary>The Laps screen's values; null when the shell was built without one (tests).</summary>
+    public LapsViewModel? Laps { get; }
 
     /// <summary>This PC's address and the port the game must send to (top bar pill; later also the Settings guide).</summary>
     public DataOutViewModel DataOut { get; }
@@ -194,7 +200,10 @@ public sealed partial class ShellViewModel : ObservableObject
     }
 
     private static List<NavigationItem> BuildTabs(
-        DashboardViewModel dashboard, PerformanceViewModel? performancePage, SettingsViewModel? settingsPage)
+        DashboardViewModel dashboard,
+        PerformanceViewModel? performancePage,
+        LapsViewModel? lapsPage,
+        SettingsViewModel? settingsPage)
     {
         // The order here is the order on screen and the Ctrl+N numbering. Placeholders are replaced by the real
         // screen's view model as each screen ships; nothing else (template, strip, shortcuts) needs to change.
@@ -204,7 +213,9 @@ public sealed partial class ShellViewModel : ObservableObject
             performancePage is not null
                 ? (PageId.Performance, Strings.TabPerformance, performancePage)
                 : Placeholder(PageId.Performance, Strings.TabPerformance, Strings.PerformancePlaceholder, PageIcons.Performance),
-            Placeholder(PageId.Laps, Strings.TabLaps, Strings.LapsPlaceholder, PageIcons.Laps),
+            lapsPage is not null
+                ? (PageId.Laps, Strings.TabLaps, lapsPage)
+                : Placeholder(PageId.Laps, Strings.TabLaps, Strings.LapsPlaceholder, PageIcons.Laps),
             Placeholder(PageId.Sessions, Strings.TabSessions, Strings.SessionsPlaceholder, PageIcons.Sessions),
             Placeholder(PageId.Analysis, Strings.TabAnalysis, Strings.AnalysisPlaceholder, PageIcons.Analysis),
             Placeholder(PageId.Map, Strings.TabMap, Strings.MapPlaceholder, PageIcons.Map),
@@ -241,6 +252,7 @@ public sealed partial class ShellViewModel : ObservableObject
             IsRunning = false;
             Dashboard.ResetLive();
             Performance?.Refresh(null); // no driving data: the state line says so (the measured numbers stay readable)
+            Laps?.Refresh(null);
             PacketsPerSecond = 0; // the loop is dead: nothing is arriving, whatever the last sample said
             ConnectionState = ConnectionState.Error;
             Status = DescribeFault(fault);
@@ -264,11 +276,16 @@ public sealed partial class ShellViewModel : ObservableObject
             Dashboard.Apply(latest);
         }
 
-        // Every tick, whether or not the Performance tab is showing: it detects the end of a run and saves a new best, which
-        // must not depend on which screen the user happens to be looking at. (Two snapshot reads and a few property writes.)
-        Performance?.Refresh(latest);
-
         var silenceSoFar = _timeProvider.GetUtcNow() - _lastPacketArrivalAt;
+
+        // Every tick, whether or not the Performance or Laps tab is showing: they detect the end of a run or a lap and save
+        // what is worth saving, which must not depend on which screen the user happens to be looking at. (A snapshot read
+        // and a few property writes each.) After the stream has gone silent the last packet is no longer "live" (the game
+        // was closed, the console went to sleep): they get null, so a frozen delta or an armed timer does not pose as current.
+        var driving = silenceSoFar > NoDataThreshold ? null : latest;
+        Performance?.Refresh(driving);
+        Laps?.Refresh(driving);
+
         ConnectionState = DetermineState(IsRunning, latest, silenceSoFar);
         Status = DescribeStatus(ConnectionState, silenceSoFar);
     }
@@ -495,6 +512,7 @@ public sealed partial class ShellViewModel : ObservableObject
         // resumes there, so no tick can interleave): wipe the previous session from the screen.
         ResetSessionState();
         Performance?.BeginSession();
+        Laps?.BeginSession();
         Refresh(); // Show the result (running, or a friendly fault) immediately, without waiting for the next tick.
     }
 
@@ -508,6 +526,7 @@ public sealed partial class ShellViewModel : ObservableObject
         // Unlike the dashboard, the Performance numbers stay on screen (the user stops to READ the result); only unsaved
         // bests are written out and the state line stops claiming the timer is armed.
         Performance?.EndSession();
+        Laps?.EndSession();
         Refresh();
     }
 }
