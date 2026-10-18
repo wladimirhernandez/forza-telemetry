@@ -59,6 +59,15 @@
         <DataTemplate DataType="{x:Type local:LapsViewModel}">
             <views:LapsView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type local:AnalysisViewModel}">
+            <views:AnalysisView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type local:MapViewModel}">
+            <views:MapView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type local:TuningViewModel}">
+            <views:TuningView />
+        </DataTemplate>
     </Window.Resources>
     <!--
       Ctrl+1..8 jump straight to a tab. KeyBindings live on the Window so they work wherever the focus is; each one runs

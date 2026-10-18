@@ -569,4 +569,77 @@ public class InsightsViewModelTests
         Assert.Equal(TireTempBand.Unknown, vm.BandFrontLeft);
         Assert.Equal([InsightsStrings.TiresNoData], vm.TireLines);
     }
+
+    // ---- Session start ------------------------------------------------------------------------------------
+
+    [Fact]
+    public void Analysis_BeginSession_empties_the_traces_and_the_shared_history()
+    {
+        var history = new TelemetryHistory();
+        history.Add(Sample(timeMs: 0));
+        history.Add(Sample(timeMs: 16));
+        var vm = new AnalysisViewModel(history, new UnitsService());
+        vm.Refresh();
+        var version = vm.DataVersion;
+        Assert.True(vm.HasData);
+
+        vm.BeginSession();
+
+        Assert.Equal(0, history.Count);
+        Assert.False(vm.HasData);
+        Assert.Equal(0, vm.SampleCount);
+        Assert.NotEqual(version, vm.DataVersion); // the chart is told to redraw as empty
+        vm.Refresh();
+        Assert.False(vm.HasData);
+    }
+
+    [Fact]
+    public void Map_BeginSession_empties_the_path_and_the_car_position()
+    {
+        var path = new TrackPath();
+        var history = new TelemetryHistory();
+        path.OnPacket(InsightPackets.At(0, 0));
+        path.OnPacket(InsightPackets.At(50, 0));
+        history.Add(Sample(timeMs: 10, x: 50, z: 0));
+        var vm = new MapViewModel(path, history, new UnitsService());
+        vm.Refresh();
+        Assert.True(vm.HasData);
+        Assert.True(vm.HasCurrent);
+
+        history.Clear(); // the Analysis page empties the shared history in the same step
+        vm.BeginSession();
+
+        Assert.Equal(0, path.Count);
+        Assert.False(vm.HasData);
+        Assert.False(vm.HasCurrent);
+        Assert.Equal(0, vm.PointCount);
+    }
+
+    [Fact]
+    public void Tuning_BeginSession_resets_the_session_tallies_but_keeps_the_dyno_curve()
+    {
+        var dyno = new DynoCapture();
+        var bottoming = new SuspensionBottomingCounter();
+        var history = new TelemetryHistory();
+        for (var i = 0; i < 5; i++)
+        {
+            dyno.OnPacket(InsightPackets.Pull(3000 + (i * 500), 150_000, 300, carOrdinal: 2211, performanceIndex: 700));
+        }
+
+        bottoming.OnPacket(InsightPackets.Suspension(frontLeft: 1f));
+        history.Add(Sample(timeMs: 10));
+        var vm = new TuningViewModel(dyno, history, bottoming, new UnitsService());
+        vm.Refresh();
+        Assert.Equal(1, vm.BottomFrontLeft);
+        Assert.True(vm.HasCurve);
+
+        history.Clear();
+        vm.BeginSession();
+
+        Assert.Equal(0, vm.BottomFrontLeft);
+        Assert.False(vm.BalanceActive);
+        Assert.False(vm.HasData);
+        Assert.True(vm.HasCurve); // a curve belongs to the car, not to the session
+        Assert.Equal(5, dyno.GetCurve(2211, 700).Count);
+    }
 }

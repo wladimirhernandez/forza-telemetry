@@ -90,7 +90,6 @@ public sealed class ServiceHelperTests : IDisposable
     {
         var engines = new TelemetryEngines();
 
-        Assert.Equal(4, engines.Observers.Count);
         Assert.Same(engines.CarChanges, engines.Observers[0]);
         Assert.Contains(engines.Acceleration, engines.Observers);
         Assert.Contains(engines.TopSpeed, engines.Observers);

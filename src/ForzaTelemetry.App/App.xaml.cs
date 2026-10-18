@@ -127,6 +127,11 @@ public partial class App : Application, IAppRestarter
 
         var lapsPage = new LapsViewModel(engines.Laps);
 
+        // The insights pages read the engines the receive loop feeds; they are only refreshed while their tab is showing.
+        var analysisPage = new AnalysisViewModel(engines.History, units);
+        var mapPage = new MapViewModel(engines.Path, engines.History, units);
+        var tuningPage = new TuningViewModel(engines.Dyno, engines.History, engines.Bottoming, units);
+
         var viewModel = new ShellViewModel(
             _telemetryService,
             TimeProvider.System,
@@ -137,7 +142,10 @@ public partial class App : Application, IAppRestarter
             settings: _settings,
             settingsPage: settingsPage,
             performancePage: _performance,
-            lapsPage: lapsPage);
+            lapsPage: lapsPage,
+            analysisPage: analysisPage,
+            mapPage: mapPage,
+            tuningPage: tuningPage);
 
         // The ticker runs on the UI thread and calls Refresh, which pulls the latest packet into the bound properties.
         _refresh = viewModel.Refresh;

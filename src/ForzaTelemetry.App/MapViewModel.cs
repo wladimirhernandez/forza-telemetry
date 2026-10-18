@@ -24,7 +24,7 @@ namespace ForzaTelemetry.App;
 /// every tab visit; it returns to auto-fit when the path is cleared (here or elsewhere).
 /// </para>
 /// </remarks>
-public sealed partial class MapViewModel : ObservableObject
+public sealed partial class MapViewModel : ObservableObject, IRefreshablePage
 {
     private const double MetersPerKilometer = 1000;
     private const double MetersPerMile = 1609.344;
@@ -162,6 +162,12 @@ public sealed partial class MapViewModel : ObservableObject
         HasData = copied >= 2;
         DataVersion++;
     }
+
+    /// <summary>
+    /// A new listening session starts: the previous session's path, statistics and car position leave the map. The same reset as
+    /// the Clear button, because that is exactly what it is: a clear that nobody had to ask for.
+    /// </summary>
+    public void BeginSession() => Clear();
 
     [RelayCommand]
     private void Clear()

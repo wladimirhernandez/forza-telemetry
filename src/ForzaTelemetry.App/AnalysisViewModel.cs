@@ -15,7 +15,7 @@ namespace ForzaTelemetry.App;
 /// new sample actually arrived, so a paused game costs nothing and the 20 Hz tick never allocates here. The chart reads the
 /// same array; it is rewritten in place on the UI thread, which is also the only thread that draws it.
 /// </remarks>
-public sealed partial class AnalysisViewModel : ObservableObject
+public sealed partial class AnalysisViewModel : ObservableObject, IRefreshablePage
 {
     /// <summary>The window lengths offered by the selector, in seconds.</summary>
     public static readonly int[] WindowChoices = [10, 30, 60];
@@ -91,6 +91,20 @@ public sealed partial class AnalysisViewModel : ObservableObject
 
     [ObservableProperty]
     private string _steerText = "0%";
+
+    /// <summary>
+    /// A new listening session starts: the traces of the previous one leave the screen. The shared history is emptied here (the
+    /// Map reads the car position from it too, so it restarts empty as well, which is what a new session means).
+    /// </summary>
+    public void BeginSession()
+    {
+        _history.Clear();
+        _lastCount = 0;
+        _lastTimeMs = 0;
+        SampleCount = 0;
+        HasData = false;
+        DataVersion++; // the chart must redraw as empty even if it is the page on screen right now
+    }
 
     /// <summary>Pulls the newest samples and readouts. Called by the shell on the UI thread while this page is showing.</summary>
     public void Refresh()

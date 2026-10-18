@@ -27,7 +27,7 @@ namespace ForzaTelemetry.App;
 /// rebuilt when a temperature or the unit changed.
 /// </para>
 /// </remarks>
-public sealed partial class TuningViewModel : ObservableObject
+public sealed partial class TuningViewModel : ObservableObject, IRefreshablePage
 {
     /// <summary>Weight of a new balance reading in the running value (0..1); about a quarter second at 20 Hz.</summary>
     public const double BalanceSmoothing = 0.2;
@@ -203,6 +203,24 @@ public sealed partial class TuningViewModel : ObservableObject
             RefreshBalance(_latest[0]);
             RefreshTires(_latest[0]);
         }
+    }
+
+    /// <summary>
+    /// A new listening session starts: the bottoming tallies, the balance reading and the tire values of the previous session
+    /// leave the screen. The dyno curves stay on purpose: they describe the car, not the session (see <see cref="TelemetryEngines.Dyno"/>).
+    /// </summary>
+    public void BeginSession()
+    {
+        _bottoming.Reset();
+        _lastCounts = new(-1, -1, -1, -1);
+        _hasBalanceReading = false;
+        _lastTimeMs = 0;
+        BalanceActive = false;
+        BalanceState = BalanceState.Unknown;
+        BalanceLabel = InsightText.BalanceLabel(BalanceState.Unknown);
+        BalanceAdvice = InsightText.BalanceAdvice(BalanceState.Unknown);
+        HasData = false;
+        RefreshSuspension();
     }
 
     [RelayCommand]

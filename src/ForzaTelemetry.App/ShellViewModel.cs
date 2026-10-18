@@ -33,8 +33,8 @@ namespace ForzaTelemetry.App;
 /// the value it already has raises no change notification, and a screen that is not showing has no bindings listening
 /// (the <c>ContentControl</c> removes the old page's view from the visual tree on navigation), so updating the dashboard
 /// while another tab is open costs a few field writes. The dashboard is always fed because the top bar's car pill reads
-/// it. A screen that is EXPENSIVE to update (a live chart, the track map) should not copy that approach: give it a
-/// method the shell calls only while <see cref="CurrentPage"/> is that screen.
+/// it. A screen that is EXPENSIVE to update (a live chart, the track map) does not copy that approach: it implements
+/// <see cref="IRefreshablePage"/> and the shell calls it only while <see cref="CurrentPage"/> is that screen.
 /// </para>
 /// </remarks>
 public sealed partial class ShellViewModel : ObservableObject
@@ -106,6 +106,9 @@ public sealed partial class ShellViewModel : ObservableObject
     /// <param name="settingsPage">The Settings screen's view model; when omitted that tab shows the "coming soon" placeholder.</param>
     /// <param name="performancePage">The Performance screen's view model; when omitted that tab shows the placeholder.</param>
     /// <param name="lapsPage">The Laps screen's view model; when omitted that tab shows the placeholder.</param>
+    /// <param name="analysisPage">The Analysis screen's view model; when omitted that tab shows the placeholder.</param>
+    /// <param name="mapPage">The Map screen's view model; when omitted that tab shows the placeholder.</param>
+    /// <param name="tuningPage">The Tuning screen's view model; when omitted that tab shows the placeholder.</param>
     public ShellViewModel(
         TelemetryService telemetryService,
         TimeProvider timeProvider,
@@ -117,7 +120,10 @@ public sealed partial class ShellViewModel : ObservableObject
         SettingsService? settings = null,
         SettingsViewModel? settingsPage = null,
         PerformanceViewModel? performancePage = null,
-        LapsViewModel? lapsPage = null)
+        LapsViewModel? lapsPage = null,
+        AnalysisViewModel? analysisPage = null,
+        MapViewModel? mapPage = null,
+        TuningViewModel? tuningPage = null)
     {
         _telemetryService = telemetryService;
         _timeProvider = timeProvider;
@@ -129,7 +135,10 @@ public sealed partial class ShellViewModel : ObservableObject
 
         Performance = performancePage;
         Laps = lapsPage;
-        Tabs = BuildTabs(Dashboard, performancePage, lapsPage, settingsPage);
+        Analysis = analysisPage;
+        Map = mapPage;
+        Tuning = tuningPage;
+        Tabs = BuildTabs(Dashboard, performancePage, lapsPage, analysisPage, mapPage, tuningPage, settingsPage);
         _selectedTab = Tabs[0];
 
         if (settings is not null)
@@ -165,6 +174,15 @@ public sealed partial class ShellViewModel : ObservableObject
 
     /// <summary>The Laps screen's values; null when the shell was built without one (tests).</summary>
     public LapsViewModel? Laps { get; }
+
+    /// <summary>The Analysis screen's values; null when the shell was built without one (tests).</summary>
+    public AnalysisViewModel? Analysis { get; }
+
+    /// <summary>The Map screen's values; null when the shell was built without one (tests).</summary>
+    public MapViewModel? Map { get; }
+
+    /// <summary>The Tuning screen's values; null when the shell was built without one (tests).</summary>
+    public TuningViewModel? Tuning { get; }
 
     /// <summary>This PC's address and the port the game must send to (top bar pill; later also the Settings guide).</summary>
     public DataOutViewModel DataOut { get; }
@@ -203,6 +221,9 @@ public sealed partial class ShellViewModel : ObservableObject
         DashboardViewModel dashboard,
         PerformanceViewModel? performancePage,
         LapsViewModel? lapsPage,
+        AnalysisViewModel? analysisPage,
+        MapViewModel? mapPage,
+        TuningViewModel? tuningPage,
         SettingsViewModel? settingsPage)
     {
         // The order here is the order on screen and the Ctrl+N numbering. Placeholders are replaced by the real
@@ -217,9 +238,15 @@ public sealed partial class ShellViewModel : ObservableObject
                 ? (PageId.Laps, Strings.TabLaps, lapsPage)
                 : Placeholder(PageId.Laps, Strings.TabLaps, Strings.LapsPlaceholder, PageIcons.Laps),
             Placeholder(PageId.Sessions, Strings.TabSessions, Strings.SessionsPlaceholder, PageIcons.Sessions),
-            Placeholder(PageId.Analysis, Strings.TabAnalysis, Strings.AnalysisPlaceholder, PageIcons.Analysis),
-            Placeholder(PageId.Map, Strings.TabMap, Strings.MapPlaceholder, PageIcons.Map),
-            Placeholder(PageId.Tuning, Strings.TabTuning, Strings.TuningPlaceholder, PageIcons.Tuning),
+            analysisPage is not null
+                ? (PageId.Analysis, Strings.TabAnalysis, analysisPage)
+                : Placeholder(PageId.Analysis, Strings.TabAnalysis, Strings.AnalysisPlaceholder, PageIcons.Analysis),
+            mapPage is not null
+                ? (PageId.Map, Strings.TabMap, mapPage)
+                : Placeholder(PageId.Map, Strings.TabMap, Strings.MapPlaceholder, PageIcons.Map),
+            tuningPage is not null
+                ? (PageId.Tuning, Strings.TabTuning, tuningPage)
+                : Placeholder(PageId.Tuning, Strings.TabTuning, Strings.TuningPlaceholder, PageIcons.Tuning),
             settingsPage is not null
                 ? (PageId.Settings, Strings.TabSettings, settingsPage)
                 : Placeholder(PageId.Settings, Strings.TabSettings, Strings.SettingsPlaceholder, PageIcons.Settings)
@@ -256,6 +283,7 @@ public sealed partial class ShellViewModel : ObservableObject
             PacketsPerSecond = 0; // the loop is dead: nothing is arriving, whatever the last sample said
             ConnectionState = ConnectionState.Error;
             Status = DescribeFault(fault);
+            RefreshVisiblePage(); // what the engines still hold (the session before the fault) stays readable
             return;
         }
 
@@ -288,6 +316,20 @@ public sealed partial class ShellViewModel : ObservableObject
 
         ConnectionState = DetermineState(IsRunning, latest, silenceSoFar);
         Status = DescribeStatus(ConnectionState, silenceSoFar);
+        RefreshVisiblePage();
+    }
+
+    /// <summary>
+    /// Refreshes the page on screen if it is one of the expensive ones (<see cref="IRefreshablePage"/>: the live traces, the map,
+    /// the dyno). Only that one: the others are hidden, nobody sees their work, and returning to a tab brings its page up to date
+    /// on the next tick because it reads the engines' current state.
+    /// </summary>
+    private void RefreshVisiblePage()
+    {
+        if (CurrentPage is IRefreshablePage page)
+        {
+            page.Refresh();
+        }
     }
 
     /// <summary>
@@ -525,6 +567,9 @@ public sealed partial class ShellViewModel : ObservableObject
         {
             Performance?.BeginSession();
             Laps?.BeginSession();
+            Analysis?.BeginSession();
+            Map?.BeginSession();
+            Tuning?.BeginSession();
         }
 
         Refresh(); // Show the result (running, or a friendly fault) immediately, without waiting for the next tick.
