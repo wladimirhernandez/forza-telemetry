@@ -15,7 +15,7 @@ namespace ForzaTelemetry.App.Services;
 /// (input, layout, rendering), making the whole app feel less responsive, not more "live".
 /// <para>
 /// Instead, <c>TelemetryService</c> keeps only the LATEST packet in memory (see its own remarks),
-/// and this ticker calls <c>MainViewModel.Refresh()</c> on a fixed schedule — <c>DispatcherTimer</c>'s
+/// and this ticker calls <c>ShellViewModel.Refresh()</c> on a fixed schedule — <c>DispatcherTimer</c>'s
 /// callback already runs on the UI thread, so no extra marshalling is needed inside <c>Refresh</c>.
 /// ~20 Hz (a 50 ms interval) is smooth enough to look "live" to a human while being well below the
 /// network's own rate — this decouples "how fast the network delivers data" from "how fast the

@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ForzaTelemetry.App;
 
-/// <summary>Composition root: builds the services by hand (no DI container), then the view model and the window.</summary>
+/// <summary>Composition root: builds the services by hand (no DI container), then the shell view model and the window.</summary>
 public partial class App : Application
 {
     // How often the UI samples the latest packet (~20 Hz); see DispatcherTimerTicker for why sampling.
@@ -72,8 +72,12 @@ public partial class App : Application
 
         // The view model reads the adapters once (and logs what it read, now and on every later Start), so this
         // root does not enumerate them a second time.
-        var viewModel = new MainViewModel(
-            _telemetryService, TimeProvider.System, new NetworkInfo(), loggerFactory.CreateLogger<MainViewModel>());
+        var viewModel = new ShellViewModel(
+            _telemetryService,
+            TimeProvider.System,
+            new NetworkInfo(),
+            loggerFactory.CreateLogger<ShellViewModel>(),
+            new WpfClipboardService());
 
         // The ticker runs on the UI thread and calls Refresh, which pulls the latest packet into the bound properties.
         _refresh = viewModel.Refresh;

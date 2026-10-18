@@ -245,6 +245,7 @@ namespace ForzaTelemetry.App.Resources {
                 return ResourceManager.GetString("TemperatureUnit", resourceCulture)!;
             }
         }
+        
         /// <summary>
         ///   Looks up a localized string similar to Tire view.
         /// </summary>
@@ -253,6 +254,7 @@ namespace ForzaTelemetry.App.Resources {
                 return ResourceManager.GetString("HeroTitle", resourceCulture)!;
             }
         }
+        
         /// <summary>
         ///   Looks up a localized string similar to PI {0}.
         /// </summary>
@@ -459,7 +461,7 @@ namespace ForzaTelemetry.App.Resources {
                 return ResourceManager.GetString("StatusStopped", resourceCulture)!;
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Listening on UDP {0}, waiting for data (drive in-game).
         /// </summary>
@@ -468,7 +470,7 @@ namespace ForzaTelemetry.App.Resources {
                 return ResourceManager.GetString("StatusListening", resourceCulture)!;
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No data for {0:F0}s.
         /// </summary>
@@ -477,7 +479,7 @@ namespace ForzaTelemetry.App.Resources {
                 return ResourceManager.GetString("StatusNoData", resourceCulture)!;
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Receiving.
         /// </summary>
@@ -486,7 +488,7 @@ namespace ForzaTelemetry.App.Resources {
                 return ResourceManager.GetString("StatusReceiving", resourceCulture)!;
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Error: port {0} already in use. Is another instance running?.
         /// </summary>
@@ -495,7 +497,7 @@ namespace ForzaTelemetry.App.Resources {
                 return ResourceManager.GetString("ErrorPortInUse", resourceCulture)!;
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Error: {0} ({1}).
         /// </summary>
@@ -504,7 +506,7 @@ namespace ForzaTelemetry.App.Resources {
                 return ResourceManager.GetString("ErrorSocket", resourceCulture)!;
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Error: {0}.
         /// </summary>
@@ -513,7 +515,7 @@ namespace ForzaTelemetry.App.Resources {
                 return ResourceManager.GetString("ErrorGeneric", resourceCulture)!;
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Data Out IP.
         /// </summary>
@@ -522,16 +524,7 @@ namespace ForzaTelemetry.App.Resources {
                 return ResourceManager.GetString("DataOutIpLabel", resourceCulture)!;
             }
         }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Copy IP address.
-        /// </summary>
-        public static string CopyIpTooltip {
-            get {
-                return ResourceManager.GetString("CopyIpTooltip", resourceCulture)!;
-            }
-        }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to not found.
         /// </summary>
@@ -540,7 +533,7 @@ namespace ForzaTelemetry.App.Resources {
                 return ResourceManager.GetString("DataOutIpNone", resourceCulture)!;
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Port {0}.
         /// </summary>
@@ -549,6 +542,168 @@ namespace ForzaTelemetry.App.Resources {
                 return ResourceManager.GetString("DataOutPortPill", resourceCulture)!;
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Copy IP address.
+        /// </summary>
+        public static string CopyIpTooltip {
+            get {
+                return ResourceManager.GetString("CopyIpTooltip", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Dashboard.
+        /// </summary>
+        public static string TabDashboard {
+            get {
+                return ResourceManager.GetString("TabDashboard", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Performance.
+        /// </summary>
+        public static string TabPerformance {
+            get {
+                return ResourceManager.GetString("TabPerformance", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Laps.
+        /// </summary>
+        public static string TabLaps {
+            get {
+                return ResourceManager.GetString("TabLaps", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Sessions.
+        /// </summary>
+        public static string TabSessions {
+            get {
+                return ResourceManager.GetString("TabSessions", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Analysis.
+        /// </summary>
+        public static string TabAnalysis {
+            get {
+                return ResourceManager.GetString("TabAnalysis", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Map.
+        /// </summary>
+        public static string TabMap {
+            get {
+                return ResourceManager.GetString("TabMap", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Tuning.
+        /// </summary>
+        public static string TabTuning {
+            get {
+                return ResourceManager.GetString("TabTuning", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Settings.
+        /// </summary>
+        public static string TabSettings {
+            get {
+                return ResourceManager.GetString("TabSettings", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Main navigation.
+        /// </summary>
+        public static string NavigationName {
+            get {
+                return ResourceManager.GetString("NavigationName", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Coming soon.
+        /// </summary>
+        public static string ComingSoon {
+            get {
+                return ResourceManager.GetString("ComingSoon", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Your 0-100 and 0-200 km/h times, quarter mile and top speed appear here after each run..
+        /// </summary>
+        public static string PerformancePlaceholder {
+            get {
+                return ResourceManager.GetString("PerformancePlaceholder", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Lap times appear here once you start a race: best, last and current lap, with a live delta against your best..
+        /// </summary>
+        public static string LapsPlaceholder {
+            get {
+                return ResourceManager.GetString("LapsPlaceholder", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Record a drive and replay it later. Your saved sessions will be listed here..
+        /// </summary>
+        public static string SessionsPlaceholder {
+            get {
+                return ResourceManager.GetString("SessionsPlaceholder", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Live traces of speed, RPM, throttle, brake and steering over the last seconds, stacked and aligned in time..
+        /// </summary>
+        public static string AnalysisPlaceholder {
+            get {
+                return ResourceManager.GetString("AnalysisPlaceholder", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to See the line you drove, colored by speed, with your braking points marked..
+        /// </summary>
+        public static string MapPlaceholder {
+            get {
+                return ResourceManager.GetString("MapPlaceholder", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Power and torque curves plus live understeer and oversteer hints to help you tune your car..
+        /// </summary>
+        public static string TuningPlaceholder {
+            get {
+                return ResourceManager.GetString("TuningPlaceholder", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Port, units, language and the step-by-step Data Out guide will live here..
+        /// </summary>
+        public static string SettingsPlaceholder {
+            get {
+                return ResourceManager.GetString("SettingsPlaceholder", resourceCulture)!;
+            }
+        }
+        
     }
 }

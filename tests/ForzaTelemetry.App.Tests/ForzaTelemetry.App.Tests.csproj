@@ -23,8 +23,8 @@
   <ItemGroup>
     <!--
       Referencing ForzaTelemetry.App (not just Core/Udp) is deliberate: these tests exercise
-      TelemetryService and MainViewModel, which live in that project. None of these tests need a live
-      UI/Dispatcher: MainViewModel is driven directly by calling Refresh(), and DispatcherTimerTicker
+      TelemetryService and ShellViewModel, which live in that project. None of these tests need a live
+      UI/Dispatcher: ShellViewModel is driven directly by calling Refresh(), and DispatcherTimerTicker
       (the only class that touches WPF's real dispatcher) is never instantiated here; see ManualTicker
       for its test double.
     -->

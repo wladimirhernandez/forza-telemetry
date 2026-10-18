@@ -5,37 +5,25 @@ using System.Windows.Media;
 
 namespace ForzaTelemetry.App;
 
-/// <summary>Borderless dashboard window: custom title bar (drag, minimize, maximize, close) around the layout.</summary>
+/// <summary>Borderless main window: custom title bar (tabs, drag, minimize, maximize, close) around the current screen.</summary>
 public partial class MainWindow : Window
 {
     // Where the mouse went down on the title bar while maximized. The drag only turns into "restore and move" once the
     // mouse travels a few pixels, so a plain click on the title bar of a maximized window does not un-maximize it.
     private Point? _pendingRestoreDrag;
 
-    public MainWindow(MainViewModel viewModel)
+    public MainWindow(ShellViewModel viewModel)
     {
         InitializeComponent();
         DataContext = viewModel;
     }
 
-    /// <summary>Copies the best Data Out IP to the clipboard (one address, even when several are listed).</summary>
-    private void OnCopyIpClick(object sender, RoutedEventArgs e)
-    {
-        if ((DataContext as MainViewModel)?.DataOutPrimaryAddress is not { } address)
-        {
-            return;
-        }
-
-        try
-        {
-            // SetText can fail with a COMException when another process holds the clipboard open; a missed copy is
-            // not worth an error dialog, the user can simply click again.
-            Clipboard.SetText(address);
-        }
-        catch (System.Runtime.InteropServices.COMException)
-        {
-        }
-    }
+    /// <summary>
+    /// Clicking the gaps of the tab strip (its padding, the rounded ends) must not start a window drag: the strip sits
+    /// inside the title bar, whose Grid turns an unhandled left click into <c>DragMove</c>. A tab itself already marks its
+    /// click handled; this covers the strip around the tabs.
+    /// </summary>
+    private void OnTabStripMouseDown(object sender, MouseButtonEventArgs e) => e.Handled = true;
 
     /// <summary>
     /// The earliest moment the window has a Win32 handle (HWND) but is not yet visible. Everything that needs the

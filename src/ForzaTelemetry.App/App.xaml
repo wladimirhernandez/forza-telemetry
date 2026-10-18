@@ -54,6 +54,14 @@
         <CornerRadius x:Key="CardRadius">14</CornerRadius>
         <CornerRadius x:Key="ButtonRadius">10</CornerRadius>
         <CornerRadius x:Key="PillRadius">999</CornerRadius>
+        <!--
+          Border corner radii must be explicit when a pill is wide: WPF scales a too-large radius down by width, which turns
+          a long pill into a lens shape (PillRadius only looks right on short, near-square shapes). ControlPillRadius is
+          ControlHeight / 2 = 18: the status pills and the tab strip; a tab inside the strip is that minus its 1 px border
+          and 3 px padding = 14.
+        -->
+        <CornerRadius x:Key="ControlPillRadius">18</CornerRadius>
+        <CornerRadius x:Key="TabRadius">14</CornerRadius>
         <!-- Focus ring sits 3 px outside a button face, so its radius is ButtonRadius + 3 (XAML cannot add, so it is a token). -->
         <system:Double x:Key="FocusRingRadius" xmlns:system="clr-namespace:System;assembly=System.Runtime">13</system:Double>
         <!-- One height for everything on the top bar (pills and the Start/Stop button) so they align on one line. -->
@@ -122,7 +130,7 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="ContentControl">
                         <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource HairlineBrush}"
-                                BorderThickness="1" CornerRadius="{StaticResource PillRadius}" Padding="14,0">
+                                BorderThickness="1" CornerRadius="{StaticResource ControlPillRadius}" Padding="14,0">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <Ellipse x:Name="Dot" Width="8" Height="8" Margin="0,1,8,0" VerticalAlignment="Center"
                                          Fill="{TemplateBinding Tag}" />
@@ -301,6 +309,119 @@
                     <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
                 </DataTrigger>
             </Style.Triggers>
+        </Style>
+
+        <!-- Focus ring for fully rounded (pill) shapes: a Rectangle clamps a huge radius to half its height. -->
+        <Style x:Key="PillFocusRing">
+            <Setter Property="Control.Template">
+                <Setter.Value>
+                    <ControlTemplate>
+                        <Rectangle Margin="-3" Stroke="{StaticResource TextBrush}" StrokeThickness="2" RadiusX="999" RadiusY="999" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!--
+          One tab of the top navigation (a segmented pill). Two fill layers sit under the label: HoverFill (a quieter
+          raised surface while the mouse is over an unselected tab) and SelectedFill (the raised surface plus a hairline
+          for the selected tab). The VisualStateManager fades their Opacity (~120 ms, same as the buttons); the label
+          color is a plain Trigger (instant), Muted normally and Text when selected or hovered.
+          A TabItem reports two independent state groups: CommonStates (hover) and SelectionStates (selected), which is
+          why both can be active at once (hovering the selected tab).
+        -->
+        <ControlTemplate x:Key="PillTabItemTemplate" TargetType="TabItem">
+            <Grid x:Name="Root" Background="Transparent" SnapsToDevicePixels="True">
+                <VisualStateManager.VisualStateGroups>
+                    <VisualStateGroup x:Name="CommonStates">
+                        <VisualStateGroup.Transitions>
+                            <VisualTransition GeneratedDuration="0:0:0.12" />
+                        </VisualStateGroup.Transitions>
+                        <VisualState x:Name="Normal" />
+                        <VisualState x:Name="MouseOver">
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="HoverFill" Storyboard.TargetProperty="Opacity"
+                                                 To="0.6" Duration="0" />
+                            </Storyboard>
+                        </VisualState>
+                        <VisualState x:Name="Disabled">
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="Opacity"
+                                                 To="0.4" Duration="0" />
+                            </Storyboard>
+                        </VisualState>
+                    </VisualStateGroup>
+                    <VisualStateGroup x:Name="SelectionStates">
+                        <VisualStateGroup.Transitions>
+                            <VisualTransition GeneratedDuration="0:0:0.12" />
+                        </VisualStateGroup.Transitions>
+                        <VisualState x:Name="Unselected" />
+                        <VisualState x:Name="Selected">
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="SelectedFill" Storyboard.TargetProperty="Opacity"
+                                                 To="1" Duration="0" />
+                            </Storyboard>
+                        </VisualState>
+                    </VisualStateGroup>
+                </VisualStateManager.VisualStateGroups>
+                <Border x:Name="HoverFill" Background="{StaticResource CardRaisedBrush}" Opacity="0"
+                        CornerRadius="{StaticResource TabRadius}" />
+                <Border x:Name="SelectedFill" Background="{StaticResource CardRaisedBrush}" BorderBrush="{StaticResource HairlineBrush}"
+                        BorderThickness="1" Opacity="0" CornerRadius="{StaticResource TabRadius}" />
+                <ContentPresenter ContentSource="Header" Margin="16,0" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  TextElement.Foreground="{TemplateBinding Foreground}" />
+            </Grid>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+
+        <!--
+          The tab container's style. The three Automation setters read the NavigationItem the tab was generated from
+          (a container's DataContext is its item): the name a screen reader says, the shortcut it announces, and the
+          tooltip text.
+        -->
+        <Style x:Key="PillTabItem" TargetType="TabItem">
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+            <Setter Property="FontFamily" Value="{StaticResource LabelFont}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource PillFocusRing}" />
+            <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+            <Setter Property="AutomationProperties.AcceleratorKey" Value="{Binding Shortcut}" />
+            <Setter Property="ToolTip" Value="{Binding ToolTip}" />
+            <Setter Property="Template" Value="{StaticResource PillTabItemTemplate}" />
+        </Style>
+
+        <!--
+          The tab strip: a pill-shaped card holding the tabs side by side. The template has NO content host
+          (PART_SelectedContentHost): this TabControl only draws the strip, the app shows the screens elsewhere.
+          KeyboardNavigation: TabControl already enters the strip with Tab (one stop, the selected tab) and moves with
+          the arrow keys, Home and End, so nothing else is needed for keyboard use.
+        -->
+        <Style x:Key="PillTabControl" TargetType="TabControl">
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="KeyboardNavigation.TabNavigation" Value="Once" />
+            <Setter Property="KeyboardNavigation.DirectionalNavigation" Value="Contained" />
+            <Setter Property="Height" Value="{StaticResource ControlHeight}" />
+            <Setter Property="ItemContainerStyle" Value="{StaticResource PillTabItem}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource HairlineBrush}"
+                                BorderThickness="1" CornerRadius="{StaticResource ControlPillRadius}" Padding="3">
+                            <StackPanel IsItemsHost="True" Orientation="Horizontal" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!--

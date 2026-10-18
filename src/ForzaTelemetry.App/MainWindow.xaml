@@ -4,11 +4,12 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:ForzaTelemetry.App"
+        xmlns:views="clr-namespace:ForzaTelemetry.App.Views"
         xmlns:controls="clr-namespace:ForzaTelemetry.App.Controls"
         xmlns:res="clr-namespace:ForzaTelemetry.App.Resources"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         mc:Ignorable="d"
-        d:DataContext="{d:DesignInstance local:MainViewModel, IsDesignTimeCreatable=True}"
+        d:DataContext="{x:Static local:ShellViewModel.DesignSample}"
         Title="{x:Static res:Strings.AppTitle}"
         Width="1440" Height="900" MinWidth="1280" MinHeight="800"
         WindowStyle="None"
@@ -37,7 +38,33 @@
                             UseAeroCaptionButtons="False" ResizeBorderThickness="{StaticResource ChromeMargin}" />
         <shell:WindowChrome x:Key="MaximizedChrome" CaptionHeight="0" GlassFrameThickness="0" CornerRadius="0"
                             UseAeroCaptionButtons="False" ResizeBorderThickness="0" />
+
+        <!--
+          Implicit DataTemplates: a template with a DataType and NO x:Key is applied automatically to every object of that
+          type shown by a ContentControl/ContentPresenter below. This is the whole screen-switching mechanism: one line per
+          kind of page, mapping a view model type to the view that draws it. The view models never reference a view.
+        -->
+        <DataTemplate DataType="{x:Type local:DashboardViewModel}">
+            <views:DashboardView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type local:PlaceholderPageViewModel}">
+            <views:PlaceholderView />
+        </DataTemplate>
     </Window.Resources>
+    <!--
+      Ctrl+1..8 jump straight to a tab. KeyBindings live on the Window so they work wherever the focus is; each one runs
+      the shell's NavigateCommand with the target PageId as its parameter.
+    -->
+    <Window.InputBindings>
+        <KeyBinding Key="D1" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static local:PageId.Dashboard}" />
+        <KeyBinding Key="D2" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static local:PageId.Performance}" />
+        <KeyBinding Key="D3" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static local:PageId.Laps}" />
+        <KeyBinding Key="D4" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static local:PageId.Sessions}" />
+        <KeyBinding Key="D5" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static local:PageId.Analysis}" />
+        <KeyBinding Key="D6" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static local:PageId.Map}" />
+        <KeyBinding Key="D7" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static local:PageId.Tuning}" />
+        <KeyBinding Key="D8" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static local:PageId.Settings}" />
+    </Window.InputBindings>
     <Window.Style>
         <Style TargetType="Window">
             <Setter Property="shell:WindowChrome.WindowChrome" Value="{StaticResource NormalChrome}" />
@@ -77,9 +104,10 @@
         </Border.Style>
 
         <!--
-          Star-sized rows share the leftover height (the hero takes everything the title bar, top bar and bottom
-          row do not); Auto rows take only what their content needs.
-          Every {Binding ...} reads a property of MainViewModel (the DataContext set in MainWindow's constructor).
+          Window layout, three rows: title bar (fixed 52), top bar (as tall as its content) and the page area (star: takes
+          everything left). The page area is ONE ContentControl whose Content is the shell view model's CurrentPage; which
+          screen appears there is decided by the DataTemplates declared in Window.Resources, never by code.
+          Every {Binding ...} reads a property of ShellViewModel (the DataContext set in MainWindow's constructor).
           {x:Static res:Strings.Key} reads UI text from Resources/Strings.resx (en) or Strings.es.resx at load time.
         -->
         <Grid>
@@ -87,16 +115,43 @@
                 <RowDefinition Height="52" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <!-- Title bar: the transparent-background Grid is what receives the mouse for dragging. -->
             <Grid Grid.Row="0" Background="Transparent" KeyboardNavigation.TabIndex="1" KeyboardNavigation.TabNavigation="Local" MouseLeftButtonDown="OnDragAreaMouseDown"
                   MouseMove="OnDragAreaMouseMove" MouseLeftButtonUp="OnDragAreaMouseUp" LostMouseCapture="OnDragAreaLostCapture">
-                <TextBlock Text="{x:Static res:Strings.AppTitle}" Style="{StaticResource MutedLabel}"
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="{x:Static res:Strings.AppTitle}" Style="{StaticResource MutedLabel}"
                            VerticalAlignment="Center" Margin="28,0,0,0" />
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"
+
+                <!--
+                  Tab strip. A TabControl is the right control for "one of several screens" because Windows already knows
+                  what it is: screen readers announce "tab, 3 of 8, selected", and the arrow keys, Home and End move the
+                  selection with no code. We only borrow its tab STRIP: the template (PillTabControl in App.xaml) has no
+                  content area, because the screens are shown by the ContentControl below, not inside the TabControl.
+                  SelectedItem is two-way bound, so a click, an arrow key and a Ctrl+N shortcut all just set one property
+                  on the view model. A ListBox or RadioButtons would look the same but announce themselves as a list or as
+                  radio buttons, which is a worse description of what this is.
+                -->
+                <TabControl Grid.Column="1" Margin="28,0,0,0" VerticalAlignment="Center"
+                            Style="{StaticResource PillTabControl}"
+                            ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
+                            AutomationProperties.Name="{x:Static res:Strings.NavigationName}"
+                            MouseLeftButtonDown="OnTabStripMouseDown">
+                    <TabControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type local:NavigationItem}">
+                            <TextBlock Text="{Binding Title}" />
+                        </DataTemplate>
+                    </TabControl.ItemTemplate>
+                </TabControl>
+
+                <StackPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"
                             Margin="0,0,14,0">
                     <!-- Icon-only buttons: ToolTip is for the mouse, AutomationProperties.Name is what screen readers announce. -->
                     <Button Style="{StaticResource WindowGlyphButton}" Click="OnMinimizeClick"
@@ -146,12 +201,13 @@
                 </StackPanel>
             </Grid>
 
-            <!-- Top bar: status pills on the left, actions on the right. -->
-            <!-- Tab order: the primary action first, then the window buttons. TabIndex only orders siblings inside one
-                 keyboard-navigation scope, and a plain Grid (TabNavigation=Continue) does not form its own scope, so its
-                 TabIndex was ignored and focus started on the title-bar glyphs. TabNavigation="Local" makes each bar a
+            <!-- Top bar: status pills on the left, actions on the right. It stays visible on every screen: the connection
+                 status matters wherever you are. -->
+            <!-- Tab order: the primary action first, then the title bar (tabs, window buttons). TabIndex only orders siblings
+                 inside one keyboard-navigation scope, and a plain Grid (TabNavigation=Continue) does not form its own scope, so
+                 its TabIndex was ignored and focus started on the title-bar glyphs. TabNavigation="Local" makes each bar a
                  tab group, which is what makes its TabIndex count (0 = this bar, 1 = the title bar). -->
-            <Grid Grid.Row="1" Margin="28,4,28,0" KeyboardNavigation.TabIndex="0" KeyboardNavigation.TabNavigation="Local">
+            <Grid Grid.Row="1" Margin="28,4,28,12" KeyboardNavigation.TabIndex="0" KeyboardNavigation.TabNavigation="Local">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                     <!--
                       Connection pill. The dot color comes from a DataTrigger per ConnectionState: the view model
@@ -184,12 +240,12 @@
                                     ContentStringFormat="{x:Static res:Strings.PacketsPerSecondPill}" />
                     <!-- Car info: class letter, performance index and drivetrain. Hidden until a packet carries a real car. -->
                     <ContentControl Style="{StaticResource StatusPill}" Margin="10,0,0,0" Tag="{x:Null}"
-                                    Visibility="{Binding HasCarInfo, Converter={StaticResource BoolToVisibility}}">
+                                    Visibility="{Binding Dashboard.HasCarInfo, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding CarClassLabel}" FontWeight="SemiBold" />
-                            <TextBlock Text="{Binding CarPerformanceIndex, StringFormat={x:Static res:Strings.CarPerformanceIndexFormat}}"
+                            <TextBlock Text="{Binding Dashboard.CarClassLabel}" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding Dashboard.CarPerformanceIndex, StringFormat={x:Static res:Strings.CarPerformanceIndexFormat}}"
                                        Foreground="{StaticResource MutedBrush}" Margin="10,0,0,0" />
-                            <TextBlock Text="{Binding DrivetrainLabel}" Foreground="{StaticResource MutedBrush}" Margin="10,0,0,0" />
+                            <TextBlock Text="{Binding Dashboard.DrivetrainLabel}" Foreground="{StaticResource MutedBrush}" Margin="10,0,0,0" />
                         </StackPanel>
                     </ContentControl>
                 </StackPanel>
@@ -205,12 +261,12 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="{x:Static res:Strings.DataOutIpLabel}" Foreground="{StaticResource MutedBrush}"
                                        VerticalAlignment="Center" />
-                            <TextBlock Text="{Binding DataOutAddress}" Margin="8,0,0,0" FontWeight="SemiBold"
+                            <TextBlock Text="{Binding DataOut.Address}" Margin="8,0,0,0" FontWeight="SemiBold"
                                        VerticalAlignment="Center" />
-                            <!-- TabIndex 1: the Start/Stop toggle (TabIndex 0) stays the first tab stop of this bar. -->
+                            <!-- TabIndex 1: the Start/Stop toggle (TabIndex 0) stays the first tab stop of this bar. The command's
+                                 CanExecute (an address exists) enables and disables the button by itself. -->
                             <Button Style="{StaticResource WindowGlyphButton}" Width="24" Height="24" Margin="6,0,-8,0" VerticalAlignment="Center"
-                                    KeyboardNavigation.TabIndex="1" Click="OnCopyIpClick"
-                                    IsEnabled="{Binding HasDataOutAddress}"
+                                    KeyboardNavigation.TabIndex="1" Command="{Binding DataOut.CopyAddressCommand}"
                                     ToolTip="{x:Static res:Strings.CopyIpTooltip}"
                                     AutomationProperties.Name="{x:Static res:Strings.CopyIpTooltip}">
                                 <Path Data="{StaticResource CopyIcon}"
@@ -220,348 +276,53 @@
                         </StackPanel>
                     </ContentControl>
                     <ContentControl Style="{StaticResource StatusPill}" Margin="10,0,0,0" Tag="{x:Null}"
-                                    Content="{Binding DataOutPort}"
+                                    Content="{Binding DataOut.Port}"
                                     ContentStringFormat="{x:Static res:Strings.DataOutPortPill}" />
-                <Button Style="{StaticResource ToggleListeningButton}" Margin="14,0,0,0" KeyboardNavigation.TabIndex="0"
-                        Command="{Binding ToggleListeningCommand}">
-                    <StackPanel Orientation="Horizontal">
-                        <!-- Icon and label follow IsRunning; both read the button Foreground, which the style also switches. -->
-                        <Path Margin="0,0,9,0" VerticalAlignment="Center" Stretch="None"
-                              Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}">
-                            <Path.Style>
-                                <Style TargetType="Path">
-                                    <Setter Property="Data" Value="{StaticResource PlayIcon}" />
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsRunning}" Value="True">
-                                            <Setter Property="Data" Value="{StaticResource StopIcon}" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Path.Style>
-                        </Path>
-                        <TextBlock VerticalAlignment="Center">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Text" Value="{x:Static res:Strings.StartButton}" />
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsRunning}" Value="True">
-                                            <Setter Property="Text" Value="{x:Static res:Strings.StopButton}" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                    </StackPanel>
-                </Button>
+                    <Button Style="{StaticResource ToggleListeningButton}" Margin="14,0,0,0" KeyboardNavigation.TabIndex="0"
+                            Command="{Binding ToggleListeningCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <!-- Icon and label follow IsRunning; both read the button Foreground, which the style also switches. -->
+                            <Path Margin="0,0,9,0" VerticalAlignment="Center" Stretch="None"
+                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}">
+                                <Path.Style>
+                                    <Style TargetType="Path">
+                                        <Setter Property="Data" Value="{StaticResource PlayIcon}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                                                <Setter Property="Data" Value="{StaticResource StopIcon}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Path.Style>
+                            </Path>
+                            <TextBlock VerticalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="{x:Static res:Strings.StartButton}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                                                <Setter Property="Text" Value="{x:Static res:Strings.StopButton}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Grid>
 
             <!--
-              Hero: the car, four tire callouts and their leader lines live on ONE fixed-size design canvas
-              (920 x 440) inside a Viewbox. The Viewbox scales the whole drawing uniformly, so the leader lines
-              stay glued to the wheels at any window size. Tradeoff: text scales with the window (it is never
-              reflowed) and the aspect ratio is fixed, leaving empty margins when the hero area is much wider
-              or taller than 920:440. The alternative (computing line endpoints from callout/wheel positions at
-              runtime in code-behind) stays crisp but is far more code and easy to desync.
+              Page area. The ContentControl shows whatever object CurrentPage holds, and finds HOW to show it by looking for
+              a DataTemplate whose DataType is that object's type (the implicit templates in Window.Resources). So
+              navigating is just "CurrentPage = another view model": WPF throws away the old view and builds the new one,
+              with the new view model already as its DataContext. Trade-off: a page's view is rebuilt on every visit
+              (its on-screen-only state, like the G-force trail, starts fresh) while its view model, which holds the real
+              state, lives on. Fine for these screens; a heavier one could cache its view.
+              IsTabStop=False: the ContentControl itself is not a keyboard stop, only the controls inside the page are.
             -->
-            <Border Grid.Row="2" Style="{StaticResource CardStyle}" Margin="28,18,28,18" Padding="12"
-                    AutomationProperties.Name="{x:Static res:Strings.HeroTitle}">
-                <Viewbox Stretch="Uniform">
-                    <Canvas Width="920" Height="440">
-                        <!-- Leader lines first, so the cards and wheels draw over their ends. -->
-                        <Line X1="220" Y1="88" X2="378" Y2="110" Style="{StaticResource LeaderLine}" />
-                        <Line X1="220" Y1="352" X2="378" Y2="325" Style="{StaticResource LeaderLine}" />
-                        <Line X1="700" Y1="88" X2="542" Y2="110" Style="{StaticResource LeaderLine}" />
-                        <Line X1="700" Y1="352" X2="542" Y2="325" Style="{StaticResource LeaderLine}" />
-
-                        <!-- The car: drawn around its own centre (0,0), then moved to the middle of the canvas. -->
-                        <Canvas Canvas.Left="460" Canvas.Top="220">
-                            <!-- Wheels first: the body covers their inner half, so they read as tires peeking out. -->
-                            <Rectangle Canvas.Left="-90" Canvas.Top="-141" Width="28" Height="62" RadiusX="8" RadiusY="8"
-                                       DataContext="{Binding FrontLeft}" Style="{StaticResource TireBandShape}" />
-                            <Rectangle Canvas.Left="62" Canvas.Top="-141" Width="28" Height="62" RadiusX="8" RadiusY="8"
-                                       DataContext="{Binding FrontRight}" Style="{StaticResource TireBandShape}" />
-                            <Rectangle Canvas.Left="-90" Canvas.Top="74" Width="28" Height="62" RadiusX="8" RadiusY="8"
-                                       DataContext="{Binding RearLeft}" Style="{StaticResource TireBandShape}" />
-                            <Rectangle Canvas.Left="62" Canvas.Top="74" Width="28" Height="62" RadiusX="8" RadiusY="8"
-                                       DataContext="{Binding RearRight}" Style="{StaticResource TireBandShape}" />
-
-                            <!-- Body -->
-                            <Path StrokeThickness="1.5" StrokeLineJoin="Round"
-                                  Stroke="{StaticResource MutedBrush}"
-                                  Data="M 0,-190 C 38,-190 60,-176 66,-148 C 70,-128 72,-110 72,-96 L 70,-40
-                                        C 68,-10 70,40 72,90 C 74,130 70,160 58,176 C 46,188 24,190 0,190
-                                        C -24,190 -46,188 -58,176 C -70,160 -74,130 -72,90 C -70,40 -68,-10 -70,-40
-                                        L -72,-96 C -72,-110 -70,-128 -66,-148 C -60,-176 -38,-190 0,-190 Z">
-                                <Path.Fill>
-                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                        <GradientStop Offset="0" Color="{StaticResource HairlineColor}" />
-                                        <GradientStop Offset="0.5" Color="{StaticResource CardRaisedColor}" />
-                                        <GradientStop Offset="1" Color="{StaticResource HairlineColor}" />
-                                    </LinearGradientBrush>
-                                </Path.Fill>
-                            </Path>
-
-                            <!-- Hood and rear deck creases -->
-                            <Path Stroke="{StaticResource MutedBrush}" StrokeThickness="1" Opacity="0.45"
-                                  Data="M -34,-160 C -20,-150 -18,-110 -26,-76 M 34,-160 C 20,-150 18,-110 26,-76
-                                        M -30,132 C -22,120 -20,90 -26,72 M 30,132 C 22,120 20,90 26,72" />
-                            <!-- Center highlight line along the car -->
-                            <Path Stroke="{StaticResource TextBrush}" StrokeThickness="1" Opacity="0.14"
-                                  Data="M 0,-182 L 0,-76 M 0,76 L 0,176" />
-
-                            <!-- Windshield, roof and rear glass -->
-                            <Path Fill="{StaticResource CanvasBrush}"
-                                  Data="M -50,-72 C -30,-84 30,-84 50,-72 L 44,-34 C 20,-40 -20,-40 -44,-34 Z" />
-                            <Path Fill="{StaticResource CardBrush}" Stroke="{StaticResource HairlineBrush}" StrokeThickness="1"
-                                  Data="M -44,-34 C -20,-40 20,-40 44,-34 L 44,32 C 20,38 -20,38 -44,32 Z" />
-                            <Path Fill="{StaticResource CanvasBrush}"
-                                  Data="M -44,38 C -20,44 20,44 44,38 L 50,72 C 30,82 -30,82 -50,72 Z" />
-                            <!-- Glass glint -->
-                            <Path Stroke="{StaticResource TextBrush}" StrokeThickness="1.2" Opacity="0.22"
-                                  Data="M -32,-70 L -22,-48" />
-
-                            <!-- Side mirrors -->
-                            <Ellipse Canvas.Left="-84" Canvas.Top="-66" Width="14" Height="9" Fill="{StaticResource HairlineBrush}"
-                                     Stroke="{StaticResource MutedBrush}" StrokeThickness="1" />
-                            <Ellipse Canvas.Left="70" Canvas.Top="-66" Width="14" Height="9" Fill="{StaticResource HairlineBrush}"
-                                     Stroke="{StaticResource MutedBrush}" StrokeThickness="1" />
-
-                            <!-- Headlights and tail light bar -->
-                            <Path Stroke="{StaticResource TextBrush}" StrokeThickness="2.5" StrokeStartLineCap="Round"
-                                  StrokeEndLineCap="Round" Opacity="0.75"
-                                  Data="M -56,-160 L -38,-174 M 56,-160 L 38,-174" />
-                            <Path Stroke="{StaticResource BrakeBrush}" StrokeThickness="3" StrokeStartLineCap="Round"
-                                  StrokeEndLineCap="Round" Opacity="0.8"
-                                  Data="M -48,182 C -20,188 20,188 48,182" />
-                        </Canvas>
-
-                        <!-- Dots on the wheels: where each leader line attaches. -->
-                        <Ellipse Canvas.Left="374" Canvas.Top="106" Width="8" Height="8" Stroke="{StaticResource CardBrush}"
-                                 StrokeThickness="1.5" DataContext="{Binding FrontLeft}" Style="{StaticResource TireBandShape}" />
-                        <Ellipse Canvas.Left="374" Canvas.Top="321" Width="8" Height="8" Stroke="{StaticResource CardBrush}"
-                                 StrokeThickness="1.5" DataContext="{Binding RearLeft}" Style="{StaticResource TireBandShape}" />
-                        <Ellipse Canvas.Left="538" Canvas.Top="106" Width="8" Height="8" Stroke="{StaticResource CardBrush}"
-                                 StrokeThickness="1.5" DataContext="{Binding FrontRight}" Style="{StaticResource TireBandShape}" />
-                        <Ellipse Canvas.Left="538" Canvas.Top="321" Width="8" Height="8" Stroke="{StaticResource CardBrush}"
-                                 StrokeThickness="1.5" DataContext="{Binding RearRight}" Style="{StaticResource TireBandShape}" />
-
-                        <!-- Callout cards: 190 x 104 each, left column x=30, right column x=700. -->
-                        <ContentControl Canvas.Left="30" Canvas.Top="36" Style="{StaticResource TireCallout}"
-                                        DataContext="{Binding FrontLeft}" Tag="{x:Static res:Strings.TireFrontLeft}" />
-                        <ContentControl Canvas.Left="30" Canvas.Top="300" Style="{StaticResource TireCallout}"
-                                        DataContext="{Binding RearLeft}" Tag="{x:Static res:Strings.TireRearLeft}" />
-                        <ContentControl Canvas.Left="700" Canvas.Top="36" Style="{StaticResource TireCallout}"
-                                        DataContext="{Binding FrontRight}" Tag="{x:Static res:Strings.TireFrontRight}" />
-                        <ContentControl Canvas.Left="700" Canvas.Top="300" Style="{StaticResource TireCallout}"
-                                        DataContext="{Binding RearRight}" Tag="{x:Static res:Strings.TireRearRight}" />
-                    </Canvas>
-                </Viewbox>
-            </Border>
-
-            <!--
-              Shift lights: a custom control (see Controls/ShiftLightStrip.cs). Value is the RPM, Maximum the redline; the
-              view model decides IsRedline so the blink rule lives in one tested place.
-            -->
-            <controls:ShiftLightStrip Grid.Row="3" Height="20" Margin="28,0,28,14"
-                                      Value="{Binding Rpm}" Maximum="{Binding MaxRpm}" IsRedline="{Binding IsRedline}" />
-
-            <!--
-              Bottom row: four cards, fixed 208 high so the hero (the only star row) gets what is left at any window size.
-              Column weights (0.9 / 1.1 / 1.15 / 1.25) give each card the width its content needs at the minimum size.
-            -->
-            <Grid Grid.Row="4" Margin="28,0,28,28" Height="208">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="0.9*" />
-                    <ColumnDefinition Width="1.1*" />
-                    <ColumnDefinition Width="1.15*" />
-                    <ColumnDefinition Width="1.25*" />
-                </Grid.ColumnDefinitions>
-
-                <!-- Gear and speed -->
-                <Border Grid.Column="0" Style="{StaticResource CardStyle}" Padding="18" Margin="0,0,7,0"
-                        AutomationProperties.Name="{x:Static res:Strings.GearSpeedTitle}">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" MinWidth="84" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" VerticalAlignment="Bottom">
-                            <TextBlock Text="{x:Static res:Strings.GearLabel}" Style="{StaticResource MutedLabel}" />
-                            <TextBlock Text="{Binding GearLabel}" Style="{StaticResource NumeralText}" FontSize="96" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" VerticalAlignment="Bottom" Margin="0,0,0,10">
-                            <TextBlock Text="{x:Static res:Strings.SpeedLabel}" Style="{StaticResource MutedLabel}" />
-                            <TextBlock Text="{Binding SpeedKmh, StringFormat={}{0:F0}}" Style="{StaticResource NumeralText}"
-                                       FontSize="64" />
-                            <TextBlock Text="{x:Static res:Strings.SpeedUnit}" Style="{StaticResource MutedLabel}" />
-                        </StackPanel>
-                    </Grid>
-                </Border>
-
-                <!-- G-force: traction circle on the left, the two numbers on the right. -->
-                <Border Grid.Column="1" Style="{StaticResource CardStyle}" Padding="18" Margin="7,0,7,0"
-                        AutomationProperties.Name="{x:Static res:Strings.GForceTitle}">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-                        <TextBlock Text="{x:Static res:Strings.GForceTitle}" Style="{StaticResource MutedLabel}" />
-                        <Grid Grid.Row="1" Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <!-- A FrameworkElement that draws itself measures to 0 x 0, so it must STRETCH to the cell (Center would collapse it);
-                                 it then draws a centered circle as large as the cell allows. -->
-                            <controls:GForceMeter Grid.Column="0"
-                                                  LateralG="{Binding LateralG}" LongitudinalG="{Binding LongitudinalG}"
-                                                  TrailResetToken="{Binding TrailResetToken}" />
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,0,0">
-                                <TextBlock Text="{x:Static res:Strings.GForceLateralLabel}" Style="{StaticResource MutedLabel}" FontSize="12" />
-                                <TextBlock Style="{StaticResource NumeralText}" FontSize="26" Margin="0,0,0,10">
-                                    <Run Text="{Binding LateralG, Mode=OneWay, StringFormat={}{0:+0.00;-0.00;0.00}}" />
-                                    <Run Text="{x:Static res:Strings.GForceUnit}" FontSize="14" Foreground="{StaticResource MutedBrush}" />
-                                </TextBlock>
-                                <TextBlock Text="{x:Static res:Strings.GForceLongitudinalLabel}" Style="{StaticResource MutedLabel}" FontSize="12" />
-                                <TextBlock Style="{StaticResource NumeralText}" FontSize="26">
-                                    <Run Text="{Binding LongitudinalG, Mode=OneWay, StringFormat={}{0:+0.00;-0.00;0.00}}" />
-                                    <Run Text="{x:Static res:Strings.GForceUnit}" FontSize="14" Foreground="{StaticResource MutedBrush}" />
-                                </TextBlock>
-                            </StackPanel>
-                        </Grid>
-                    </Grid>
-                </Border>
-
-                <!-- Inputs: throttle and brake as tall bars, then steering, clutch and handbrake as thin bars. -->
-                <Border Grid.Column="2" Style="{StaticResource CardStyle}" Padding="18" Margin="7,0,7,0"
-                        AutomationProperties.Name="{x:Static res:Strings.InputsTitle}">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-                        <TextBlock Text="{x:Static res:Strings.InputsTitle}" Style="{StaticResource MutedLabel}" />
-                        <Grid Grid.Row="1" Margin="0,10,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Grid Grid.Column="0" Margin="0,0,16,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" MinWidth="58" />
-                                    <ColumnDefinition Width="Auto" MinWidth="58" />
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="*" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-                                <controls:BarMeter Grid.Column="0" Orientation="Vertical" Width="22" Margin="0,0,0,6"
-                                                   Value="{Binding ThrottleInput}" FillBrush="{StaticResource ThrottleBrush}" />
-                                <controls:BarMeter Grid.Column="1" Orientation="Vertical" Width="22" Margin="0,0,0,6"
-                                                   Value="{Binding BrakeInput}" FillBrush="{StaticResource BrakeBrush}" />
-                                <TextBlock Grid.Row="1" Grid.Column="0" Text="{x:Static res:Strings.ThrottleLabel}"
-                                           Style="{StaticResource MutedLabel}" FontSize="11" HorizontalAlignment="Center" />
-                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Static res:Strings.BrakeLabel}"
-                                           Style="{StaticResource MutedLabel}" FontSize="11" HorizontalAlignment="Center" />
-                            </Grid>
-                            <Grid Grid.Column="1">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="*" />
-                                    <RowDefinition Height="*" />
-                                    <RowDefinition Height="*" />
-                                </Grid.RowDefinitions>
-                                <StackPanel Grid.Row="0" VerticalAlignment="Center">
-                                    <TextBlock Text="{x:Static res:Strings.SteeringLabel}" Style="{StaticResource MutedLabel}" FontSize="11" />
-                                    <controls:BarMeter Height="8" Margin="0,4,0,0" IsBipolar="True" Minimum="-1" Maximum="1"
-                                                       Value="{Binding SteerInput}" />
-                                </StackPanel>
-                                <StackPanel Grid.Row="1" VerticalAlignment="Center">
-                                    <TextBlock Text="{x:Static res:Strings.ClutchLabel}" Style="{StaticResource MutedLabel}" FontSize="11" />
-                                    <controls:BarMeter Height="4" Margin="0,4,0,0" Value="{Binding ClutchInput}"
-                                                       FillBrush="{StaticResource MutedBrush}" />
-                                </StackPanel>
-                                <StackPanel Grid.Row="2" VerticalAlignment="Center">
-                                    <TextBlock Text="{x:Static res:Strings.HandbrakeLabel}" Style="{StaticResource MutedLabel}" FontSize="11" />
-                                    <controls:BarMeter Height="4" Margin="0,4,0,0" Value="{Binding HandBrakeInput}"
-                                                       FillBrush="{StaticResource MutedBrush}" />
-                                </StackPanel>
-                            </Grid>
-                        </Grid>
-                    </Grid>
-                </Border>
-
-                <!--
-                  Engine: RPM readout, then a 2 x 2 grid of tick gauges (power, torque, boost, fuel). The shift lights
-                  above already show where the RPM is in the band, so the old RPM progress bar is gone.
-                -->
-                <Border Grid.Column="3" Style="{StaticResource CardStyle}" Padding="18" Margin="7,0,0,0"
-                        AutomationProperties.Name="{x:Static res:Strings.EngineTitle}">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-                        <TextBlock Grid.Row="0" Text="{x:Static res:Strings.EngineTitle}" Style="{StaticResource MutedLabel}" />
-                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,2,0,0"
-                                    AutomationProperties.Name="{x:Static res:Strings.RpmLabel}">
-                            <TextBlock Text="{Binding RpmReadout}" Style="{StaticResource NumeralText}" FontSize="30" />
-                            <TextBlock Text="{x:Static res:Strings.RpmUnit}" Style="{StaticResource MutedLabel}" Margin="6,0,0,5"
-                                       VerticalAlignment="Bottom" />
-                        </StackPanel>
-                        <Grid Grid.Row="2" Margin="0,6,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="*" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-
-                            <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center">
-                                <TextBlock Text="{x:Static res:Strings.PowerLabel}" Style="{StaticResource MutedLabel}" FontSize="11" />
-                                <TextBlock Style="{StaticResource NumeralText}" FontSize="20">
-                                    <Run Text="{Binding PowerKw, Mode=OneWay, StringFormat={}{0:F0}}" />
-                                    <Run Text="{x:Static res:Strings.PowerUnitKw}" FontSize="12" Foreground="{StaticResource MutedBrush}" />
-                                    <Run Text="{Binding PowerHp, Mode=OneWay, StringFormat={}{0:F0}}" FontSize="14" Foreground="{StaticResource MutedBrush}" />
-                                    <Run Text="{x:Static res:Strings.PowerUnitHp}" FontSize="12" Foreground="{StaticResource MutedBrush}" />
-                                </TextBlock>
-                                <controls:TickGauge Height="8" Margin="0,3,0,0" Value="{Binding PowerRatio}" />
-                            </StackPanel>
-
-                            <StackPanel Grid.Row="0" Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
-                                <TextBlock Text="{x:Static res:Strings.TorqueLabel}" Style="{StaticResource MutedLabel}" FontSize="11" />
-                                <TextBlock Style="{StaticResource NumeralText}" FontSize="20">
-                                    <Run Text="{Binding TorqueNm, Mode=OneWay, StringFormat={}{0:F0}}" />
-                                    <Run Text="{x:Static res:Strings.TorqueUnit}" FontSize="12" Foreground="{StaticResource MutedBrush}" />
-                                </TextBlock>
-                                <controls:TickGauge Height="8" Margin="0,3,0,0" Value="{Binding TorqueRatio}" />
-                            </StackPanel>
-
-                            <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center">
-                                <TextBlock Text="{x:Static res:Strings.BoostLabel}" Style="{StaticResource MutedLabel}" FontSize="11" />
-                                <TextBlock Style="{StaticResource NumeralText}" FontSize="20">
-                                    <Run Text="{Binding BoostPsi, Mode=OneWay, StringFormat={}{0:F1}}" />
-                                    <Run Text="{x:Static res:Strings.BoostUnit}" FontSize="12" Foreground="{StaticResource MutedBrush}" />
-                                </TextBlock>
-                                <controls:TickGauge Height="8" Margin="0,3,0,0" Value="{Binding BoostRatio}" />
-                            </StackPanel>
-
-                            <StackPanel Grid.Row="1" Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
-                                <TextBlock Text="{x:Static res:Strings.FuelLabel}" Style="{StaticResource MutedLabel}" FontSize="11" />
-                                <TextBlock Style="{StaticResource NumeralText}" FontSize="20">
-                                    <Run Text="{Binding FuelPercent, Mode=OneWay, StringFormat={}{0:F0}}" />
-                                    <Run Text="{x:Static res:Strings.PercentUnit}" FontSize="12" Foreground="{StaticResource MutedBrush}" />
-                                </TextBlock>
-                                <controls:TickGauge Height="8" Margin="0,3,0,0" Value="{Binding FuelRatio}" />
-                            </StackPanel>
-                        </Grid>
-                    </Grid>
-                </Border>
-            </Grid>
+            <ContentControl Grid.Row="2" Content="{Binding CurrentPage}" IsTabStop="False" KeyboardNavigation.TabNavigation="Local"
+                            KeyboardNavigation.TabIndex="2" />
         </Grid>
     </Border>
 </Window>

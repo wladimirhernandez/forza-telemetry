@@ -1,0 +1,40 @@
+<UserControl x:Class="ForzaTelemetry.App.Views.PlaceholderView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:res="clr-namespace:ForzaTelemetry.App.Resources"
+             mc:Ignorable="d"
+             d:DesignWidth="1300" d:DesignHeight="700">
+    <!--
+      Empty state for a screen that is not built yet. One view serves every placeholder tab: the DataContext is a
+      PlaceholderPageViewModel, so the icon, title and sentence are all data. Calm on purpose: a muted icon in a round
+      badge, the title, one sentence of what is coming and a small "Coming soon" tag, centered in a card.
+    -->
+    <Border Style="{StaticResource CardStyle}" Margin="28,6,28,28"
+            AutomationProperties.Name="{Binding Title}">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="460">
+            <!-- Icon badge. Binding a string to Path.Data works: WPF converts it to a Geometry with the path mini-language. -->
+            <Border Width="72" Height="72" CornerRadius="{StaticResource PillRadius}" HorizontalAlignment="Center"
+                    Background="{StaticResource CardRaisedBrush}" BorderBrush="{StaticResource HairlineBrush}"
+                    BorderThickness="1">
+                <!-- The Canvas is the fixed 24 x 24 drawing box the icon paths are designed in, so every icon centers the same
+                     way; the Viewbox scales that box up (vector, so it stays crisp) to fill the badge comfortably. -->
+                <Viewbox Width="34" Height="34" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Canvas Width="24" Height="24">
+                        <Path Data="{Binding IconPathData}" Stroke="{StaticResource MutedBrush}" StrokeThickness="1.4"
+                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                    </Canvas>
+                </Viewbox>
+            </Border>
+            <TextBlock Text="{Binding Title}" Style="{StaticResource ValueText}" FontSize="24" FontWeight="SemiBold"
+                       HorizontalAlignment="Center" Margin="0,22,0,0" />
+            <TextBlock Text="{Binding Description}" Style="{StaticResource MutedLabel}" FontSize="15"
+                       TextWrapping="Wrap" TextAlignment="Center" Margin="0,10,0,0" LineHeight="22" />
+            <Border HorizontalAlignment="Center" Margin="0,22,0,0" Padding="12,4" CornerRadius="13"
+                    BorderBrush="{StaticResource HairlineBrush}" BorderThickness="1">
+                <TextBlock Text="{x:Static res:Strings.ComingSoon}" Style="{StaticResource MutedLabel}" FontSize="12" />
+            </Border>
+        </StackPanel>
+    </Border>
+</UserControl>

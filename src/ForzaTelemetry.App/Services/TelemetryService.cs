@@ -27,7 +27,7 @@ namespace ForzaTelemetry.App.Services;
 /// repainting, and it cannot do that while blocked awaiting the next packet. <see cref="Task.Run"/>
 /// hands the whole loop to a thread-pool thread instead, so the UI thread stays free. This is also
 /// exactly why nothing in this class may touch a bound UI property directly — see
-/// <c>MainViewModel.Refresh</c> and <c>DispatcherTimerTicker</c> for how the UI safely reads back
+/// <c>ShellViewModel.Refresh</c> and <c>DispatcherTimerTicker</c> for how the UI safely reads back
 /// out of this service instead.
 /// </para>
 /// <para>
@@ -40,7 +40,7 @@ namespace ForzaTelemetry.App.Services;
 /// <b>Why <see cref="Volatile"/>/<see cref="Interlocked"/>, not a <c>lock</c>:</b> exactly one
 /// thread — the background receive loop — ever WRITES <see cref="Latest"/>, <see cref="ReceivedCount"/>
 /// and the last-packet timestamp; one or more other threads (the UI thread, via
-/// <c>MainViewModel.Refresh</c>) only ever READ them. That single-writer/many-reader shape is
+/// <c>ShellViewModel.Refresh</c>) only ever READ them. That single-writer/many-reader shape is
 /// exactly what these primitives are for: they guarantee a reader never observes a half-written
 /// value, without paying for a full lock on every one of the ~30-60 packets/sec this can receive.
 /// </para>
@@ -91,8 +91,8 @@ public sealed class TelemetryService : IAsyncDisposable
     public Exception? Fault => Volatile.Read(ref _fault);
 
     // Note: this service deliberately does NOT track "time since last packet" itself — that would
-    // need its own clock, and MainViewModel already needs an injected TimeProvider for
-    // PacketsPerSecond. Keeping only ReceivedCount here lets MainViewModel derive "how long since a
+    // need its own clock, and ShellViewModel already needs an injected TimeProvider for
+    // PacketsPerSecond. Keeping only ReceivedCount here lets ShellViewModel derive "how long since a
     // NEW packet arrived" from ONE clock (see its Refresh method), instead of two clocks
     // (this service's real one, and the view model's injected one) that could disagree in a test.
 
@@ -184,7 +184,7 @@ public sealed class TelemetryService : IAsyncDisposable
             // a background Task.Run that nobody is awaiting. An unobserved Task exception is exactly
             // the kind of failure that either crashes the process or vanishes silently depending on
             // the runtime, neither of which is acceptable for "the network hiccuped" in a UI app —
-            // recording it as Fault lets MainViewModel show it instead.
+            // recording it as Fault lets ShellViewModel show it instead.
             Volatile.Write(ref _fault, ex);
             AppLog.LoopFaulted(_logger, ex);
         }

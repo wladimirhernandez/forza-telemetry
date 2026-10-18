@@ -2,7 +2,7 @@ namespace ForzaTelemetry.App;
 
 /// <summary>
 /// Coarse connection state the view maps to a colour (status pill dot). Kept separate from
-/// <see cref="MainViewModel.Status"/>, which is the human-readable sentence: the view needs a closed set to
+/// <see cref="ShellViewModel.Status"/>, which is the human-readable sentence: the view needs a closed set to
 /// switch on, not text to parse.
 /// </summary>
 public enum ConnectionState

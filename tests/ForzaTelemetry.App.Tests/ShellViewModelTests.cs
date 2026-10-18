@@ -9,14 +9,14 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace ForzaTelemetry.App.Tests;
 
-public class MainViewModelTests
+public class ShellViewModelTests
 {
     [Fact]
     public async Task Start_then_a_received_packet_updates_Rpm_Speed_and_Gear_on_Refresh()
     {
         var fake = new FakeTelemetrySource();
         var service = new TelemetryService(() => fake);
-        var vm = new MainViewModel(service, TimeProvider.System);
+        var vm = new ShellViewModel(service, TimeProvider.System);
 
         await vm.StartCommand.ExecuteAsync(null);
         fake.Publish(TestPackets.Sample(currentEngineRpm: 5_200f, engineMaxRpm: 7_500f, speedMetersPerSecond: 40f, gear: 4));
@@ -24,10 +24,10 @@ public class MainViewModelTests
 
         vm.Refresh();
 
-        Assert.Equal(5_200f, vm.Rpm);
-        Assert.Equal(7_500f, vm.MaxRpm);
-        Assert.Equal(40f * 3.6f, vm.SpeedKmh, precision: 3);
-        Assert.Equal("4", vm.GearLabel);
+        Assert.Equal(5_200f, vm.Dashboard.Rpm);
+        Assert.Equal(7_500f, vm.Dashboard.MaxRpm);
+        Assert.Equal(40f * 3.6f, vm.Dashboard.SpeedKmh, precision: 3);
+        Assert.Equal("4", vm.Dashboard.GearLabel);
         Assert.True(vm.IsRunning);
         Assert.Equal(Strings.StatusReceiving, vm.Status);
 
@@ -39,7 +39,7 @@ public class MainViewModelTests
     {
         var fake = new FakeTelemetrySource();
         var service = new TelemetryService(() => fake);
-        var vm = new MainViewModel(service, TimeProvider.System);
+        var vm = new ShellViewModel(service, TimeProvider.System);
 
         await vm.StartCommand.ExecuteAsync(null);
         fake.Publish(TestPackets.Sample(
@@ -49,14 +49,14 @@ public class MainViewModelTests
 
         vm.Refresh();
 
-        Assert.Equal(TireTempBand.Cold, vm.FrontLeft.Band);
-        Assert.Equal(TireTempBand.Ideal, vm.FrontRight.Band);
-        Assert.Equal(TireTempBand.Warm, vm.RearLeft.Band);
-        Assert.Equal(TireTempBand.Hot, vm.RearRight.Band);
-        Assert.Equal(0.7f, vm.FrontLeft.Slip);
-        Assert.Equal(0.3f, vm.FrontLeft.Suspension);
-        Assert.Equal(0.9f, vm.RearRight.Suspension);
-        Assert.Equal(0, vm.FrontLeft.TemperatureC, precision: 3);
+        Assert.Equal(TireTempBand.Cold, vm.Dashboard.FrontLeft.Band);
+        Assert.Equal(TireTempBand.Ideal, vm.Dashboard.FrontRight.Band);
+        Assert.Equal(TireTempBand.Warm, vm.Dashboard.RearLeft.Band);
+        Assert.Equal(TireTempBand.Hot, vm.Dashboard.RearRight.Band);
+        Assert.Equal(0.7f, vm.Dashboard.FrontLeft.Slip);
+        Assert.Equal(0.3f, vm.Dashboard.FrontLeft.Suspension);
+        Assert.Equal(0.9f, vm.Dashboard.RearRight.Suspension);
+        Assert.Equal(0, vm.Dashboard.FrontLeft.TemperatureC, precision: 3);
 
         await vm.StopCommand.ExecuteAsync(null);
     }
@@ -68,13 +68,13 @@ public class MainViewModelTests
         var secondSource = new FakeTelemetrySource();
         var sourcesToHandOut = new Queue<ITelemetrySource>([firstSource, secondSource]);
         var service = new TelemetryService(() => sourcesToHandOut.Dequeue());
-        var vm = new MainViewModel(service, TimeProvider.System);
+        var vm = new ShellViewModel(service, TimeProvider.System);
 
         await vm.StartCommand.ExecuteAsync(null);
         firstSource.Publish(TestPackets.Sample(gear: 1));
         Assert.True(await Wait.UntilAsync(() => service.ReceivedCount == 1));
         vm.Refresh();
-        Assert.Equal("1", vm.GearLabel);
+        Assert.Equal("1", vm.Dashboard.GearLabel);
 
         await vm.StopCommand.ExecuteAsync(null);
         Assert.False(vm.IsRunning);
@@ -85,7 +85,7 @@ public class MainViewModelTests
         Assert.True(await Wait.UntilAsync(() => service.ReceivedCount == 2));
         vm.Refresh();
 
-        Assert.Equal("2", vm.GearLabel);
+        Assert.Equal("2", vm.Dashboard.GearLabel);
         Assert.True(vm.IsRunning);
 
         await vm.StopCommand.ExecuteAsync(null);
@@ -96,7 +96,7 @@ public class MainViewModelTests
     {
         var service = new TelemetryService(
             () => throw new SocketException((int)SocketError.AddressAlreadyInUse));
-        var vm = new MainViewModel(service, TimeProvider.System);
+        var vm = new ShellViewModel(service, TimeProvider.System);
 
         await vm.StartCommand.ExecuteAsync(null);
 
@@ -113,7 +113,7 @@ public class MainViewModelTests
         var fake = new FakeTelemetrySource();
         var service = new TelemetryService(() => fake);
         var timeProvider = new FakeTimeProvider();
-        var vm = new MainViewModel(service, timeProvider);
+        var vm = new ShellViewModel(service, timeProvider);
 
         // Anchors _lastRefreshAt at the fake clock's starting instant.
         await vm.StartCommand.ExecuteAsync(null);
@@ -139,7 +139,7 @@ public class MainViewModelTests
         var fake = new FakeTelemetrySource();
         var service = new TelemetryService(() => fake);
         var timeProvider = new FakeTimeProvider();
-        var vm = new MainViewModel(service, timeProvider);
+        var vm = new ShellViewModel(service, timeProvider);
 
         await vm.StartCommand.ExecuteAsync(null);
         fake.Publish(TestPackets.Sample());
@@ -164,7 +164,7 @@ public class MainViewModelTests
         // exactly when a "tick" happens by calling ManualTicker.Tick() itself.
         var fake = new FakeTelemetrySource();
         var service = new TelemetryService(() => fake);
-        var vm = new MainViewModel(service, TimeProvider.System);
+        var vm = new ShellViewModel(service, TimeProvider.System);
         var ticker = new ManualTicker();
         ticker.Start(TimeSpan.FromMilliseconds(50), vm.Refresh);
 
@@ -174,7 +174,7 @@ public class MainViewModelTests
 
         ticker.Tick();
 
-        Assert.Equal("7", vm.GearLabel);
+        Assert.Equal("7", vm.Dashboard.GearLabel);
 
         await vm.StopCommand.ExecuteAsync(null);
     }
@@ -185,7 +185,7 @@ public class MainViewModelTests
         var fake = new FakeTelemetrySource();
         var service = new TelemetryService(() => fake);
         var timeProvider = new FakeTimeProvider();
-        var vm = new MainViewModel(service, timeProvider);
+        var vm = new ShellViewModel(service, timeProvider);
         Assert.Equal(ConnectionState.Stopped, vm.ConnectionState);
 
         await vm.StartCommand.ExecuteAsync(null);
@@ -209,7 +209,7 @@ public class MainViewModelTests
     {
         var service = new TelemetryService(
             () => throw new SocketException((int)SocketError.AddressAlreadyInUse));
-        var vm = new MainViewModel(service, TimeProvider.System);
+        var vm = new ShellViewModel(service, TimeProvider.System);
 
         await vm.StartCommand.ExecuteAsync(null);
 
@@ -221,17 +221,17 @@ public class MainViewModelTests
     {
         var fake = new FakeTelemetrySource();
         var service = new TelemetryService(() => fake);
-        var vm = new MainViewModel(service, TimeProvider.System);
+        var vm = new ShellViewModel(service, TimeProvider.System);
         var changed = new List<string?>();
-        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+        vm.Dashboard.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
 
         await vm.StartCommand.ExecuteAsync(null);
         fake.Publish(TestPackets.Sample(currentEngineRpm: 7_439f, engineMaxRpm: 9_000f));
         Assert.True(await Wait.UntilAsync(() => service.ReceivedCount == 1));
         vm.Refresh();
 
-        Assert.Equal("7 439 / 9 000", vm.RpmReadout);
-        Assert.Contains(nameof(MainViewModel.RpmReadout), changed);
+        Assert.Equal("7 439 / 9 000", vm.Dashboard.RpmReadout);
+        Assert.Contains(nameof(DashboardViewModel.RpmReadout), changed);
 
         await vm.StopCommand.ExecuteAsync(null);
     }
@@ -243,7 +243,7 @@ public class MainViewModelTests
         var secondSource = new FakeTelemetrySource();
         var sourcesToHandOut = new Queue<ITelemetrySource>([firstSource, secondSource]);
         var service = new TelemetryService(() => sourcesToHandOut.Dequeue());
-        var vm = new MainViewModel(service, TimeProvider.System);
+        var vm = new ShellViewModel(service, TimeProvider.System);
 
         await vm.ToggleListeningCommand.ExecuteAsync(null);
         Assert.True(vm.IsRunning);
@@ -260,13 +260,13 @@ public class MainViewModelTests
     }
 
     [Fact]
-    public void Design_time_constructor_populates_sample_values_for_the_previewer()
+    public void Design_time_sample_populates_values_for_the_previewer()
     {
-        var vm = new MainViewModel();
+        var vm = ShellViewModel.DesignSample;
 
         Assert.True(vm.IsRunning);
-        Assert.False(string.IsNullOrWhiteSpace(vm.GearLabel));
-        Assert.True(vm.MaxRpm > 0);
+        Assert.False(string.IsNullOrWhiteSpace(vm.Dashboard.GearLabel));
+        Assert.True(vm.Dashboard.MaxRpm > 0);
     }
 
     // ---- Per-session state ------------------------------------------------------------------------------
@@ -279,13 +279,13 @@ public class MainViewModelTests
         var sources = new Queue<ITelemetrySource>([firstSource, secondSource]);
         var service = new TelemetryService(() => sources.Dequeue());
         var timeProvider = new FakeTimeProvider();
-        var vm = new MainViewModel(service, timeProvider);
+        var vm = new ShellViewModel(service, timeProvider);
 
         await vm.StartCommand.ExecuteAsync(null);
         firstSource.Publish(TestPackets.Sample(currentEngineRpm: 6_000f, gear: 5, carOrdinal: 7, performanceIndex: 700));
         Assert.True(await Wait.UntilAsync(() => service.ReceivedCount == 1));
         vm.Refresh();
-        Assert.Equal(6_000f, vm.Rpm);
+        Assert.Equal(6_000f, vm.Dashboard.Rpm);
         await vm.StopCommand.ExecuteAsync(null);
 
         // Long pause between sessions: the old silence clock would read "No data for 60 s" right after Start.
@@ -294,10 +294,10 @@ public class MainViewModelTests
         vm.Refresh();
 
         Assert.Null(service.Latest);
-        Assert.Equal(0f, vm.Rpm);
-        Assert.Equal("-", vm.GearLabel);
-        Assert.False(vm.HasCarInfo);
-        Assert.Equal(TireTempBand.Unknown, vm.FrontLeft.Band);
+        Assert.Equal(0f, vm.Dashboard.Rpm);
+        Assert.Equal("-", vm.Dashboard.GearLabel);
+        Assert.False(vm.Dashboard.HasCarInfo);
+        Assert.Equal(TireTempBand.Unknown, vm.Dashboard.FrontLeft.Band);
         Assert.Equal(0.0, vm.PacketsPerSecond);
         Assert.Equal(ConnectionState.Listening, vm.ConnectionState);
         Assert.Equal(
@@ -315,7 +315,7 @@ public class MainViewModelTests
         var sources = new Queue<ITelemetrySource>([firstSource, secondSource]);
         var service = new TelemetryService(() => sources.Dequeue());
         var timeProvider = new FakeTimeProvider();
-        var vm = new MainViewModel(service, timeProvider);
+        var vm = new ShellViewModel(service, timeProvider);
 
         await vm.StartCommand.ExecuteAsync(null);
         for (var i = 0; i < 50; i++)
@@ -343,7 +343,7 @@ public class MainViewModelTests
     {
         var fake = new FakeTelemetrySource();
         var service = new TelemetryService(() => fake);
-        var vm = new MainViewModel(service, TimeProvider.System);
+        var vm = new ShellViewModel(service, TimeProvider.System);
 
         await vm.StartCommand.ExecuteAsync(null);
         // 7_000 of 7_000 rpm: a redline packet with pedals and G-forces.
@@ -352,20 +352,20 @@ public class MainViewModelTests
             power: 200_000f, fuel: 0.5f));
         Assert.True(await Wait.UntilAsync(() => service.ReceivedCount == 1));
         vm.Refresh();
-        Assert.True(vm.IsRedline);
-        Assert.True(vm.ThrottleInput > 0);
+        Assert.True(vm.Dashboard.IsRedline);
+        Assert.True(vm.Dashboard.ThrottleInput > 0);
 
         await vm.StopCommand.ExecuteAsync(null);
         vm.Refresh();
         vm.Refresh();
 
-        Assert.False(vm.IsRedline);
-        Assert.Equal(0.0, vm.ThrottleInput);
-        Assert.Equal(0.0, vm.BrakeInput);
-        Assert.Equal(0.0, vm.LateralG);
-        Assert.Equal(0.0, vm.PowerKw);
-        Assert.Equal(0.0, vm.FuelPercent);
-        Assert.Equal(0f, vm.Rpm);
+        Assert.False(vm.Dashboard.IsRedline);
+        Assert.Equal(0.0, vm.Dashboard.ThrottleInput);
+        Assert.Equal(0.0, vm.Dashboard.BrakeInput);
+        Assert.Equal(0.0, vm.Dashboard.LateralG);
+        Assert.Equal(0.0, vm.Dashboard.PowerKw);
+        Assert.Equal(0.0, vm.Dashboard.FuelPercent);
+        Assert.Equal(0f, vm.Dashboard.Rpm);
         Assert.Equal(ConnectionState.Stopped, vm.ConnectionState);
     }
 
@@ -375,7 +375,7 @@ public class MainViewModelTests
         var fake = new FakeTelemetrySource();
         var service = new TelemetryService(() => fake);
         var timeProvider = new FakeTimeProvider();
-        var vm = new MainViewModel(service, timeProvider);
+        var vm = new ShellViewModel(service, timeProvider);
 
         await vm.StartCommand.ExecuteAsync(null);
         for (var i = 0; i < 5; i++)
@@ -387,7 +387,7 @@ public class MainViewModelTests
         timeProvider.Advance(TimeSpan.FromSeconds(1));
         vm.Refresh();
         Assert.True(vm.PacketsPerSecond > 0);
-        Assert.True(vm.IsRedline);
+        Assert.True(vm.Dashboard.IsRedline);
 
         fake.FailNextReadWith(new InvalidOperationException("boom"));
         fake.Publish(TestPackets.Sample());
@@ -397,9 +397,9 @@ public class MainViewModelTests
 
         Assert.Equal(ConnectionState.Error, vm.ConnectionState);
         Assert.Equal(0.0, vm.PacketsPerSecond);
-        Assert.False(vm.IsRedline);
-        Assert.Equal(0.0, vm.ThrottleInput);
-        Assert.Equal(0f, vm.Rpm);
+        Assert.False(vm.Dashboard.IsRedline);
+        Assert.Equal(0.0, vm.Dashboard.ThrottleInput);
+        Assert.Equal(0f, vm.Dashboard.Rpm);
     }
 
     [Fact]
@@ -407,28 +407,28 @@ public class MainViewModelTests
     {
         var fake = new FakeTelemetrySource();
         var service = new TelemetryService(() => fake);
-        var vm = new MainViewModel(service, TimeProvider.System);
+        var vm = new ShellViewModel(service, TimeProvider.System);
         await vm.StartCommand.ExecuteAsync(null);
 
         // A strong car: 500 kW sets the power gauge scale; a 250 kW reading is then half of it.
         fake.Publish(TestPackets.Sample(power: 500_000f, carOrdinal: 11));
         Assert.True(await Wait.UntilAsync(() => service.ReceivedCount == 1));
         vm.Refresh();
-        var tokenAfterCar = vm.TrailResetToken;
+        var tokenAfterCar = vm.Dashboard.TrailResetToken;
 
         // Pause menu: zeroed packet with another ordinal. Must not count as a car change.
         fake.Publish(TestPackets.Sample(isRaceOn: false, carOrdinal: 0, power: 0));
         Assert.True(await Wait.UntilAsync(() => service.ReceivedCount == 2));
         vm.Refresh();
-        Assert.Equal(tokenAfterCar, vm.TrailResetToken);
+        Assert.Equal(tokenAfterCar, vm.Dashboard.TrailResetToken);
         Assert.Equal(ConnectionState.Receiving, vm.ConnectionState);
 
         fake.Publish(TestPackets.Sample(power: 250_000f, carOrdinal: 11));
         Assert.True(await Wait.UntilAsync(() => service.ReceivedCount == 3));
         vm.Refresh();
 
-        Assert.Equal(tokenAfterCar, vm.TrailResetToken);
-        Assert.Equal(0.5, vm.PowerRatio, precision: 2);
+        Assert.Equal(tokenAfterCar, vm.Dashboard.TrailResetToken);
+        Assert.Equal(0.5, vm.Dashboard.PowerRatio, precision: 2);
 
         await vm.StopCommand.ExecuteAsync(null);
     }
@@ -438,20 +438,20 @@ public class MainViewModelTests
     {
         var fake = new FakeTelemetrySource();
         var service = new TelemetryService(() => fake);
-        var vm = new MainViewModel(service, TimeProvider.System);
+        var vm = new ShellViewModel(service, TimeProvider.System);
         await vm.StartCommand.ExecuteAsync(null);
 
         fake.Publish(TestPackets.Sample(currentEngineRpm: 7_000f, engineMaxRpm: 7_000f));
         Assert.True(await Wait.UntilAsync(() => service.ReceivedCount == 1));
         vm.Refresh();
-        Assert.True(vm.IsRedline);
+        Assert.True(vm.Dashboard.IsRedline);
 
         fake.Publish(TestPackets.Sample(currentEngineRpm: 7_000f, engineMaxRpm: 7_000f, isRaceOn: false));
         Assert.True(await Wait.UntilAsync(() => service.ReceivedCount == 2));
         vm.Refresh();
 
-        Assert.False(vm.IsRedline);
-        Assert.Equal(0f, vm.Rpm);
+        Assert.False(vm.Dashboard.IsRedline);
+        Assert.Equal(0f, vm.Dashboard.Rpm);
 
         await vm.StopCommand.ExecuteAsync(null);
     }
@@ -461,32 +461,32 @@ public class MainViewModelTests
     {
         var fake = new FakeTelemetrySource();
         var service = new TelemetryService(() => fake);
-        var vm = new MainViewModel(service, TimeProvider.System);
-        var token = vm.TrailResetToken;
+        var vm = new ShellViewModel(service, TimeProvider.System);
+        var token = vm.Dashboard.TrailResetToken;
 
         await vm.StartCommand.ExecuteAsync(null);
-        Assert.NotEqual(token, vm.TrailResetToken);
-        token = vm.TrailResetToken;
+        Assert.NotEqual(token, vm.Dashboard.TrailResetToken);
+        token = vm.Dashboard.TrailResetToken;
 
         fake.Publish(TestPackets.Sample(carOrdinal: 1));
         Assert.True(await Wait.UntilAsync(() => service.ReceivedCount == 1));
         vm.Refresh();
-        Assert.NotEqual(token, vm.TrailResetToken); // first car seen
-        token = vm.TrailResetToken;
+        Assert.NotEqual(token, vm.Dashboard.TrailResetToken); // first car seen
+        token = vm.Dashboard.TrailResetToken;
 
         fake.Publish(TestPackets.Sample(carOrdinal: 1));
         Assert.True(await Wait.UntilAsync(() => service.ReceivedCount == 2));
         vm.Refresh();
-        Assert.Equal(token, vm.TrailResetToken); // same car: trail keeps growing
+        Assert.Equal(token, vm.Dashboard.TrailResetToken); // same car: trail keeps growing
 
         fake.Publish(TestPackets.Sample(carOrdinal: 2));
         Assert.True(await Wait.UntilAsync(() => service.ReceivedCount == 3));
         vm.Refresh();
-        Assert.NotEqual(token, vm.TrailResetToken);
-        token = vm.TrailResetToken;
+        Assert.NotEqual(token, vm.Dashboard.TrailResetToken);
+        token = vm.Dashboard.TrailResetToken;
 
         await vm.StopCommand.ExecuteAsync(null);
-        Assert.NotEqual(token, vm.TrailResetToken);
+        Assert.NotEqual(token, vm.Dashboard.TrailResetToken);
     }
 
     [Fact]
@@ -527,10 +527,10 @@ public class MainViewModelTests
     public void DataOutAddress_lists_the_LAN_addresses_and_the_port_is_the_listener_default()
     {
         var service = new TelemetryService(() => new FakeTelemetrySource());
-        var vm = new MainViewModel(service, TimeProvider.System, new FakeNetworkInfo("192.168.0.204", "10.0.0.7"));
+        var vm = new ShellViewModel(service, TimeProvider.System, new FakeNetworkInfo("192.168.0.204", "10.0.0.7"));
 
-        Assert.Equal("192.168.0.204, 10.0.0.7", vm.DataOutAddress);
-        Assert.Equal(UdpTelemetryListener.DefaultPort, vm.DataOutPort);
+        Assert.Equal("192.168.0.204, 10.0.0.7", vm.DataOut.Address);
+        Assert.Equal(UdpTelemetryListener.DefaultPort, vm.DataOut.Port);
     }
 
     [Fact]
@@ -538,8 +538,8 @@ public class MainViewModelTests
     {
         var service = new TelemetryService(() => new FakeTelemetrySource());
 
-        Assert.Equal(Strings.DataOutIpNone, new MainViewModel(service, TimeProvider.System, new FakeNetworkInfo()).DataOutAddress);
-        Assert.Equal(Strings.DataOutIpNone, new MainViewModel(service, TimeProvider.System).DataOutAddress);
+        Assert.Equal(Strings.DataOutIpNone, new ShellViewModel(service, TimeProvider.System, new FakeNetworkInfo()).DataOut.Address);
+        Assert.Equal(Strings.DataOutIpNone, new ShellViewModel(service, TimeProvider.System).DataOut.Address);
     }
 
     [Fact]
@@ -547,12 +547,12 @@ public class MainViewModelTests
     {
         var network = new FakeNetworkInfo("192.168.0.204");
         var service = new TelemetryService(() => new FakeTelemetrySource());
-        var vm = new MainViewModel(service, TimeProvider.System, network);
+        var vm = new ShellViewModel(service, TimeProvider.System, network);
 
         network.Ips = ["172.16.0.9"];
         await vm.StartCommand.ExecuteAsync(null);
 
-        Assert.Equal("172.16.0.9", vm.DataOutAddress);
+        Assert.Equal("172.16.0.9", vm.DataOut.Address);
 
         await vm.StopCommand.ExecuteAsync(null);
     }
@@ -561,7 +561,7 @@ public class MainViewModelTests
     public async Task Toggle_decides_from_the_live_service_state_not_the_tick_updated_IsRunning()
     {
         var service = new TelemetryService(() => new FakeTelemetrySource());
-        var vm = new MainViewModel(service, TimeProvider.System);
+        var vm = new ShellViewModel(service, TimeProvider.System);
 
         await service.StartAsync(); // the service runs, but no Refresh() ran: vm.IsRunning is still the stale false
         Assert.False(vm.IsRunning);
@@ -577,7 +577,7 @@ public class MainViewModelTests
         var disposeGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var fake = new FakeTelemetrySource { DisposeGate = disposeGate };
         var service = new TelemetryService(() => fake);
-        var vm = new MainViewModel(service, TimeProvider.System);
+        var vm = new ShellViewModel(service, TimeProvider.System);
         await vm.StartCommand.ExecuteAsync(null);
 
         var stopping = vm.ToggleListeningCommand.ExecuteAsync(null); // blocks inside the source's dispose
@@ -607,14 +607,14 @@ public class MainViewModelTests
         var fake = new FakeTelemetrySource();
         var service = new TelemetryService(() => fake);
         var timeProvider = new FakeTimeProvider();
-        var vm = new MainViewModel(service, timeProvider);
+        var vm = new ShellViewModel(service, timeProvider);
         await vm.StartCommand.ExecuteAsync(null);
 
         fake.Publish(TestPackets.Sample(engineMaxRpm: 8_200f));
         Assert.True(await Wait.UntilAsync(() => service.ReceivedCount == 1));
         timeProvider.Advance(TimeSpan.FromSeconds(1));
         vm.Refresh();
-        Assert.Equal(8_200f, vm.MaxRpm);
+        Assert.Equal(8_200f, vm.Dashboard.MaxRpm);
 
         for (var i = 0; i < 4; i++)
         {
@@ -625,36 +625,36 @@ public class MainViewModelTests
         timeProvider.Advance(TimeSpan.FromSeconds(1));
         vm.Refresh();
 
-        Assert.Equal(0f, vm.Rpm); // live driving values are idle...
+        Assert.Equal(0f, vm.Dashboard.Rpm); // live driving values are idle...
         Assert.Equal(4.0, vm.PacketsPerSecond, precision: 3); // ...but packets are still arriving
-        Assert.Equal(8_200f, vm.MaxRpm); // and the car's redline survives the pause
+        Assert.Equal(8_200f, vm.Dashboard.MaxRpm); // and the car's redline survives the pause
 
         await vm.StopCommand.ExecuteAsync(null);
     }
 
     [Fact]
-    public async Task DataOutPrimaryAddress_is_the_first_address_and_HasDataOutAddress_follows_it()
+    public async Task DataOut_PrimaryAddress_is_the_first_address_and_HasAddress_follows_it()
     {
         var network = new FakeNetworkInfo("192.168.0.204", "10.0.0.7");
-        var vm = new MainViewModel(new TelemetryService(() => new FakeTelemetrySource()), TimeProvider.System, network);
+        var vm = new ShellViewModel(new TelemetryService(() => new FakeTelemetrySource()), TimeProvider.System, network);
 
-        Assert.Equal("192.168.0.204", vm.DataOutPrimaryAddress);
-        Assert.True(vm.HasDataOutAddress);
+        Assert.Equal("192.168.0.204", vm.DataOut.PrimaryAddress);
+        Assert.True(vm.DataOut.HasAddress);
 
         network.Ips = [];
         await vm.StartCommand.ExecuteAsync(null);
 
-        Assert.Null(vm.DataOutPrimaryAddress);
-        Assert.False(vm.HasDataOutAddress);
+        Assert.Null(vm.DataOut.PrimaryAddress);
+        Assert.False(vm.DataOut.HasAddress);
         await vm.StopCommand.ExecuteAsync(null);
     }
 
     [Fact]
     public async Task Every_address_read_is_logged_and_Start_reads_the_adapters_off_the_calling_thread()
     {
-        var logger = new ListLogger<MainViewModel>();
+        var logger = new ListLogger<ShellViewModel>();
         var network = new FakeNetworkInfo("192.168.0.204");
-        var vm = new MainViewModel(new TelemetryService(() => new FakeTelemetrySource()), TimeProvider.System, network, logger);
+        var vm = new ShellViewModel(new TelemetryService(() => new FakeTelemetrySource()), TimeProvider.System, network, logger);
         var callerThread = Environment.CurrentManagedThreadId;
 
         await vm.StartCommand.ExecuteAsync(null);

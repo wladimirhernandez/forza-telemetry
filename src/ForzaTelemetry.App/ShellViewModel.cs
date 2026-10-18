@@ -1,0 +1,382 @@
+using System.Globalization;
+using System.Net.Sockets;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using ForzaTelemetry.App.Resources;
+using ForzaTelemetry.App.Services;
+using ForzaTelemetry.Core;
+using ForzaTelemetry.Udp;
+using Microsoft.Extensions.Logging;
+
+namespace ForzaTelemetry.App;
+
+/// <summary>
+/// The window's view model: which screen is showing (tab navigation), the connection status pills, the Data Out
+/// address, the Start/Stop toggle, and the one refresh that pulls telemetry out of the service every tick.
+/// </summary>
+/// <remarks>
+/// <b>Why a shell view model.</b> Before the tabs, one view model did everything because there was one screen. With
+/// several screens, the things that are true no matter which screen is open (are we listening? what is the status? what
+/// do I type into the game?) must not live inside any one screen's view model. This class owns them and the screens
+/// own only their own values (<see cref="DashboardViewModel"/>, later the Laps/Performance/... view models). The window
+/// binds its top bar to the shell and its content area to <see cref="CurrentPage"/>.
+/// <para>
+/// This class NEVER talks to <c>TelemetryService</c> per-packet. It only ever reads out of it inside
+/// <see cref="Refresh"/>, which something else (the composition root's <c>IUiTicker</c>) calls on a
+/// fixed schedule, on the UI thread — see <c>TelemetryService</c>'s and <c>DispatcherTimerTicker</c>'s
+/// remarks for the full reasoning. That is also why this class holds no reference to <see cref="IUiTicker"/>
+/// itself: it does not need to know HOW OFTEN it gets refreshed, only what to do when it is.
+/// </para>
+/// <para>
+/// <b>One ticker, many pages.</b> There is a single 20 Hz tick for the whole app. Each tick the shell reads the service
+/// once and updates the status and the <see cref="Dashboard"/> values. That is cheap on purpose: a property that is set to
+/// the value it already has raises no change notification, and a screen that is not showing has no bindings listening
+/// (the <c>ContentControl</c> removes the old page's view from the visual tree on navigation), so updating the dashboard
+/// while another tab is open costs a few field writes. The dashboard is always fed because the top bar's car pill reads
+/// it. A screen that is EXPENSIVE to update (a live chart, the track map) should not copy that approach: give it a
+/// method the shell calls only while <see cref="CurrentPage"/> is that screen.
+/// </para>
+/// </remarks>
+public sealed partial class ShellViewModel : ObservableObject
+{
+    /// <summary>How stale the latest packet must be before the status line switches to "No data for Ns".</summary>
+    private static readonly TimeSpan NoDataThreshold = TimeSpan.FromSeconds(2);
+
+    private readonly TelemetryService _telemetryService;
+    private readonly TimeProvider _timeProvider;
+
+    // Used by Refresh to turn "packets received since last time" into a per-second rate.
+    private long _receivedCountAtLastRefresh;
+    private DateTimeOffset _lastRefreshAt;
+
+    // Updated only when ReceivedCount has gone UP since the previous Refresh — i.e. "the last time a
+    // NEW packet actually arrived", not merely "the last time Refresh happened to run". Read from the
+    // same injected _timeProvider as PacketsPerSecond (not TelemetryService, which has no clock of its
+    // own — see that class's remarks) so a test can make time "pass" deterministically for both.
+    private DateTimeOffset _lastPacketArrivalAt;
+
+    // Human-readable status sentence. Its text comes from Resources/Strings*.resx (same as the view's own text);
+    // ConnectionState below is the language-neutral version the view and the tests can rely on.
+    [ObservableProperty]
+    private string _status = Strings.StatusStopped;
+
+    /// <summary>Closed-set version of <see cref="Status"/> that the view maps to the status dot colour.</summary>
+    [ObservableProperty]
+    private ConnectionState _connectionState = ConnectionState.Stopped;
+
+    [ObservableProperty]
+    private double _packetsPerSecond;
+
+    // [NotifyCanExecuteChangedFor]: whenever IsRunning changes, CommunityToolkit.Mvvm's source
+    // generator re-checks StartCommand/StopCommand's CanExecute automatically (calling
+    // Button.Command's CanExecute again is what actually enables/disables the bound Button in the
+    // view) — without this attribute, the buttons would only re-evaluate the next time WPF
+    // happened to ask, which is not guaranteed to be promptly after a Start/Stop.
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StopCommand))]
+    private bool _isRunning;
+
+    /// <param name="telemetryService">The already-constructed telemetry service this view model reads from in <see cref="Refresh"/>.</param>
+    /// <param name="timeProvider">
+    /// Injected instead of reading <see cref="DateTimeOffset.UtcNow"/> directly, so a test can pass a
+    /// fake clock (<c>Microsoft.Extensions.Time.Testing.FakeTimeProvider</c>) and get a deterministic,
+    /// exact <see cref="PacketsPerSecond"/> instead of one that depends on real wall-clock timing.
+    /// </param>
+    /// <param name="networkInfo">Source of the LAN address shown in the top bar; optional so tests that do not care can omit it.</param>
+    /// <param name="logger">Receives the address list on every read (so the log shows what the user was told); optional.</param>
+    /// <param name="clipboard">Target of the "copy IP" command; optional.</param>
+    /// <param name="dashboard">The dashboard screen's view model; optional so only a test or the designer has to pass one.</param>
+    public ShellViewModel(
+        TelemetryService telemetryService,
+        TimeProvider timeProvider,
+        INetworkInfo? networkInfo = null,
+        ILogger? logger = null,
+        IClipboardService? clipboard = null,
+        DashboardViewModel? dashboard = null)
+    {
+        _telemetryService = telemetryService;
+        _timeProvider = timeProvider;
+        Dashboard = dashboard ?? new DashboardViewModel();
+        DataOut = new DataOutViewModel(UdpTelemetryListener.DefaultPort, networkInfo, clipboard, logger);
+
+        Tabs = BuildTabs(Dashboard);
+        _selectedTab = Tabs[0];
+
+        _lastRefreshAt = timeProvider.GetUtcNow();
+        _lastPacketArrivalAt = _lastRefreshAt;
+    }
+
+    /// <summary>
+    /// A populated instance for the XAML designer (<c>d:DataContext="{x:Static local:ShellViewModel.DesignSample}"</c>):
+    /// it builds a harmless <see cref="TelemetryService"/> (whose factory is never invoked — nothing in design mode
+    /// calls Start) and fills the status values with representative samples.
+    /// </summary>
+    public static ShellViewModel DesignSample => new(
+        new TelemetryService(() => throw new InvalidOperationException("Design-time view model: Start is never called.")),
+        TimeProvider.System,
+        dashboard: DashboardViewModel.DesignSample)
+    {
+        PacketsPerSecond = 29.7,
+        Status = Strings.StatusReceiving,
+        IsRunning = true,
+        ConnectionState = ConnectionState.Receiving
+    };
+
+    /// <summary>The Dashboard screen's values.</summary>
+    public DashboardViewModel Dashboard { get; }
+
+    /// <summary>This PC's address and the port the game must send to (top bar pill; later also the Settings guide).</summary>
+    public DataOutViewModel DataOut { get; }
+
+    // ---- Navigation ---------------------------------------------------------------------------
+
+    /// <summary>The tabs, left to right. The index in this list is also the Ctrl+N shortcut (Ctrl+1 is the first).</summary>
+    public IReadOnlyList<NavigationItem> Tabs { get; }
+
+    /// <summary>
+    /// The selected tab. The tab strip binds this two-way, so a click, an arrow key or a Ctrl+N shortcut all end up here
+    /// and nothing else has to keep them in sync. [NotifyPropertyChangedFor]: <see cref="CurrentPage"/> is derived from it.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CurrentPage))]
+    private NavigationItem _selectedTab;
+
+    /// <summary>
+    /// The view model of the screen being shown. The window's <c>ContentControl</c> binds this as its Content; WPF then
+    /// finds the <c>DataTemplate</c> whose DataType matches this object's runtime TYPE and builds that view for it.
+    /// </summary>
+    public object CurrentPage => SelectedTab.Page;
+
+    /// <summary>Switches to the given screen (the Ctrl+1..8 key bindings pass the screen's <see cref="PageId"/>).</summary>
+    [RelayCommand]
+    private void Navigate(PageId page)
+    {
+        var target = Tabs.FirstOrDefault(tab => tab.Id == page);
+        if (target is not null)
+        {
+            SelectedTab = target;
+        }
+    }
+
+    private static List<NavigationItem> BuildTabs(DashboardViewModel dashboard)
+    {
+        // The order here is the order on screen and the Ctrl+N numbering. Placeholders are replaced by the real
+        // screen's view model as each screen ships; nothing else (template, strip, shortcuts) needs to change.
+        (PageId Id, string Title, object Page)[] pages =
+        [
+            (PageId.Dashboard, Strings.TabDashboard, dashboard),
+            Placeholder(PageId.Performance, Strings.TabPerformance, Strings.PerformancePlaceholder, PageIcons.Performance),
+            Placeholder(PageId.Laps, Strings.TabLaps, Strings.LapsPlaceholder, PageIcons.Laps),
+            Placeholder(PageId.Sessions, Strings.TabSessions, Strings.SessionsPlaceholder, PageIcons.Sessions),
+            Placeholder(PageId.Analysis, Strings.TabAnalysis, Strings.AnalysisPlaceholder, PageIcons.Analysis),
+            Placeholder(PageId.Map, Strings.TabMap, Strings.MapPlaceholder, PageIcons.Map),
+            Placeholder(PageId.Tuning, Strings.TabTuning, Strings.TuningPlaceholder, PageIcons.Tuning),
+            Placeholder(PageId.Settings, Strings.TabSettings, Strings.SettingsPlaceholder, PageIcons.Settings)
+        ];
+
+        return pages
+            .Select((page, index) => new NavigationItem(page.Id, page.Title, $"Ctrl+{index + 1}", page.Page))
+            .ToList();
+    }
+
+    private static (PageId Id, string Title, object Page) Placeholder(PageId id, string title, string description, string icon) =>
+        (id, title, new PlaceholderPageViewModel(id, title, description, icon));
+
+    // ---- Refresh --------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Pulls the CURRENT state out of <see cref="TelemetryService"/> and pushes it into the status values and the
+    /// dashboard. Called ~20 times/sec, on the UI thread, by whatever <c>IUiTicker</c>
+    /// the composition root wired up — see the class remarks for why this is the ONLY place this
+    /// view model reads the service, instead of reacting to every packet.
+    /// </summary>
+    public void Refresh()
+    {
+        var fault = _telemetryService.Fault;
+        if (fault is not null)
+        {
+            // Early return: do not sample packets/s or the latest packet while faulted. But the early return must
+            // not leave the last live-looking numbers on screen either (a frozen "29 packets/s" next to an error,
+            // a shift light still blinking), so show the idle dashboard.
+            IsRunning = false;
+            Dashboard.ResetLive();
+            PacketsPerSecond = 0; // the loop is dead: nothing is arriving, whatever the last sample said
+            ConnectionState = ConnectionState.Error;
+            Status = DescribeFault(fault);
+            return;
+        }
+
+        IsRunning = _telemetryService.IsRunning;
+        UpdatePacketsPerSecond();
+
+        var latest = _telemetryService.Latest;
+        if (latest is { IsRaceOn: false })
+        {
+            // Menus, pause and rewind send packets with IsRaceOn = false and (mostly) zeroed fields. They prove the
+            // game is still talking (the arrival clock above already counted them), but their values are not driving
+            // data: showing them would flash zeros, and their car ordinal would wrongly reset the per-car gauge
+            // scale. So show the idle dashboard and leave the per-car state (peaks, ordinal) alone.
+            Dashboard.ResetLive();
+        }
+        else if (latest is not null)
+        {
+            Dashboard.Apply(latest);
+        }
+
+        var silenceSoFar = _timeProvider.GetUtcNow() - _lastPacketArrivalAt;
+        ConnectionState = DetermineState(IsRunning, latest, silenceSoFar);
+        Status = DescribeStatus(ConnectionState, silenceSoFar);
+    }
+
+    /// <summary>
+    /// Forgets everything the previous session produced (Start, Stop): the idle dashboard plus the packets/s and
+    /// silence clocks re-anchored to "now" and to the service's current counter (which Stop/Start never resets).
+    /// </summary>
+    private void ResetSessionState()
+    {
+        Dashboard.ResetSession();
+        PacketsPerSecond = 0;
+
+        // Re-anchor the clocks. Without this the silence timer would still count from the previous session's last
+        // packet (a fresh Start would instantly read "No data for 40 s"), and the next packets/s would divide the
+        // whole backlog of the old counter by a stale interval.
+        var now = _timeProvider.GetUtcNow();
+        _lastRefreshAt = now;
+        _lastPacketArrivalAt = now;
+        _receivedCountAtLastRefresh = _telemetryService.ReceivedCount;
+    }
+
+    private void UpdatePacketsPerSecond()
+    {
+        var now = _timeProvider.GetUtcNow();
+        var elapsed = now - _lastRefreshAt;
+        var receivedCount = _telemetryService.ReceivedCount;
+
+        // Guard against a zero/negative elapsed time (e.g. two refreshes on the exact same tick in a
+        // test) — dividing by it would produce NaN/Infinity instead of just "no change yet".
+        if (elapsed > TimeSpan.Zero)
+        {
+            PacketsPerSecond = (receivedCount - _receivedCountAtLastRefresh) / elapsed.TotalSeconds;
+        }
+
+        if (receivedCount > _receivedCountAtLastRefresh)
+        {
+            // At least one NEW packet arrived since the previous Refresh — reset the silence clock.
+            _lastPacketArrivalAt = now;
+        }
+
+        _receivedCountAtLastRefresh = receivedCount;
+        _lastRefreshAt = now;
+    }
+
+    private static ConnectionState DetermineState(bool isRunning, TelemetryPacket? latest, TimeSpan silenceSoFar)
+    {
+        if (!isRunning)
+        {
+            return ConnectionState.Stopped;
+        }
+
+        if (latest is null)
+        {
+            return ConnectionState.Listening;
+        }
+
+        return silenceSoFar > NoDataThreshold ? ConnectionState.NoData : ConnectionState.Receiving;
+    }
+
+    private static string DescribeStatus(ConnectionState state, TimeSpan silenceSoFar) => state switch
+    {
+        ConnectionState.Listening => string.Format(CultureInfo.CurrentCulture, Strings.StatusListening, UdpTelemetryListener.DefaultPort),
+        ConnectionState.NoData => string.Format(CultureInfo.CurrentCulture, Strings.StatusNoData, silenceSoFar.TotalSeconds),
+        ConnectionState.Receiving => Strings.StatusReceiving,
+        _ => Strings.StatusStopped
+    };
+
+    private static string DescribeFault(Exception fault) => fault switch
+    {
+        SocketException { SocketErrorCode: SocketError.AddressAlreadyInUse } =>
+            string.Format(CultureInfo.CurrentCulture, Strings.ErrorPortInUse, UdpTelemetryListener.DefaultPort),
+        SocketException socketEx =>
+            string.Format(CultureInfo.CurrentCulture, Strings.ErrorSocket, socketEx.SocketErrorCode, socketEx.Message),
+        _ => string.Format(CultureInfo.CurrentCulture, Strings.ErrorGeneric, fault.Message)
+    };
+
+    // ---- Start / Stop / Toggle ------------------------------------------------------------
+    //
+    // Three commands, one lock. They all end up in TelemetryService, so two of them overlapping (a double click on
+    // the toggle, Stop pressed while a slow Start is still awaiting) must be impossible. IsBusy is the shared
+    // "a command is in flight" flag: it disables all three buttons AND makes the guard in RunExclusiveAsync drop a
+    // call that arrives anyway (ExecuteAsync from code does not consult CanExecute). It is only touched on the UI
+    // thread, so a plain bool is enough.
+    // CanStart/CanStop read the service's LIVE state, not IsRunning: that property is only refreshed by the 20 Hz
+    // tick, so right after a Start it can still say "stopped" for up to 50 ms.
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StopCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ToggleListeningCommand))]
+    private bool _isBusy;
+
+    private bool CanStart() => !IsBusy && !_telemetryService.IsRunning;
+
+    private bool CanStop() => !IsBusy && _telemetryService.IsRunning;
+
+    private bool CanToggle() => !IsBusy;
+
+    private async Task RunExclusiveAsync(Func<Task> action)
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            await action();
+        }
+        finally
+        {
+            IsBusy = false;
+            // The service's state changed while IsRunning (the tick copy) did not notify: re-evaluate the buttons now.
+            StartCommand.NotifyCanExecuteChanged();
+            StopCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    // [RelayCommand]: CommunityToolkit.Mvvm's source generator turns this method into a public
+    // `StartCommand` property (an IAsyncRelayCommand) that can be bound to a Button.Command.
+    [RelayCommand(CanExecute = nameof(CanStart))]
+    private Task StartAsync() => RunExclusiveAsync(StartCoreAsync);
+
+    [RelayCommand(CanExecute = nameof(CanStop))]
+    private Task StopAsync() => RunExclusiveAsync(StopCoreAsync);
+
+    // The single Start/Stop toggle button: it does whatever the service's CURRENT state allows, decided INSIDE the
+    // lock (after any in-flight command finished), so it can never pick Start from a stale answer. The button's
+    // label/icon/look are switched by the view from IsRunning, so no text lives here.
+    [RelayCommand(CanExecute = nameof(CanToggle))]
+    private Task ToggleListeningAsync() =>
+        RunExclusiveAsync(() => _telemetryService.IsRunning ? StopCoreAsync() : StartCoreAsync());
+
+    private async Task StartCoreAsync()
+    {
+        await DataOut.RefreshAsync(); // The user may have changed network since the last Start.
+        await _telemetryService.StartAsync();
+
+        // After the service started (it dropped its own stale Latest) and on the UI thread (this continuation
+        // resumes there, so no tick can interleave): wipe the previous session from the screen.
+        ResetSessionState();
+        Refresh(); // Show the result (running, or a friendly fault) immediately, without waiting for the next tick.
+    }
+
+    private async Task StopCoreAsync()
+    {
+        await _telemetryService.StopAsync();
+
+        // A stopped dashboard must look idle: no frozen RPM, no shift light blinking at a redline that is long gone.
+        ResetSessionState();
+        Refresh();
+    }
+}

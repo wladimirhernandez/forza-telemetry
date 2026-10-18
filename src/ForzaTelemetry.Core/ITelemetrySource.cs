@@ -2,7 +2,7 @@ namespace ForzaTelemetry.Core;
 
 /// <summary>
 /// Port (a hexagonal-architecture term): "a live stream of telemetry packets, from wherever they
-/// actually come from". The rest of the app — <c>TelemetryService</c>, <c>MainViewModel</c>, and
+/// actually come from". The rest of the app — <c>TelemetryService</c>, <c>ShellViewModel</c>, and
 /// their tests — depends on THIS abstraction, never on <c>UdpTelemetryListener</c> directly.
 /// </summary>
 /// <remarks>

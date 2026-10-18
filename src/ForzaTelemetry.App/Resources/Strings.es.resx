@@ -177,4 +177,55 @@
   <data name="CopyIpTooltip" xml:space="preserve">
     <value>Copiar dirección IP</value>
   </data>
+  <data name="TabDashboard" xml:space="preserve">
+    <value>Panel</value>
+  </data>
+  <data name="TabPerformance" xml:space="preserve">
+    <value>Rendimiento</value>
+  </data>
+  <data name="TabLaps" xml:space="preserve">
+    <value>Vueltas</value>
+  </data>
+  <data name="TabSessions" xml:space="preserve">
+    <value>Sesiones</value>
+  </data>
+  <data name="TabAnalysis" xml:space="preserve">
+    <value>Análisis</value>
+  </data>
+  <data name="TabMap" xml:space="preserve">
+    <value>Mapa</value>
+  </data>
+  <data name="TabTuning" xml:space="preserve">
+    <value>Puesta a punto</value>
+  </data>
+  <data name="TabSettings" xml:space="preserve">
+    <value>Ajustes</value>
+  </data>
+  <data name="NavigationName" xml:space="preserve">
+    <value>Navegación principal</value>
+  </data>
+  <data name="ComingSoon" xml:space="preserve">
+    <value>Próximamente</value>
+  </data>
+  <data name="PerformancePlaceholder" xml:space="preserve">
+    <value>Tus tiempos de 0-100 y 0-200 km/h, el cuarto de milla y la velocidad máxima aparecen aquí después de cada prueba.</value>
+  </data>
+  <data name="LapsPlaceholder" xml:space="preserve">
+    <value>Los tiempos por vuelta aparecen aquí cuando empiezas una carrera: mejor, última y actual, con la diferencia en vivo frente a tu mejor vuelta.</value>
+  </data>
+  <data name="SessionsPlaceholder" xml:space="preserve">
+    <value>Graba una sesión y reprodúcela después. Tus sesiones guardadas aparecerán aquí.</value>
+  </data>
+  <data name="AnalysisPlaceholder" xml:space="preserve">
+    <value>Gráficas en vivo de velocidad, RPM, acelerador, freno y dirección de los últimos segundos, alineadas en el tiempo.</value>
+  </data>
+  <data name="MapPlaceholder" xml:space="preserve">
+    <value>Mira la trayectoria que recorriste, coloreada por velocidad y con tus puntos de frenado marcados.</value>
+  </data>
+  <data name="TuningPlaceholder" xml:space="preserve">
+    <value>Curvas de potencia y par, además de indicadores en vivo de subviraje y sobreviraje para afinar tu coche.</value>
+  </data>
+  <data name="SettingsPlaceholder" xml:space="preserve">
+    <value>Aquí estarán el puerto, las unidades, el idioma y la guía paso a paso de Data Out.</value>
+  </data>
 </root>

@@ -177,4 +177,55 @@
   <data name="CopyIpTooltip" xml:space="preserve">
     <value>Copy IP address</value>
   </data>
+  <data name="TabDashboard" xml:space="preserve">
+    <value>Dashboard</value>
+  </data>
+  <data name="TabPerformance" xml:space="preserve">
+    <value>Performance</value>
+  </data>
+  <data name="TabLaps" xml:space="preserve">
+    <value>Laps</value>
+  </data>
+  <data name="TabSessions" xml:space="preserve">
+    <value>Sessions</value>
+  </data>
+  <data name="TabAnalysis" xml:space="preserve">
+    <value>Analysis</value>
+  </data>
+  <data name="TabMap" xml:space="preserve">
+    <value>Map</value>
+  </data>
+  <data name="TabTuning" xml:space="preserve">
+    <value>Tuning</value>
+  </data>
+  <data name="TabSettings" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="NavigationName" xml:space="preserve">
+    <value>Main navigation</value>
+  </data>
+  <data name="ComingSoon" xml:space="preserve">
+    <value>Coming soon</value>
+  </data>
+  <data name="PerformancePlaceholder" xml:space="preserve">
+    <value>Your 0-100 and 0-200 km/h times, quarter mile and top speed appear here after each run.</value>
+  </data>
+  <data name="LapsPlaceholder" xml:space="preserve">
+    <value>Lap times appear here once you start a race: best, last and current lap, with a live delta against your best.</value>
+  </data>
+  <data name="SessionsPlaceholder" xml:space="preserve">
+    <value>Record a drive and replay it later. Your saved sessions will be listed here.</value>
+  </data>
+  <data name="AnalysisPlaceholder" xml:space="preserve">
+    <value>Live traces of speed, RPM, throttle, brake and steering over the last seconds, stacked and aligned in time.</value>
+  </data>
+  <data name="MapPlaceholder" xml:space="preserve">
+    <value>See the line you drove, colored by speed, with your braking points marked.</value>
+  </data>
+  <data name="TuningPlaceholder" xml:space="preserve">
+    <value>Power and torque curves plus live understeer and oversteer hints to help you tune your car.</value>
+  </data>
+  <data name="SettingsPlaceholder" xml:space="preserve">
+    <value>Port, units, language and the step-by-step Data Out guide will live here.</value>
+  </data>
 </root>
