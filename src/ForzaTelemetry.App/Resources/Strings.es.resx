@@ -346,4 +346,100 @@
   <data name="PublicNetworkRecheckButton" xml:space="preserve">
     <value>Comprobar de nuevo</value>
   </data>
+  <data name="CancelButton" xml:space="preserve">
+    <value>Cancelar</value>
+  </data>
+  <data name="PerfStateWaiting" xml:space="preserve">
+    <value>Esperando datos de conducción</value>
+  </data>
+  <data name="PerfStateReady" xml:space="preserve">
+    <value>Listo: detén el coche para armar el cronómetro</value>
+  </data>
+  <data name="PerfStateArmed" xml:space="preserve">
+    <value>Armado: arranca cuando quieras</value>
+  </data>
+  <data name="PerfStateRunning" xml:space="preserve">
+    <value>En marcha</value>
+  </data>
+  <data name="PerfStateDone" xml:space="preserve">
+    <value>Completado</value>
+  </data>
+  <data name="PerfStateAborted" xml:space="preserve">
+    <value>Prueba cancelada: detén el coche para intentarlo de nuevo</value>
+  </data>
+  <data name="PerfTitle100" xml:space="preserve">
+    <value>0–100 km/h</value>
+  </data>
+  <data name="PerfTitle200" xml:space="preserve">
+    <value>0–200 km/h</value>
+  </data>
+  <data name="PerfTitleQuarter" xml:space="preserve">
+    <value>¼ de milla</value>
+  </data>
+  <data name="PerfTitleTopSpeed" xml:space="preserve">
+    <value>Velocidad máxima</value>
+  </data>
+  <data name="PerfNewBest" xml:space="preserve">
+    <value>Nuevo récord</value>
+  </data>
+  <data name="PerfTrapFormat" xml:space="preserve">
+    <value>{0} {1} en la meta</value>
+  </data>
+  <data name="PerfThresholdNote" xml:space="preserve">
+    <value>Las pruebas se miden hasta 100 y 200 km/h (unas 62 y 124 mph) con cualquier unidad. Las velocidades se muestran en tu unidad.</value>
+  </data>
+  <data name="PerfNoCar" xml:space="preserve">
+    <value>Aún no se detecta ningún coche</value>
+  </data>
+  <data name="PerfCarOrdinalFormat" xml:space="preserve">
+    <value>Coche n.º {0}</value>
+  </data>
+  <data name="PerfCurrentCarLabel" xml:space="preserve">
+    <value>Coche actual</value>
+  </data>
+  <data name="PerfResetRun" xml:space="preserve">
+    <value>Reiniciar prueba</value>
+  </data>
+  <data name="PerfResetRunTooltip" xml:space="preserve">
+    <value>Borra los resultados de esta prueba y la velocidad máxima de la sesión (los récords guardados se conservan)</value>
+  </data>
+  <data name="PerfHistoryTitle" xml:space="preserve">
+    <value>Mejor marca por coche</value>
+  </data>
+  <data name="PerfHistoryEmpty" xml:space="preserve">
+    <value>Tus mejores tiempos aparecen aquí después de cada prueba, agrupados por coche e índice de rendimiento.</value>
+  </data>
+  <data name="PerfClearHistory" xml:space="preserve">
+    <value>Borrar historial</value>
+  </data>
+  <data name="PerfClearConfirmTitle" xml:space="preserve">
+    <value>¿Borrar el historial de rendimiento?</value>
+  </data>
+  <data name="PerfClearConfirmMessage" xml:space="preserve">
+    <value>Esto borra los mejores tiempos y velocidades máximas de todos los coches. No se puede deshacer.</value>
+  </data>
+  <data name="PerfClearConfirmButton" xml:space="preserve">
+    <value>Borrar</value>
+  </data>
+  <data name="PerfColCar" xml:space="preserve">
+    <value>Coche</value>
+  </data>
+  <data name="PerfColZeroTo100" xml:space="preserve">
+    <value>0–100</value>
+  </data>
+  <data name="PerfColZeroTo200" xml:space="preserve">
+    <value>0–200</value>
+  </data>
+  <data name="PerfColQuarter" xml:space="preserve">
+    <value>¼ de milla</value>
+  </data>
+  <data name="PerfColTopSpeed" xml:space="preserve">
+    <value>Vel. máxima</value>
+  </data>
+  <data name="PerfColUpdated" xml:space="preserve">
+    <value>Actualizado</value>
+  </data>
+  <data name="PerfSortByFormat" xml:space="preserve">
+    <value>Ordenar por {0}</value>
+  </data>
 </root>

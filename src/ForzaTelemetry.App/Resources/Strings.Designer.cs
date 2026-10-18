@@ -1056,5 +1056,293 @@ namespace ForzaTelemetry.App.Resources {
             }
         }
         
+        /// <summary>
+        ///   Looks up a localized string similar to Cancel.
+        /// </summary>
+        public static string CancelButton {
+            get {
+                return ResourceManager.GetString("CancelButton", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Waiting for driving data.
+        /// </summary>
+        public static string PerfStateWaiting {
+            get {
+                return ResourceManager.GetString("PerfStateWaiting", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Ready: stop the car to arm the timer.
+        /// </summary>
+        public static string PerfStateReady {
+            get {
+                return ResourceManager.GetString("PerfStateReady", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Armed: launch when ready.
+        /// </summary>
+        public static string PerfStateArmed {
+            get {
+                return ResourceManager.GetString("PerfStateArmed", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Running.
+        /// </summary>
+        public static string PerfStateRunning {
+            get {
+                return ResourceManager.GetString("PerfStateRunning", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Done.
+        /// </summary>
+        public static string PerfStateDone {
+            get {
+                return ResourceManager.GetString("PerfStateDone", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Run aborted: stop the car to try again.
+        /// </summary>
+        public static string PerfStateAborted {
+            get {
+                return ResourceManager.GetString("PerfStateAborted", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 0–100 km/h.
+        /// </summary>
+        public static string PerfTitle100 {
+            get {
+                return ResourceManager.GetString("PerfTitle100", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 0–200 km/h.
+        /// </summary>
+        public static string PerfTitle200 {
+            get {
+                return ResourceManager.GetString("PerfTitle200", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to ¼ mile.
+        /// </summary>
+        public static string PerfTitleQuarter {
+            get {
+                return ResourceManager.GetString("PerfTitleQuarter", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Top speed.
+        /// </summary>
+        public static string PerfTitleTopSpeed {
+            get {
+                return ResourceManager.GetString("PerfTitleTopSpeed", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to New best.
+        /// </summary>
+        public static string PerfNewBest {
+            get {
+                return ResourceManager.GetString("PerfNewBest", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to {0} {1} at the line.
+        /// </summary>
+        public static string PerfTrapFormat {
+            get {
+                return ResourceManager.GetString("PerfTrapFormat", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Runs are timed to 100 and 200 km/h (about 62 and 124 mph) in either unit. Speeds are shown in your unit..
+        /// </summary>
+        public static string PerfThresholdNote {
+            get {
+                return ResourceManager.GetString("PerfThresholdNote", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No car detected yet.
+        /// </summary>
+        public static string PerfNoCar {
+            get {
+                return ResourceManager.GetString("PerfNoCar", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Car #{0}.
+        /// </summary>
+        public static string PerfCarOrdinalFormat {
+            get {
+                return ResourceManager.GetString("PerfCarOrdinalFormat", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Current car.
+        /// </summary>
+        public static string PerfCurrentCarLabel {
+            get {
+                return ResourceManager.GetString("PerfCurrentCarLabel", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Reset run.
+        /// </summary>
+        public static string PerfResetRun {
+            get {
+                return ResourceManager.GetString("PerfResetRun", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Clear this run's results and the session top speed (saved bests are kept).
+        /// </summary>
+        public static string PerfResetRunTooltip {
+            get {
+                return ResourceManager.GetString("PerfResetRunTooltip", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Best per car.
+        /// </summary>
+        public static string PerfHistoryTitle {
+            get {
+                return ResourceManager.GetString("PerfHistoryTitle", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Your best times appear here after each run, grouped by car and performance index..
+        /// </summary>
+        public static string PerfHistoryEmpty {
+            get {
+                return ResourceManager.GetString("PerfHistoryEmpty", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Clear history.
+        /// </summary>
+        public static string PerfClearHistory {
+            get {
+                return ResourceManager.GetString("PerfClearHistory", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Clear the performance history?.
+        /// </summary>
+        public static string PerfClearConfirmTitle {
+            get {
+                return ResourceManager.GetString("PerfClearConfirmTitle", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to This deletes the best times and top speeds of every car. It cannot be undone..
+        /// </summary>
+        public static string PerfClearConfirmMessage {
+            get {
+                return ResourceManager.GetString("PerfClearConfirmMessage", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Clear.
+        /// </summary>
+        public static string PerfClearConfirmButton {
+            get {
+                return ResourceManager.GetString("PerfClearConfirmButton", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Car.
+        /// </summary>
+        public static string PerfColCar {
+            get {
+                return ResourceManager.GetString("PerfColCar", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 0–100.
+        /// </summary>
+        public static string PerfColZeroTo100 {
+            get {
+                return ResourceManager.GetString("PerfColZeroTo100", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 0–200.
+        /// </summary>
+        public static string PerfColZeroTo200 {
+            get {
+                return ResourceManager.GetString("PerfColZeroTo200", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to ¼ mile.
+        /// </summary>
+        public static string PerfColQuarter {
+            get {
+                return ResourceManager.GetString("PerfColQuarter", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Top speed.
+        /// </summary>
+        public static string PerfColTopSpeed {
+            get {
+                return ResourceManager.GetString("PerfColTopSpeed", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Updated.
+        /// </summary>
+        public static string PerfColUpdated {
+            get {
+                return ResourceManager.GetString("PerfColUpdated", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Sort by {0}.
+        /// </summary>
+        public static string PerfSortByFormat {
+            get {
+                return ResourceManager.GetString("PerfSortByFormat", resourceCulture)!;
+            }
+        }
+        
     }
 }

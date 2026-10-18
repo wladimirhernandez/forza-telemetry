@@ -25,8 +25,9 @@ namespace ForzaTelemetry.Core.Performance;
 /// The writer holds a lock for the duration of one packet (uncontended, tens of nanoseconds); <see cref="Current"/>
 /// takes the same lock and BUILDS an immutable <see cref="AccelerationSnapshot"/> on read from the writer's
 /// fields. Building on read means a run in progress allocates one snapshot per UI refresh (~20 Hz) instead of
-/// one per packet (~60 Hz), and a reader can never observe a half-updated run. <see cref="Reset"/> only raises
-/// a flag that the writer honours on its next packet.</para>
+/// one per packet (~60 Hz), and a reader can never observe a half-updated run. <see cref="Reset"/> takes the same
+/// lock and clears at once, so a "reset" button empties the display immediately instead of on the next packet (which
+/// never comes while the game is paused or the listener is stopped).</para>
 /// </remarks>
 public sealed class AccelerationTimer : IPacketObserver
 {
@@ -41,7 +42,6 @@ public sealed class AccelerationTimer : IPacketObserver
 
     private readonly object _gate = new();
     private AccelerationSnapshot _published = AccelerationSnapshot.Empty;
-    private int _resetRequested;
 
     // ---- Writer-only state (never touched by readers) ----
     private AccelerationState _state = AccelerationState.Idle;
@@ -75,8 +75,18 @@ public sealed class AccelerationTimer : IPacketObserver
         }
     }
 
-    /// <summary>Asks the timer to forget all results (also the last completed run). Safe from any thread.</summary>
-    public void Reset() => Volatile.Write(ref _resetRequested, 1);
+    /// <summary>Forgets all results (also the last completed run) and any run in progress. Safe from any thread.</summary>
+    public void Reset()
+    {
+        lock (_gate)
+        {
+            _state = AccelerationState.Idle;
+            _lastCompleted = AccelerationSnapshot.Empty;
+            _previous = null; // never interpolate across the reset
+            ClearRun();
+            Publish(AccelerationSnapshot.Empty);
+        }
+    }
 
     /// <inheritdoc />
     public void OnPacket(TelemetryPacket packet)
@@ -89,14 +99,6 @@ public sealed class AccelerationTimer : IPacketObserver
 
     private void Process(TelemetryPacket packet)
     {
-        if (Interlocked.Exchange(ref _resetRequested, 0) == 1)
-        {
-            _state = AccelerationState.Idle;
-            _lastCompleted = AccelerationSnapshot.Empty;
-            ClearRun();
-            Publish(AccelerationSnapshot.Empty);
-        }
-
         if (!float.IsFinite(packet.Speed) || !float.IsFinite(packet.DistanceTraveled))
         {
             return;

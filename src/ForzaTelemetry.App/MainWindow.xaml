@@ -53,6 +53,9 @@
         <DataTemplate DataType="{x:Type local:SettingsViewModel}">
             <views:SettingsView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type local:PerformanceViewModel}">
+            <views:PerformanceView />
+        </DataTemplate>
     </Window.Resources>
     <!--
       Ctrl+1..8 jump straight to a tab. KeyBindings live on the Window so they work wherever the focus is; each one runs

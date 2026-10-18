@@ -14,10 +14,8 @@ namespace ForzaTelemetry.App.Services;
 /// the logs go to LocalAppData because they are machine-specific and can grow. Neither location needs admin rights, unlike
 /// the install folder under Program Files.
 /// <para>
-/// <b>Why the write goes through a temp file.</b> Overwriting <c>settings.json</c> in place and being interrupted (crash,
-/// power loss) leaves a half-written file, which then reads as corrupt and silently resets the user's settings. Writing the
-/// full text to <c>settings.json.tmp</c> first and then swapping it in (<see cref="File.Replace(string, string, string?)"/>,
-/// an atomic operation on NTFS) means the real file is always either the old complete version or the new complete one.
+/// <b>Why the write goes through a temp file.</b> See <see cref="AtomicFile"/>: the real file is always either the old
+/// complete version or the new complete one, so an interrupted save cannot read back as a corrupt (and therefore reset) file.
 /// </para>
 /// </remarks>
 public sealed class JsonSettingsStore : ISettingsStore
@@ -89,23 +87,11 @@ public sealed class JsonSettingsStore : ISettingsStore
 
     public bool TrySave(AppSettings settings)
     {
-        var temp = _path + ".tmp";
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-
             // Always this build's layout version, whatever the value in hand says (it may have come from a newer file).
             var toWrite = settings with { SchemaVersion = AppSettings.CurrentSchemaVersion };
-            File.WriteAllText(temp, Serialize(toWrite));
-
-            if (File.Exists(_path))
-            {
-                File.Replace(temp, _path, destinationBackupFileName: null);
-            }
-            else
-            {
-                File.Move(temp, _path);
-            }
+            AtomicFile.WriteAllText(_path, Serialize(toWrite));
 
             AppLog.SettingsSaved(_logger, _path);
             return true;
@@ -113,7 +99,6 @@ public sealed class JsonSettingsStore : ISettingsStore
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             AppLog.SettingsSaveFailed(_logger, ex, _path);
-            TryDelete(temp);
             return false;
         }
     }
@@ -151,18 +136,6 @@ public sealed class JsonSettingsStore : ISettingsStore
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // Nothing more to do: the warning above already recorded the corruption.
-        }
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // A leftover .tmp is harmless: the next save overwrites it.
         }
     }
 }

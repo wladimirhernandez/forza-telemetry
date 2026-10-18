@@ -346,4 +346,100 @@
   <data name="PublicNetworkRecheckButton" xml:space="preserve">
     <value>Check again</value>
   </data>
+  <data name="CancelButton" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="PerfStateWaiting" xml:space="preserve">
+    <value>Waiting for driving data</value>
+  </data>
+  <data name="PerfStateReady" xml:space="preserve">
+    <value>Ready: stop the car to arm the timer</value>
+  </data>
+  <data name="PerfStateArmed" xml:space="preserve">
+    <value>Armed: launch when ready</value>
+  </data>
+  <data name="PerfStateRunning" xml:space="preserve">
+    <value>Running</value>
+  </data>
+  <data name="PerfStateDone" xml:space="preserve">
+    <value>Done</value>
+  </data>
+  <data name="PerfStateAborted" xml:space="preserve">
+    <value>Run aborted: stop the car to try again</value>
+  </data>
+  <data name="PerfTitle100" xml:space="preserve">
+    <value>0–100 km/h</value>
+  </data>
+  <data name="PerfTitle200" xml:space="preserve">
+    <value>0–200 km/h</value>
+  </data>
+  <data name="PerfTitleQuarter" xml:space="preserve">
+    <value>¼ mile</value>
+  </data>
+  <data name="PerfTitleTopSpeed" xml:space="preserve">
+    <value>Top speed</value>
+  </data>
+  <data name="PerfNewBest" xml:space="preserve">
+    <value>New best</value>
+  </data>
+  <data name="PerfTrapFormat" xml:space="preserve">
+    <value>{0} {1} at the line</value>
+  </data>
+  <data name="PerfThresholdNote" xml:space="preserve">
+    <value>Runs are timed to 100 and 200 km/h (about 62 and 124 mph) in either unit. Speeds are shown in your unit.</value>
+  </data>
+  <data name="PerfNoCar" xml:space="preserve">
+    <value>No car detected yet</value>
+  </data>
+  <data name="PerfCarOrdinalFormat" xml:space="preserve">
+    <value>Car #{0}</value>
+  </data>
+  <data name="PerfCurrentCarLabel" xml:space="preserve">
+    <value>Current car</value>
+  </data>
+  <data name="PerfResetRun" xml:space="preserve">
+    <value>Reset run</value>
+  </data>
+  <data name="PerfResetRunTooltip" xml:space="preserve">
+    <value>Clear this run's results and the session top speed (saved bests are kept)</value>
+  </data>
+  <data name="PerfHistoryTitle" xml:space="preserve">
+    <value>Best per car</value>
+  </data>
+  <data name="PerfHistoryEmpty" xml:space="preserve">
+    <value>Your best times appear here after each run, grouped by car and performance index.</value>
+  </data>
+  <data name="PerfClearHistory" xml:space="preserve">
+    <value>Clear history</value>
+  </data>
+  <data name="PerfClearConfirmTitle" xml:space="preserve">
+    <value>Clear the performance history?</value>
+  </data>
+  <data name="PerfClearConfirmMessage" xml:space="preserve">
+    <value>This deletes the best times and top speeds of every car. It cannot be undone.</value>
+  </data>
+  <data name="PerfClearConfirmButton" xml:space="preserve">
+    <value>Clear</value>
+  </data>
+  <data name="PerfColCar" xml:space="preserve">
+    <value>Car</value>
+  </data>
+  <data name="PerfColZeroTo100" xml:space="preserve">
+    <value>0–100</value>
+  </data>
+  <data name="PerfColZeroTo200" xml:space="preserve">
+    <value>0–200</value>
+  </data>
+  <data name="PerfColQuarter" xml:space="preserve">
+    <value>¼ mile</value>
+  </data>
+  <data name="PerfColTopSpeed" xml:space="preserve">
+    <value>Top speed</value>
+  </data>
+  <data name="PerfColUpdated" xml:space="preserve">
+    <value>Updated</value>
+  </data>
+  <data name="PerfSortByFormat" xml:space="preserve">
+    <value>Sort by {0}</value>
+  </data>
 </root>

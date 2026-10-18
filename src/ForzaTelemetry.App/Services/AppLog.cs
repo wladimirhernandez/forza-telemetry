@@ -41,6 +41,9 @@ internal static partial class AppLog
     [LoggerMessage(EventId = 113, Level = LogLevel.Error, Message = "The telemetry receive loop faulted.")]
     public static partial void LoopFaulted(ILogger logger, Exception exception);
 
+    [LoggerMessage(EventId = 114, Level = LogLevel.Error, Message = "Packet observer {Observer} threw (failure number {Failures}); the receive loop continues.")]
+    public static partial void ObserverFailed(ILogger logger, Exception exception, string observer, int failures);
+
     // ---- Settings (120s) ----
 
     [LoggerMessage(EventId = 120, Level = LogLevel.Information, Message = "No settings file at {Path}; using the defaults.")]
@@ -92,4 +95,24 @@ internal static partial class AppLog
 
     [LoggerMessage(EventId = 141, Level = LogLevel.Information, Message = "Network profile of {Address}: {Category}.")]
     public static partial void NetworkProfile(ILogger logger, string address, string category);
+
+    // ---- Performance history (150s) ----
+
+    [LoggerMessage(EventId = 150, Level = LogLevel.Information, Message = "Performance history loaded: {Cars} car(s) from {Path}.")]
+    public static partial void PerformanceHistoryLoaded(ILogger logger, int cars, string path);
+
+    [LoggerMessage(EventId = 151, Level = LogLevel.Warning, Message = "Could not read the performance history {Path}; starting empty.")]
+    public static partial void PerformanceHistoryUnreadable(ILogger logger, Exception exception, string path);
+
+    [LoggerMessage(EventId = 152, Level = LogLevel.Warning, Message = "The performance history {Path} is corrupt; starting empty (a copy is kept next to it as .corrupt).")]
+    public static partial void PerformanceHistoryCorrupt(ILogger logger, Exception exception, string path);
+
+    [LoggerMessage(EventId = 153, Level = LogLevel.Warning, Message = "Skipped {Count} unreadable entries of the performance history {Path}.")]
+    public static partial void PerformanceHistoryEntriesSkipped(ILogger logger, int count, string path);
+
+    [LoggerMessage(EventId = 154, Level = LogLevel.Information, Message = "Performance history saved: {Cars} car(s) to {Path}.")]
+    public static partial void PerformanceHistorySaved(ILogger logger, int cars, string path);
+
+    [LoggerMessage(EventId = 155, Level = LogLevel.Warning, Message = "Could not save the performance history to {Path}; it will be retried on the next change.")]
+    public static partial void PerformanceHistorySaveFailed(ILogger logger, Exception exception, string path);
 }

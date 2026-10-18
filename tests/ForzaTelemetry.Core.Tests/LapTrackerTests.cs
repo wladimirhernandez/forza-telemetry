@@ -275,4 +275,36 @@ public class LapTrackerTests
 
         Assert.Equal(tracker.Current, tracker.Current);
     }
+
+    [Fact]
+    public void Reset_forgets_the_laps_the_best_time_and_the_delta_reference()
+    {
+        var tracker = new LapTracker();
+        DriveLap(tracker, 0, 20, 0);
+        tracker.OnPacket(Lap(1, 0.0, 1000, lastLap: 20, bestLap: 20));
+        DriveLap(tracker, 1, 21, 1000, lastLap: 20, bestLap: 20, stopAtSeconds: 10);
+        Assert.NotNull(tracker.Current.DeltaSeconds);
+        Assert.Single(tracker.Current.Laps);
+
+        tracker.Reset();
+
+        Assert.Equal(LapSnapshot.Empty, tracker.Current);
+    }
+
+    [Fact]
+    public void After_a_reset_the_next_lap_is_lap_one_with_no_delta_until_a_lap_has_been_completed()
+    {
+        var tracker = new LapTracker();
+        DriveLap(tracker, 0, 20, 0);
+        tracker.OnPacket(Lap(1, 0.0, 1000, lastLap: 20, bestLap: 20));
+        tracker.Reset();
+
+        DriveLap(tracker, 0, 25, 5000, stopAtSeconds: 10);
+
+        var snapshot = tracker.Current;
+        Assert.Equal(1, snapshot.CurrentLapNumber);
+        Assert.Null(snapshot.DeltaSeconds); // the old best lap is gone, so there is nothing to compare with
+        Assert.Empty(snapshot.Laps);
+        Assert.Null(snapshot.BestLapSeconds);
+    }
 }

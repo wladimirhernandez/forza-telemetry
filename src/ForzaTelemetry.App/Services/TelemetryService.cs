@@ -44,11 +44,29 @@ namespace ForzaTelemetry.App.Services;
 /// exactly what these primitives are for: they guarantee a reader never observes a half-written
 /// value, without paying for a full lock on every one of the ~30-60 packets/sec this can receive.
 /// </para>
+/// <para>
+/// <b>Why per-packet observers exist next to "only the latest packet":</b> the UI samples <see cref="Latest"/> at 20 Hz,
+/// but the game sends up to ~60 packets/s, so two of every three packets are never seen by the UI. That is fine for a
+/// gauge and wrong for an engine that needs EXACT timing (the 0-100 km/h timer interpolates between consecutive packets)
+/// or a complete record (the lap tracker's distance samples). Each registered <see cref="IPacketObserver"/> is therefore
+/// called for EVERY packet, on the receive loop's thread, before the packet is published as <see cref="Latest"/>. Two
+/// consequences: an observer must be fast (it runs inside the loop), and once <see cref="ReceivedCount"/> shows N packets
+/// every observer has already consumed all N, which keeps "what the engines say" consistent with "what the UI was told".
+/// An observer that throws is logged and skipped for that packet: one faulty engine must never stop the receive loop, the
+/// other engines, or the dashboard.
+/// </para>
 /// </remarks>
 public sealed class TelemetryService : IAsyncDisposable
 {
+    /// <summary>After the first failure of an observer, log again only every this many failures (~10 s at 60 packets/s).</summary>
+    private const int ObserverLogEvery = 600;
+
     private readonly Func<ITelemetrySource> _sourceFactory;
     private readonly ILogger<TelemetryService> _logger;
+
+    // Fixed at construction, so the receive loop can iterate it without a lock. Failure counters are only touched by the loop.
+    private readonly IPacketObserver[] _observers;
+    private readonly int[] _observerFailures;
 
     // Serializes Start and Stop. Stop nulls the shared fields BEFORE it awaits the loop and the dispose, so
     // without this a second Stop (e.g. App.OnExit while the Stop button's Stop is still in flight) would see
@@ -68,10 +86,16 @@ public sealed class TelemetryService : IAsyncDisposable
 
     /// <param name="sourceFactory">Builds a fresh telemetry source for every Start (see the class remarks).</param>
     /// <param name="logger">Where lifecycle events and faults are recorded; optional (defaults to discarding them), like the UDP listener's.</param>
-    public TelemetryService(Func<ITelemetrySource> sourceFactory, ILogger<TelemetryService>? logger = null)
+    /// <param name="observers">Engines that must see every packet (see the class remarks); called in the given order.</param>
+    public TelemetryService(
+        Func<ITelemetrySource> sourceFactory,
+        ILogger<TelemetryService>? logger = null,
+        IEnumerable<IPacketObserver>? observers = null)
     {
         _sourceFactory = sourceFactory;
         _logger = logger ?? NullLogger<TelemetryService>.Instance;
+        _observers = observers?.ToArray() ?? [];
+        _observerFailures = new int[_observers.Length];
     }
 
     /// <summary>Most recently received packet of the CURRENT session, or null if none has arrived yet (cleared on Start and Stop).</summary>
@@ -169,6 +193,7 @@ public sealed class TelemetryService : IAsyncDisposable
         {
             await foreach (var packet in source.ReadPacketsAsync(ct).ConfigureAwait(false))
             {
+                NotifyObservers(packet);
                 Volatile.Write(ref _latest, packet);
                 Interlocked.Increment(ref _receivedCount);
             }
@@ -191,6 +216,34 @@ public sealed class TelemetryService : IAsyncDisposable
         finally
         {
             Volatile.Write(ref _isRunning, false);
+        }
+    }
+
+    /// <summary>
+    /// Hands one packet to every observer, each in its own try/catch. Without the guard, the first exception from any engine
+    /// would propagate into <see cref="RunLoopAsync"/>'s catch, which treats it as a SOURCE failure: the receive loop would
+    /// end and the whole app would show a socket-style error because, say, the lap tracker had a bug.
+    /// <para>
+    /// Logging is throttled per observer: a bug that fires on every packet would otherwise write ~60 lines a second. The
+    /// first failure is logged, then one in every <see cref="ObserverLogEvery"/>.
+    /// </para>
+    /// </summary>
+    private void NotifyObservers(TelemetryPacket packet)
+    {
+        for (var i = 0; i < _observers.Length; i++)
+        {
+            try
+            {
+                _observers[i].OnPacket(packet);
+            }
+            catch (Exception ex)
+            {
+                var failures = ++_observerFailures[i];
+                if (failures == 1 || failures % ObserverLogEvery == 0)
+                {
+                    AppLog.ObserverFailed(_logger, ex, _observers[i].GetType().Name, failures);
+                }
+            }
         }
     }
 

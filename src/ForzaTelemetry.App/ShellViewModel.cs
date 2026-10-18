@@ -104,6 +104,7 @@ public sealed partial class ShellViewModel : ObservableObject
     /// the default.
     /// </param>
     /// <param name="settingsPage">The Settings screen's view model; when omitted that tab shows the "coming soon" placeholder.</param>
+    /// <param name="performancePage">The Performance screen's view model; when omitted that tab shows the placeholder.</param>
     public ShellViewModel(
         TelemetryService telemetryService,
         TimeProvider timeProvider,
@@ -113,7 +114,8 @@ public sealed partial class ShellViewModel : ObservableObject
         DashboardViewModel? dashboard = null,
         DataOutViewModel? dataOut = null,
         SettingsService? settings = null,
-        SettingsViewModel? settingsPage = null)
+        SettingsViewModel? settingsPage = null,
+        PerformanceViewModel? performancePage = null)
     {
         _telemetryService = telemetryService;
         _timeProvider = timeProvider;
@@ -123,7 +125,8 @@ public sealed partial class ShellViewModel : ObservableObject
         DataOut = dataOut
             ?? new DataOutViewModel(settings?.Current.UdpPort ?? UdpTelemetryListener.DefaultPort, networkInfo, clipboard, logger);
 
-        Tabs = BuildTabs(Dashboard, settingsPage);
+        Performance = performancePage;
+        Tabs = BuildTabs(Dashboard, performancePage, settingsPage);
         _selectedTab = Tabs[0];
 
         if (settings is not null)
@@ -153,6 +156,9 @@ public sealed partial class ShellViewModel : ObservableObject
 
     /// <summary>The Dashboard screen's values.</summary>
     public DashboardViewModel Dashboard { get; }
+
+    /// <summary>The Performance screen's values; null when the shell was built without one (tests).</summary>
+    public PerformanceViewModel? Performance { get; }
 
     /// <summary>This PC's address and the port the game must send to (top bar pill; later also the Settings guide).</summary>
     public DataOutViewModel DataOut { get; }
@@ -187,14 +193,17 @@ public sealed partial class ShellViewModel : ObservableObject
         }
     }
 
-    private static List<NavigationItem> BuildTabs(DashboardViewModel dashboard, SettingsViewModel? settingsPage)
+    private static List<NavigationItem> BuildTabs(
+        DashboardViewModel dashboard, PerformanceViewModel? performancePage, SettingsViewModel? settingsPage)
     {
         // The order here is the order on screen and the Ctrl+N numbering. Placeholders are replaced by the real
         // screen's view model as each screen ships; nothing else (template, strip, shortcuts) needs to change.
         (PageId Id, string Title, object Page)[] pages =
         [
             (PageId.Dashboard, Strings.TabDashboard, dashboard),
-            Placeholder(PageId.Performance, Strings.TabPerformance, Strings.PerformancePlaceholder, PageIcons.Performance),
+            performancePage is not null
+                ? (PageId.Performance, Strings.TabPerformance, performancePage)
+                : Placeholder(PageId.Performance, Strings.TabPerformance, Strings.PerformancePlaceholder, PageIcons.Performance),
             Placeholder(PageId.Laps, Strings.TabLaps, Strings.LapsPlaceholder, PageIcons.Laps),
             Placeholder(PageId.Sessions, Strings.TabSessions, Strings.SessionsPlaceholder, PageIcons.Sessions),
             Placeholder(PageId.Analysis, Strings.TabAnalysis, Strings.AnalysisPlaceholder, PageIcons.Analysis),
@@ -231,6 +240,7 @@ public sealed partial class ShellViewModel : ObservableObject
             // a shift light still blinking), so show the idle dashboard.
             IsRunning = false;
             Dashboard.ResetLive();
+            Performance?.Refresh(null); // no driving data: the state line says so (the measured numbers stay readable)
             PacketsPerSecond = 0; // the loop is dead: nothing is arriving, whatever the last sample said
             ConnectionState = ConnectionState.Error;
             Status = DescribeFault(fault);
@@ -253,6 +263,10 @@ public sealed partial class ShellViewModel : ObservableObject
         {
             Dashboard.Apply(latest);
         }
+
+        // Every tick, whether or not the Performance tab is showing: it detects the end of a run and saves a new best, which
+        // must not depend on which screen the user happens to be looking at. (Two snapshot reads and a few property writes.)
+        Performance?.Refresh(latest);
 
         var silenceSoFar = _timeProvider.GetUtcNow() - _lastPacketArrivalAt;
         ConnectionState = DetermineState(IsRunning, latest, silenceSoFar);
@@ -480,6 +494,7 @@ public sealed partial class ShellViewModel : ObservableObject
         // After the service started (it dropped its own stale Latest) and on the UI thread (this continuation
         // resumes there, so no tick can interleave): wipe the previous session from the screen.
         ResetSessionState();
+        Performance?.BeginSession();
         Refresh(); // Show the result (running, or a friendly fault) immediately, without waiting for the next tick.
     }
 
@@ -489,6 +504,10 @@ public sealed partial class ShellViewModel : ObservableObject
 
         // A stopped dashboard must look idle: no frozen RPM, no shift light blinking at a redline that is long gone.
         ResetSessionState();
+
+        // Unlike the dashboard, the Performance numbers stay on screen (the user stops to READ the result); only unsaved
+        // bests are written out and the state line stops claiming the timer is armed.
+        Performance?.EndSession();
         Refresh();
     }
 }

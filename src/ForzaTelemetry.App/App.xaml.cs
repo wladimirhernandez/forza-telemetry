@@ -4,6 +4,8 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
 using ForzaTelemetry.App.Services;
+using ForzaTelemetry.Core;
+using ForzaTelemetry.Core.Performance;
 using ForzaTelemetry.Udp;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -22,6 +24,7 @@ public partial class App : Application, IAppRestarter
 
     private TelemetryService? _telemetryService;
     private SettingsService? _settings;
+    private PerformanceViewModel? _performance;
     private DispatcherTimerTicker? _ticker;
     private Action? _refresh;
 
@@ -81,9 +84,15 @@ public partial class App : Application, IAppRestarter
         // datagram per sender and discarded-datagram messages land in the same file as the app's own events.
         var listenerLogger = loggerFactory.CreateLogger<UdpTelemetryListener>();
         var settings = _settings;
+
+        // The engines that need EVERY packet (not the 20 Hz sample the screens get): registered with the service, which
+        // calls them from the receive loop; the view models below only read their snapshots.
+        var acceleration = new AccelerationTimer();
+        var topSpeed = new TopSpeedTracker();
         _telemetryService = new TelemetryService(
             () => new UdpTelemetryListener(settings.Current.UdpPort, logger: listenerLogger),
-            loggerFactory.CreateLogger<TelemetryService>());
+            loggerFactory.CreateLogger<TelemetryService>(),
+            observers: [acceleration, topSpeed]);
         _ticker = new DispatcherTimerTicker();
 
         // Manual composition (no DI container): each object is built here with exactly what it needs. The units service
@@ -106,6 +115,13 @@ public partial class App : Application, IAppRestarter
             _logging.LogDirectory ?? AppLogging.DefaultLogDirectory,
             new ExplorerFolderOpener(loggerFactory.CreateLogger<ExplorerFolderOpener>()),
             this);
+
+        // The per-car bests are read once here; a missing or damaged file is not an error (the store logs it).
+        var history = new PerformanceHistoryStore(
+            PerformanceHistoryStore.DefaultPath, TimeProvider.System, loggerFactory.CreateLogger<PerformanceHistoryStore>());
+        history.Load();
+        _performance = new PerformanceViewModel(acceleration, topSpeed, history, units, new WpfConfirmationService());
+
         var viewModel = new ShellViewModel(
             _telemetryService,
             TimeProvider.System,
@@ -114,7 +130,8 @@ public partial class App : Application, IAppRestarter
             dashboard: new DashboardViewModel(units),
             dataOut: dataOut,
             settings: _settings,
-            settingsPage: settingsPage);
+            settingsPage: settingsPage,
+            performancePage: _performance);
 
         // The ticker runs on the UI thread and calls Refresh, which pulls the latest packet into the bound properties.
         _refresh = viewModel.Refresh;
@@ -160,6 +177,16 @@ public partial class App : Application, IAppRestarter
         catch (Exception ex)
         {
             // Nothing to show while exiting, but the file keeps the evidence.
+            AppLog.ShutdownStopFailed(_logger, ex);
+        }
+
+        // The listener has stopped, so no engine is changing any more: save the last car's top speed and any unsaved best.
+        try
+        {
+            _performance?.EndSession();
+        }
+        catch (Exception ex)
+        {
             AppLog.ShutdownStopFailed(_logger, ex);
         }
 

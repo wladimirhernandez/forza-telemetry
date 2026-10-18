@@ -231,6 +231,33 @@ public class AccelerationTimerTests
     }
 
     [Fact]
+    public void Reset_empties_the_snapshot_immediately_without_waiting_for_a_packet()
+    {
+        var timer = new AccelerationTimer();
+        Launch(timer, 10, durationSeconds: 12);
+        Assert.NotNull(timer.Current.ZeroTo100KmhSeconds);
+
+        timer.Reset();
+
+        Assert.Equal(AccelerationSnapshot.Empty, timer.Current);
+    }
+
+    [Fact]
+    public void Reset_in_the_middle_of_a_run_drops_it_and_the_run_does_not_resume()
+    {
+        var timer = new AccelerationTimer();
+        Launch(timer, 10, durationSeconds: 3); // still running: 0-100 km/h is reached at ~2.8 s, the other lines are not
+        timer.Reset();
+
+        // The car is still moving fast: after the reset it must not count as a new run (no standstill, so not armed).
+        timer.OnPacket(TestPackets.Drive(9000, 40f, 200f));
+        timer.OnPacket(TestPackets.Drive(9020, 40.2f, 208f));
+
+        Assert.Equal(AccelerationState.Idle, timer.Current.State);
+        Assert.Null(timer.Current.ZeroTo100KmhSeconds);
+    }
+
+    [Fact]
     public void Ignores_non_finite_values()
     {
         var timer = new AccelerationTimer();

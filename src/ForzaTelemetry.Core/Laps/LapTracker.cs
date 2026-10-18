@@ -89,6 +89,28 @@ public sealed class LapTracker : IPacketObserver
         }
     }
 
+    /// <summary>
+    /// Forgets the whole session: the lap list, best/last and the delta reference, as if no packet had ever arrived.
+    /// Takes the writer's lock, so it is safe from any thread and empties the display immediately.
+    /// </summary>
+    public void Reset()
+    {
+        lock (_gate)
+        {
+            _hasPrevious = false;
+            _lapsCompleted = 0;
+            _previousCurrentLap = 0;
+            _lapStartDistance = 0;
+            _currentLapValid = false;
+            _currentCount = 0;
+            ResetSession(); // lap list, best/last and the reference samples
+            _shownCurrentLap = 0;
+            _shownLastLap = null;
+            _shownBestLap = null;
+            _shownDelta = null;
+        }
+    }
+
     /// <inheritdoc />
     public void OnPacket(TelemetryPacket packet)
     {
