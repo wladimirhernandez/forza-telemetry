@@ -85,6 +85,18 @@
                 <StackPanel>
                     <TextBlock Text="{x:Static res:Strings.ConnectionTitle}" Style="{StaticResource SectionTitle}" />
 
+                    <!-- Reopens the first-run guide (live checklist) at any time. -->
+                    <Grid Margin="0,14,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{x:Static res:SetupStrings.SetupGuideHint}" Style="{StaticResource SmallNote}"
+                                   VerticalAlignment="Center" Margin="0,0,16,0" />
+                        <Button Grid.Column="1" Style="{StaticResource FormButton}" Command="{Binding OpenSetupGuideCommand}"
+                                Content="{x:Static res:SetupStrings.SetupOpenGuideButton}" />
+                    </Grid>
+
                     <TextBlock Text="{x:Static res:Strings.PortLabel}" Style="{StaticResource FieldLabel}" />
                     <StackPanel Orientation="Horizontal">
                         <!--

@@ -40,6 +40,10 @@ public enum AppLanguage
 /// <param name="TemperatureUnit">Unit of every tire temperature readout.</param>
 /// <param name="Language">Display language, applied at startup.</param>
 /// <param name="StartListeningOnLaunch">Start the UDP listener as soon as the app opens (default off: the user presses Start).</param>
+/// <param name="HasCompletedSetup">
+/// True once the user has finished or dismissed the first-run "Connect your game" guide, so it opens by itself only on the
+/// first launch (it stays reachable from Settings and from the dashboard).
+/// </param>
 /// <remarks>
 /// <b>Why an immutable record.</b> A settings change is "replace the whole value", never "mutate a field somewhere":
 /// <c>settings with { SpeedUnit = SpeedUnit.Mph }</c> builds a new copy, and record equality then answers "did anything
@@ -67,7 +71,8 @@ public sealed record AppSettings(
     SpeedUnit SpeedUnit = SpeedUnit.Kmh,
     TemperatureUnit TemperatureUnit = TemperatureUnit.Celsius,
     AppLanguage Language = AppLanguage.System,
-    bool StartListeningOnLaunch = false)
+    bool StartListeningOnLaunch = false,
+    bool HasCompletedSetup = false)
 {
     /// <summary>Properties found in the file that this build does not know (written by a newer version); kept so a save does not drop them.</summary>
     [JsonIgnore]

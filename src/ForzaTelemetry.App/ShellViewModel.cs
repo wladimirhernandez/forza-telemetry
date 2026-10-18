@@ -37,7 +37,7 @@ namespace ForzaTelemetry.App;
 /// <see cref="IRefreshablePage"/> and the shell calls it only while <see cref="CurrentPage"/> is that screen.
 /// </para>
 /// </remarks>
-public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
+public sealed partial class ShellViewModel : ObservableObject, ISessionsHost, IConnectionGuideHost
 {
     /// <summary>How stale the latest packet must be before the status line switches to "No data for Ns".</summary>
     private static readonly TimeSpan NoDataThreshold = TimeSpan.FromSeconds(2);
@@ -128,6 +128,10 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
     /// <param name="mapPage">The Map screen's view model; when omitted that tab shows the placeholder.</param>
     /// <param name="tuningPage">The Tuning screen's view model; when omitted that tab shows the placeholder.</param>
     /// <param name="sessionsPage">The Sessions screen's view model; when omitted that tab shows the placeholder.</param>
+    /// <param name="guide">
+    /// The "Connect your game" guide. The shell attaches itself to it (so it can start listening and open the dashboard), refreshes
+    /// it on every tick while it is open and hands it to the dashboard's "How to connect" link; when omitted nothing of that exists.
+    /// </param>
     /// <param name="engines">
     /// The per-packet engines the receive loop feeds. The shell resets them at the start of every fresh session, BEFORE the loop
     /// starts (see <see cref="StartCoreAsync"/>); when omitted (tests of other things) there is nothing to reset.
@@ -148,7 +152,8 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
         MapViewModel? mapPage = null,
         TuningViewModel? tuningPage = null,
         TelemetryEngines? engines = null,
-        SessionsViewModel? sessionsPage = null)
+        SessionsViewModel? sessionsPage = null,
+        ConnectionGuideViewModel? guide = null)
     {
         _telemetryService = telemetryService;
         _engines = engines;
@@ -166,6 +171,9 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
         Tuning = tuningPage;
         Sessions = sessionsPage;
         sessionsPage?.Attach(this); // the page starts and stops replays through this shell's serialized commands
+        Guide = guide;
+        guide?.Attach(this); // the guide starts listening and goes to the dashboard through this shell
+        Dashboard.Guide = guide;
         Tabs = BuildTabs(Dashboard, performancePage, lapsPage, sessionsPage, analysisPage, mapPage, tuningPage, settingsPage);
         _selectedTab = Tabs[0];
 
@@ -217,6 +225,9 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
 
     /// <summary>This PC's address and the port the game must send to (top bar pill; later also the Settings guide).</summary>
     public DataOutViewModel DataOut { get; }
+
+    /// <summary>The "Connect your game" guide shown as a card over the window while it is open; null when the shell was built without one (tests).</summary>
+    public ConnectionGuideViewModel? Guide { get; }
 
     // ---- Navigation ---------------------------------------------------------------------------
 
@@ -320,6 +331,8 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
             Status = DescribeFault(fault);
             Sessions?.Refresh(); // a recording whose listener just died ends here; a failed replay is reported on the page
             RefreshVisiblePage(); // what the engines still hold (the session before the fault) stays readable
+            Dashboard.ShowConnectHint = true; // a failed listener is the clearest "how do I connect" moment
+            Guide?.Refresh();
             return;
         }
 
@@ -357,6 +370,11 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
         Status = DescribeStatus(ConnectionState, silenceSoFar);
         Sessions?.Refresh();
         RefreshVisiblePage();
+
+        // The dashboard offers "How to connect" whenever the game is NOT feeding it: stopped, listening with nothing yet, or silent.
+        // Receiving (even menu packets) and a replay hide it.
+        Dashboard.ShowConnectHint = ConnectionState is ConnectionState.Stopped or ConnectionState.Listening or ConnectionState.NoData;
+        Guide?.Refresh();
     }
 
     /// <summary>
@@ -691,6 +709,14 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
         Laps?.EndSession();
         Refresh();
     }
+
+    // ---- Connection guide (IConnectionGuideHost) ------------------------------------------------------
+
+    /// <inheritdoc />
+    public Task StartListeningAsync() => StartCommand.CanExecute(null) ? StartCommand.ExecuteAsync(null) : Task.CompletedTask;
+
+    /// <inheritdoc />
+    public void ShowDashboard() => Navigate(PageId.Dashboard);
 
     // ---- Replay (ISessionsHost) -----------------------------------------------------------------------
     //

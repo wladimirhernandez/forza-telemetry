@@ -81,6 +81,11 @@ internal static class AppSettingsReader
                     settings = accepted ? settings with { StartListeningOnLaunch = value.GetBoolean() } : settings;
                     break;
 
+                case "hascompletedsetup":
+                    accepted = value.ValueKind is JsonValueKind.True or JsonValueKind.False;
+                    settings = accepted ? settings with { HasCompletedSetup = value.GetBoolean() } : settings;
+                    break;
+
                 default:
                     // Clone: the element points into the document, which is disposed when this method returns.
                     (unknown ??= [])[name] = value.Clone();

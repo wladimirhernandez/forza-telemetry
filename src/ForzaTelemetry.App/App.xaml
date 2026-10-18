@@ -550,6 +550,55 @@
         <!-- ===== Form controls (Settings screen) ===== -->
 
         <!-- Section heading inside a card. -->
+        <!--
+          Text link: a borderless button for "go somewhere or open something" inside a sentence-sized space (the dashboard's
+          "How to connect"). The green label and a 1 px underline that fades in on hover and keyboard focus say it is clickable
+          without the weight of a filled button. The underline is an opacity layer, like the Ghost button's fills, so no color is animated.
+        -->
+        <ControlTemplate x:Key="LinkButtonTemplate" TargetType="Button">
+            <Grid Background="Transparent" Margin="{TemplateBinding Padding}">
+                <VisualStateManager.VisualStateGroups>
+                    <VisualStateGroup x:Name="CommonStates">
+                        <VisualStateGroup.Transitions>
+                            <VisualTransition GeneratedDuration="0:0:0.12" />
+                        </VisualStateGroup.Transitions>
+                        <VisualState x:Name="Normal" />
+                        <VisualState x:Name="MouseOver">
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="Underline" Storyboard.TargetProperty="Opacity" To="1" Duration="0" />
+                            </Storyboard>
+                        </VisualState>
+                        <VisualState x:Name="Pressed">
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="Underline" Storyboard.TargetProperty="Opacity" To="1" Duration="0" />
+                                <DoubleAnimation Storyboard.TargetName="Label" Storyboard.TargetProperty="Opacity" To="0.7" Duration="0" />
+                            </Storyboard>
+                        </VisualState>
+                        <VisualState x:Name="Disabled">
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="Label" Storyboard.TargetProperty="Opacity" To="0.4" Duration="0" />
+                            </Storyboard>
+                        </VisualState>
+                    </VisualStateGroup>
+                </VisualStateManager.VisualStateGroups>
+                <ContentPresenter x:Name="Label" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  TextElement.Foreground="{TemplateBinding Foreground}" />
+                <Border x:Name="Underline" Height="1" VerticalAlignment="Bottom" Margin="0,0,0,-2" Opacity="0"
+                        Background="{TemplateBinding Foreground}" />
+            </Grid>
+        </ControlTemplate>
+
+        <Style x:Key="LinkButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource ThrottleBrush}" />
+            <Setter Property="FontFamily" Value="{StaticResource LabelFont}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="2,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
+            <Setter Property="Template" Value="{StaticResource LinkButtonTemplate}" />
+        </Style>
+
         <Style x:Key="SectionTitle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
             <Setter Property="FontFamily" Value="{StaticResource LabelFont}" />

@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="SetupTitle" xml:space="preserve">
+    <value>Conecta tu juego</value>
+  </data>
+  <data name="SetupSubtitle" xml:space="preserve">
+    <value>Apunta Forza Horizon a este PC. La lista se actualiza en vivo en cuanto el juego envía datos.</value>
+  </data>
+  <data name="SetupAddressLabel" xml:space="preserve">
+    <value>Dirección IP de Data Out</value>
+  </data>
+  <data name="SetupPortLabel" xml:space="preserve">
+    <value>Puerto</value>
+  </data>
+  <data name="SetupCopyButton" xml:space="preserve">
+    <value>Copiar IP</value>
+  </data>
+  <data name="SetupWhichIpTitle" xml:space="preserve">
+    <value>¿Qué IP uso?</value>
+  </data>
+  <data name="SetupSamePcTitle" xml:space="preserve">
+    <value>El juego se ejecuta en este PC</value>
+  </data>
+  <data name="SetupSamePcBody" xml:space="preserve">
+    <value>Escribe 127.0.0.1 como dirección IP.</value>
+  </data>
+  <data name="SetupOtherDeviceTitle" xml:space="preserve">
+    <value>Xbox u otro PC</value>
+  </data>
+  <data name="SetupOtherDeviceBody" xml:space="preserve">
+    <value>Escribe la dirección de arriba. Ambos dispositivos deben estar en la misma red.</value>
+  </data>
+  <data name="SetupInGameTitle" xml:space="preserve">
+    <value>En el juego</value>
+  </data>
+  <data name="SetupInGameStep1" xml:space="preserve">
+    <value>Abre Ajustes y luego HUD y jugabilidad.</value>
+  </data>
+  <data name="SetupInGameStep2" xml:space="preserve">
+    <value>Activa Data Out.</value>
+  </data>
+  <data name="SetupInGameStep3" xml:space="preserve">
+    <value>Escribe la dirección IP y el puerto de la izquierda.</value>
+  </data>
+  <data name="SetupChecklistTitle" xml:space="preserve">
+    <value>Lista en vivo</value>
+  </data>
+  <data name="SetupCheckListening" xml:space="preserve">
+    <value>Escuchando en el puerto UDP {0}</value>
+  </data>
+  <data name="SetupCheckNetwork" xml:space="preserve">
+    <value>El perfil de red es Privado</value>
+  </data>
+  <data name="SetupCheckPackets" xml:space="preserve">
+    <value>Llegan paquetes</value>
+  </data>
+  <data name="SetupCheckDriving" xml:space="preserve">
+    <value>Conduciendo</value>
+  </data>
+  <data name="SetupStateOk" xml:space="preserve">
+    <value>listo</value>
+  </data>
+  <data name="SetupStatePending" xml:space="preserve">
+    <value>en espera</value>
+  </data>
+  <data name="SetupStateWarning" xml:space="preserve">
+    <value>requiere atención</value>
+  </data>
+  <data name="SetupListeningPending" xml:space="preserve">
+    <value>La aplicación aún no está escuchando.</value>
+  </data>
+  <data name="SetupListeningOk" xml:space="preserve">
+    <value>Lista para recibir datos del juego.</value>
+  </data>
+  <data name="SetupListeningReplay" xml:space="preserve">
+    <value>Se está reproduciendo una grabación, no el juego. Detén la reproducción para escuchar.</value>
+  </data>
+  <data name="SetupStartListeningButton" xml:space="preserve">
+    <value>Empezar a escuchar</value>
+  </data>
+  <data name="SetupNetworkPrivate" xml:space="preserve">
+    <value>Windows trata esta red como Privada, así que se permiten los datos entrantes del juego.</value>
+  </data>
+  <data name="SetupNetworkDomain" xml:space="preserve">
+    <value>Windows trata esta red como una red de dominio.</value>
+  </data>
+  <data name="SetupNetworkPublic" xml:space="preserve">
+    <value>Las redes públicas bloquean los datos entrantes del juego. Cámbiala a Privada (pasos abajo).</value>
+  </data>
+  <data name="SetupNetworkPublicWorks" xml:space="preserve">
+    <value>Esta red es Pública, pero los datos están llegando de todos modos.</value>
+  </data>
+  <data name="SetupNetworkUnknown" xml:space="preserve">
+    <value>No se pudo comprobar. Solo importa si no llegan paquetes.</value>
+  </data>
+  <data name="SetupPacketsPending" xml:space="preserve">
+    <value>Aún no se recibe nada.</value>
+  </data>
+  <data name="SetupPacketsOk" xml:space="preserve">
+    <value>Recibiendo datos de {0}.</value>
+  </data>
+  <data name="SetupPacketsOkNoSender" xml:space="preserve">
+    <value>Recibiendo datos.</value>
+  </data>
+  <data name="SetupPacketsWarning" xml:space="preserve">
+    <value>No ha llegado nada tras {0} segundos. Revisa la lista de abajo.</value>
+  </data>
+  <data name="SetupDrivingPending" xml:space="preserve">
+    <value>Esperando a que conduzcas. Los menús y la pausa no envían datos de conducción.</value>
+  </data>
+  <data name="SetupDrivingOk" xml:space="preserve">
+    <value>Los datos de conducción están llegando.</value>
+  </data>
+  <data name="SetupNetworkFixTitle" xml:space="preserve">
+    <value>Cambia esta red a Privada</value>
+  </data>
+  <data name="SetupTroubleTitle" xml:space="preserve">
+    <value>¿No llega nada? Revisa esto</value>
+  </data>
+  <data name="SetupTroubleIp" xml:space="preserve">
+    <value>La IP del juego es exactamente la que se muestra aquí, o 127.0.0.1 si el juego corre en este PC.</value>
+  </data>
+  <data name="SetupTroubleFirewall" xml:space="preserve">
+    <value>El Firewall de Windows permite UDP entrante en este puerto. El instalador agrega la regla para redes Privadas.</value>
+  </data>
+  <data name="SetupTroubleVpn" xml:space="preserve">
+    <value>Una VPN puede bloquear el acceso a la red local. Páusala o permite el acceso a la LAN.</value>
+  </data>
+  <data name="SetupTroubleSubnet" xml:space="preserve">
+    <value>La consola y este PC están en la misma red y subred (no un Wi-Fi de invitados ni otro router).</value>
+  </data>
+  <data name="SetupTroubleDriving" xml:space="preserve">
+    <value>El juego está en una conducción: Data Out no envía nada desde los menús ni las pantallas de carga.</value>
+  </data>
+  <data name="SetupConnectedTitle" xml:space="preserve">
+    <value>Estás conectado</value>
+  </data>
+  <data name="SetupConnectedBody" xml:space="preserve">
+    <value>Los datos de conducción llegan en vivo desde el juego.</value>
+  </data>
+  <data name="SetupGoToDashboard" xml:space="preserve">
+    <value>Ir al panel</value>
+  </data>
+  <data name="SetupCloseButton" xml:space="preserve">
+    <value>Cerrar</value>
+  </data>
+  <data name="SetupOpenGuideButton" xml:space="preserve">
+    <value>Abrir la guía de conexión</value>
+  </data>
+  <data name="SetupHowToConnect" xml:space="preserve">
+    <value>Cómo conectar</value>
+  </data>
+  <data name="SetupDashboardHint" xml:space="preserve">
+    <value>Aún no se reciben datos del juego.</value>
+  </data>
+  <data name="SetupGuideHint" xml:space="preserve">
+    <value>Una guía paso a paso con una lista en vivo de lo que funciona.</value>
+  </data>
+</root>

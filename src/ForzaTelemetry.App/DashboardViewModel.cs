@@ -76,6 +76,20 @@ public sealed partial class DashboardViewModel : ObservableObject
         DrivetrainLabel = "AWD"
     };
 
+    /// <summary>
+    /// True while the game is not sending driving data (stopped, listening with nothing yet, silent, faulted): the dashboard then
+    /// offers the "How to connect" link. Set by the shell on every tick; a replay or live data hides it.
+    /// </summary>
+    [ObservableProperty]
+    private bool _showConnectHint;
+
+    /// <summary>The connection guide the hint opens; set by the shell (null in tests and in the designer: the link does nothing).</summary>
+    public ConnectionGuideViewModel? Guide { get; set; }
+
+    /// <summary>Opens the "Connect your game" guide.</summary>
+    [CommunityToolkit.Mvvm.Input.RelayCommand]
+    private void OpenGuide() => Guide?.Open();
+
     // [NotifyPropertyChangedFor]: RpmReadout is computed from Rpm and MaxRpm, so it must raise its own change
     // notification whenever either input changes, or the bound TextBlock would keep showing stale text.
     [ObservableProperty]

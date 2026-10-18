@@ -98,6 +98,10 @@ public partial class App : Application, IAppRestarter
         var listenerLogger = loggerFactory.CreateLogger<UdpTelemetryListener>();
         var settings = _settings;
 
+        // Who sends the datagrams, for the connection guide's "packets arriving from ..." line. Reset by every new listener, so a
+        // sender from the previous listening session is never shown as current.
+        var senders = new DataOutSenderTracker();
+
         // The engines that need EVERY packet (not the 20 Hz sample the screens get): registered with the service, which
         // calls them from the receive loop; the view models below only read their snapshots. They are built together, with
         // the one ordered list the service is given, so none can be forgotten and the car-change detector runs first.
@@ -109,7 +113,12 @@ public partial class App : Application, IAppRestarter
         _recorder = new SessionRecorder();
         var recorder = _recorder;
         _telemetryService = new TelemetryService(
-            () => new UdpTelemetryListener(settings.Current.UdpPort, logger: listenerLogger, datagramObservers: [recorder]),
+            () =>
+            {
+                senders.Reset();
+                return new UdpTelemetryListener(
+                    settings.Current.UdpPort, logger: listenerLogger, datagramObservers: [recorder], senderObserver: senders.Record);
+            },
             loggerFactory.CreateLogger<TelemetryService>(),
             observers: engines.Observers);
         _ticker = new DispatcherTimerTicker();
@@ -128,13 +137,15 @@ public partial class App : Application, IAppRestarter
             clipboard,
             loggerFactory.CreateLogger<DataOutViewModel>(),
             new NetworkListManagerProfileInfo(loggerFactory.CreateLogger<NetworkListManagerProfileInfo>()));
+        var guide = new ConnectionGuideViewModel(_telemetryService, dataOut, senders, TimeProvider.System, _settings);
         var folderOpener = new ExplorerFolderOpener(loggerFactory.CreateLogger<ExplorerFolderOpener>());
         var settingsPage = new SettingsViewModel(
             _settings,
             dataOut,
             _logging.LogDirectory ?? AppLogging.DefaultLogDirectory,
             folderOpener,
-            this);
+            this,
+            guide: guide);
 
         // The recordings folder, created on demand (%APPDATA%/ForzaTelemetry/recordings), and the page that records into it and
         // replays from it. The page asks the shell (below) to start and stop replays; the shell attaches itself to it.
@@ -175,7 +186,8 @@ public partial class App : Application, IAppRestarter
             mapPage: mapPage,
             tuningPage: tuningPage,
             engines: engines,
-            sessionsPage: sessionsPage);
+            sessionsPage: sessionsPage,
+            guide: guide);
 
         // The ticker runs on the UI thread and calls Refresh, which pulls the latest packet into the bound properties.
         _refresh = viewModel.Refresh;
@@ -185,6 +197,9 @@ public partial class App : Application, IAppRestarter
         MainWindow = window;
         window.Show();
         _mainWindowShown = true;
+
+        // First launch only: the guide opens over the window by itself (see ConnectionGuideViewModel.OpenIfFirstRun).
+        guide.OpenIfFirstRun();
 
         // "Start listening when the app opens": run the same command as the Start button, after the window is up so a
         // failure (port in use) shows as the normal red status instead of blocking startup.

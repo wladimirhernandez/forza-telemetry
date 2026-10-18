@@ -69,8 +69,16 @@ public sealed partial class DataOutViewModel : ObservableObject
     /// True when Windows marks the network of <see cref="PrimaryAddress"/> as Public, so the guide shows how to switch it to
     /// Private. False while unknown (including before the first lookup finishes): a missing answer is never a warning.
     /// </summary>
+    public bool IsPublicNetwork => Category == NetworkCategory.Public;
+
+    /// <summary>
+    /// The Windows network profile of <see cref="PrimaryAddress"/>, or <see cref="NetworkCategory.Unknown"/> while it is not known
+    /// (no lookup yet, none possible, or it failed). The connection checklist reads this; the Settings warning reads
+    /// <see cref="IsPublicNetwork"/>.
+    /// </summary>
     [ObservableProperty]
-    private bool _isPublicNetwork;
+    [NotifyPropertyChangedFor(nameof(IsPublicNetwork))]
+    private NetworkCategory _category;
 
     /// <summary>True when there is an address to copy; enables the copy buttons.</summary>
     public bool HasAddress => PrimaryAddress is not null;
@@ -134,7 +142,7 @@ public sealed partial class DataOutViewModel : ObservableObject
         // A newer lookup started while this one was waiting (the address changed): its answer is the one that counts.
         if (version == _categoryLookupVersion)
         {
-            IsPublicNetwork = category == NetworkCategory.Public;
+            Category = category;
         }
     }
 

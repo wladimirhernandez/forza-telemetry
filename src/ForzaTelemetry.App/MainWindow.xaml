@@ -248,6 +248,16 @@
                  its TabIndex was ignored and focus started on the title-bar glyphs. TabNavigation="Local" makes each bar a
                  tab group, which is what makes its TabIndex count (0 = this bar, 1 = the title bar). -->
             <Grid Grid.Row="1" Margin="28,4,28,12" KeyboardNavigation.TabIndex="0" KeyboardNavigation.TabNavigation="Local">
+                <Grid.Style>
+                    <Style TargetType="Grid">
+                        <Style.Triggers>
+                            <!-- While the setup guide is open the window behind it is inert (a disabled subtree is skipped by Tab and by clicks). -->
+                            <DataTrigger Binding="{Binding Guide.IsOpen}" Value="True">
+                                <Setter Property="IsEnabled" Value="False" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Grid.Style>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                     <!--
                       Connection pill. The dot color comes from a DataTrigger per ConnectionState: the view model
@@ -374,7 +384,26 @@
               IsTabStop=False: the ContentControl itself is not a keyboard stop, only the controls inside the page are.
             -->
             <ContentControl Grid.Row="2" Content="{Binding CurrentPage}" IsTabStop="False" KeyboardNavigation.TabNavigation="Local"
-                            KeyboardNavigation.TabIndex="2" />
+                            KeyboardNavigation.TabIndex="2">
+                <ContentControl.Style>
+                    <Style TargetType="ContentControl">
+                        <Style.Triggers>
+                            <!-- While the setup guide is open the window behind it is inert (a disabled subtree is skipped by Tab and by clicks). -->
+                            <DataTrigger Binding="{Binding Guide.IsOpen}" Value="True">
+                                <Setter Property="IsEnabled" Value="False" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ContentControl.Style>
+            </ContentControl>
+
+            <!--
+              The "Connect your game" guide: a modal card over every row (title bar excluded from the dimming would look odd, so
+              it covers the whole window). Hidden unless the guide is open; its DataContext is the shell's Guide.
+            -->
+            <views:ConnectionGuideView Grid.Row="0" Grid.RowSpan="3" DataContext="{Binding Guide}"
+                                       Visibility="{Binding IsOpen, Converter={StaticResource BoolToVisibility}}"
+                                       KeyboardNavigation.TabIndex="3" />
         </Grid>
     </Border>
 </Window>

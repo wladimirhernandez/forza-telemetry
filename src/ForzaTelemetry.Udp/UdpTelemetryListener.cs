@@ -85,6 +85,10 @@ public sealed class UdpTelemetryListener : ITelemetrySource
     private readonly IDatagramObserver[] _datagramObservers;
     private readonly int[] _datagramObserverFailures;
 
+    // Told who sent each datagram (the observers above only see bytes). Optional; a failure of it is contained like theirs.
+    private readonly Action<IPEndPoint>? _senderObserver;
+    private int _senderObserverFailures;
+
     /// <summary>
     /// Running count of <see cref="SocketException"/>s seen on receive, used only to rate-limit
     /// <see cref="Log.SocketReceiveError"/> the same way <see cref="_discardedCount"/> rate-limits
@@ -143,12 +147,19 @@ public sealed class UdpTelemetryListener : ITelemetrySource
     /// the session recorder is the one that matters). Called in the given order; one that throws is logged and skipped for
     /// that datagram, it never ends the receive loop nor starves the others.
     /// </param>
+    /// <param name="senderObserver">
+    /// Called with the remote endpoint of EVERY received datagram, on the receive thread, whether or not it parses. This is how a
+    /// UI learns the Xbox's address (the "packets arriving from ..." line of a connection checklist) without the raw-bytes
+    /// observers having to carry it. Same contract as <see cref="IDatagramObserver"/>: fast, non-blocking; one that throws is
+    /// logged and skipped, it never ends the receive loop.
+    /// </param>
     public UdpTelemetryListener(
         int port = DefaultPort,
         IPAddress? bindAddress = null,
         ILogger<UdpTelemetryListener>? logger = null,
         HeartbeatOptions? heartbeatOptions = null,
-        IEnumerable<IDatagramObserver>? datagramObservers = null)
+        IEnumerable<IDatagramObserver>? datagramObservers = null,
+        Action<IPEndPoint>? senderObserver = null)
     {
         // Bind first: if the port is already in use, this throws SocketException before anything
         // else (like the logger) is touched — the caller (the console app) is expected to catch
@@ -158,6 +169,7 @@ public sealed class UdpTelemetryListener : ITelemetrySource
         _logger = logger ?? NullLogger<UdpTelemetryListener>.Instance;
         _datagramObservers = datagramObservers?.ToArray() ?? [];
         _datagramObserverFailures = new int[_datagramObservers.Length];
+        _senderObserver = senderObserver;
         _heartbeatOptions = heartbeatOptions ?? HeartbeatOptions.Default;
         _nextHeartbeatThreshold = _heartbeatOptions.InitialSilence;
         _receive = ct => _udpClient.ReceiveAsync(ct);
@@ -464,12 +476,34 @@ public sealed class UdpTelemetryListener : ITelemetrySource
         _silenceStopwatch.Restart();
         _nextHeartbeatThreshold = _heartbeatOptions.InitialSilence;
         _lastRemoteEndPoint = remote;
+        NotifySenderObserver(remote);
 
         if (_seenRemoteEndPoints.Add(remote))
         {
             // This is how the user discovers the Xbox's actual IP address: the very first
             // datagram from a sender that has never been seen before on this listener.
             Log.FirstDatagramFromSender(_logger, remote, length);
+        }
+    }
+
+    private void NotifySenderObserver(IPEndPoint remote)
+    {
+        if (_senderObserver is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _senderObserver(remote);
+        }
+        catch (Exception ex)
+        {
+            var failures = ++_senderObserverFailures;
+            if (failures == 1 || failures % DatagramObserverLogEvery == 0)
+            {
+                Log.DatagramObserverFailed(_logger, ex, "senderObserver", failures);
+            }
         }
     }
 

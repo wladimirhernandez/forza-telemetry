@@ -25,6 +25,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly SettingsService _settings;
     private readonly IFolderOpener? _folderOpener;
     private readonly IAppRestarter? _restarter;
+    private readonly ConnectionGuideViewModel? _guide;
 
     // The language that is actually on screen right now: it was applied at startup, so a different SELECTED language only
     // takes effect after a restart (see LanguageChangePending).
@@ -39,15 +40,18 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <param name="folderOpener">Opens the folder; optional (the button then does nothing).</param>
     /// <param name="restarter">Restarts the app for a language change; optional (the restart button is then hidden).</param>
     /// <param name="systemCulture">The culture "System" means; optional (the one Windows gave the process at startup).</param>
+    /// <param name="guide">The "Connect your game" guide the Connection card opens; optional (the button then does nothing).</param>
     public SettingsViewModel(
         SettingsService settings,
         DataOutViewModel dataOut,
         string logDirectory,
         IFolderOpener? folderOpener = null,
         IAppRestarter? restarter = null,
-        CultureInfo? systemCulture = null)
+        CultureInfo? systemCulture = null,
+        ConnectionGuideViewModel? guide = null)
     {
         _settings = settings;
+        _guide = guide;
         DataOut = dataOut;
         LogDirectory = logDirectory;
         _folderOpener = folderOpener;
@@ -85,6 +89,10 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     /// <summary>The address and port the game must send to; the guide card shows it and offers the copy command.</summary>
     public DataOutViewModel DataOut { get; }
+
+    /// <summary>Opens the step-by-step "Connect your game" guide with its live checklist.</summary>
+    [RelayCommand]
+    private void OpenSetupGuide() => _guide?.Open();
 
     // ---- Connection: UDP port -------------------------------------------------------------------
 

@@ -20,6 +20,9 @@
       Auto rows take only what their content needs.
       {x:Static res:Strings.Key} reads UI text from Resources/Strings.resx (en) or Strings.es.resx at load time.
     -->
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
@@ -37,6 +40,7 @@
         -->
         <Border Grid.Row="0" Style="{StaticResource CardStyle}" Margin="28,18,28,18" Padding="12"
                 AutomationProperties.Name="{x:Static res:Strings.HeroTitle}">
+            <Grid>
             <Viewbox Stretch="Uniform">
                 <Canvas Width="920" Height="440">
                     <!-- Leader lines first, so the cards and wheels draw over their ends. -->
@@ -128,6 +132,27 @@
                                     DataContext="{Binding RearRight}" Tag="{x:Static res:Strings.TireRearRight}" />
                 </Canvas>
             </Viewbox>
+
+            <!--
+              Waiting state: shown while the game is not feeding the dashboard (stopped, listening with nothing, silent or failed).
+              A small card in the top-left corner of the hero, the corner the car and its callouts never use. Its width is capped so
+              the text wraps instead of growing towards the first tire callout (Spanish is the longer language).
+            -->
+            <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8" Padding="16,12" MaxWidth="250"
+                    CornerRadius="{StaticResource ButtonRadius}" Background="{StaticResource CardRaisedBrush}"
+                    BorderBrush="{StaticResource HairlineBrush}" BorderThickness="1"
+                    Visibility="{Binding ShowConnectHint, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="8" Height="8" Fill="{StaticResource WarmBrush}" Margin="0,5,10,0" VerticalAlignment="Top" />
+                        <TextBlock Text="{x:Static res:SetupStrings.SetupDashboardHint}" Style="{StaticResource MutedLabel}"
+                                   TextWrapping="Wrap" MaxWidth="190" />
+                    </StackPanel>
+                    <Button Style="{StaticResource LinkButton}" Margin="18,8,0,0" HorizontalAlignment="Left"
+                            Command="{Binding OpenGuideCommand}" Content="{x:Static res:SetupStrings.SetupHowToConnect}" />
+                </StackPanel>
+            </Border>
+            </Grid>
         </Border>
 
         <!--
