@@ -91,15 +91,109 @@ public class BrakingTestTests
     }
 
     [Fact]
-    public void Arms_just_above_105_kmh_but_not_just_below()
+    public void Arms_just_above_63_mph_but_not_just_below()
     {
         var slow = new BrakingTest();
-        slow.OnPacket(TestPackets.Drive(0, (float)(104.9 / 3.6), 0f));
+        slow.OnPacket(TestPackets.Drive(0, (float)(63 * 1.609344 / 3.6 - 0.1), 0f));
         var fast = new BrakingTest();
-        fast.OnPacket(TestPackets.Drive(0, (float)(105.1 / 3.6), 0f));
+        fast.OnPacket(TestPackets.Drive(0, (float)(63 * 1.609344 / 3.6 + 0.1), 0f));
 
         Assert.Equal(BrakingState.Idle, slow.Current.State);
         Assert.Equal(BrakingState.Armed, fast.Current.State);
+    }
+
+    [Fact]
+    public void A_normal_60_to_0_mph_stop_from_65_mph_records_only_the_mph_test()
+    {
+        var test = new BrakingTest();
+
+        Run(test, cruiseKmh: 104.6); // 65 mph: armed for 60 mph, below the 105 km/h arming of the 100 km/h test
+
+        var snap = test.Current;
+        Assert.Equal(BrakingState.Done, snap.State);
+        Assert.Null(snap.HundredToZeroMeters);
+        Assert.Null(snap.HundredToZeroSeconds);
+        Assert.Equal(ExpectedSeconds(Mph60), snap.SixtyToZeroMphSeconds!.Value, 0.002);
+        Assert.Equal(ExpectedMeters(Mph60), snap.SixtyToZeroMphMeters!.Value, 0.02);
+    }
+
+    [Fact]
+    public void A_stop_that_starts_from_above_105_kmh_records_both_tests()
+    {
+        var test = new BrakingTest();
+
+        Run(test, cruiseKmh: 106);
+
+        Assert.NotNull(test.Current.HundredToZeroMeters);
+        Assert.NotNull(test.Current.SixtyToZeroMphMeters);
+    }
+
+    [Fact]
+    public void The_brake_may_ramp_up_to_300_ms_after_the_start_crossing()
+    {
+        var test = new BrakingTest();
+        var crossing = (120 / 3.6 - Kmh100) / Decel; // seconds into the braking when 100 km/h is crossed
+
+        Run(test, brakeAt: t => t < crossing + 0.2 ? (byte)0 : HardBrake);
+
+        Assert.Equal(BrakingState.Done, test.Current.State);
+        Assert.NotNull(test.Current.HundredToZeroMeters);
+    }
+
+    [Fact]
+    public void A_brake_that_is_not_hard_within_300_ms_after_the_crossing_is_not_a_test()
+    {
+        var test = new BrakingTest();
+        var crossing = (120 / 3.6 - Kmh100) / Decel;
+
+        Run(test, brakeAt: t => t < crossing + 0.4 ? (byte)0 : HardBrake);
+
+        Assert.NotEqual(BrakingState.Done, test.Current.State);
+        Assert.Null(test.Current.HundredToZeroMeters);
+        Assert.Equal(0, test.Current.CompletedRuns);
+    }
+
+    [Fact]
+    public void Completed_runs_counts_every_finished_stop_and_the_braking_snapshot_carries_the_last_one()
+    {
+        var test = new BrakingTest();
+        Run(test);
+        var first = test.Current;
+        Assert.Equal(1, first.CompletedRuns);
+
+        Run(test, brakeSeconds: 2); // a second stop in progress (timestamps rewind: re-arms, then runs)
+
+        var snap = test.Current;
+        Assert.Equal(BrakingState.Braking, snap.State);
+        Assert.Equal(1, snap.CompletedRuns); // nothing new finished yet
+        Assert.Equal(first.HundredToZeroMeters, snap.GetCompletedResult().HundredToZeroMeters);
+
+        Run(test); // and a third, identical stop: the VALUES repeat, the counter still moves
+        Assert.Equal(2, test.Current.CompletedRuns);
+        Assert.Equal(first.HundredToZeroMeters!.Value, test.Current.HundredToZeroMeters!.Value, 6);
+    }
+
+    [Fact]
+    public void Falling_through_the_line_on_the_throttle_is_not_a_stop()
+    {
+        var test = new BrakingTest();
+        test.OnPacket(TestPackets.Drive(0, 120f / 3.6f, 0f));
+
+        test.OnPacket(TestPackets.Drive(20, 99f / 3.6f, 10f) with { Brake = HardBrake, Accel = 255 });
+
+        Assert.Equal(BrakingState.Idle, test.Current.State);
+    }
+
+    [Fact]
+    public void Completed_runs_survives_reset()
+    {
+        var test = new BrakingTest();
+        Run(test);
+
+        test.Reset();
+
+        Assert.Equal(1, test.Current.CompletedRuns);
+        Assert.Null(test.Current.HundredToZeroMeters);
     }
 
     [Fact]
@@ -141,10 +235,11 @@ public class BrakingTestTests
         var test = new BrakingTest();
         test.OnPacket(TestPackets.Drive(0, 120f / 3.6f, 0f));
         test.OnPacket(TestPackets.Drive(20, 99f / 3.6f, 10f)); // crossed 100 with no brake
+        test.OnPacket(TestPackets.Drive(400, 90f / 3.6f, 20f)); // still no brake once the 0.3 s ramp is over: disarmed
         Assert.Equal(BrakingState.Idle, test.Current.State);
 
-        test.OnPacket(TestPackets.Drive(40, 60f / 3.6f, 20f) with { Brake = HardBrake });
-        test.OnPacket(TestPackets.Drive(60, 0f, 25f) with { Brake = HardBrake });
+        test.OnPacket(TestPackets.Drive(1000, 60f / 3.6f, 30f) with { Brake = HardBrake });
+        test.OnPacket(TestPackets.Drive(1020, 0f, 35f) with { Brake = HardBrake });
 
         Assert.Null(test.Current.HundredToZeroSeconds);
     }
@@ -258,7 +353,7 @@ public class BrakingTestTests
 
         test.Reset();
 
-        Assert.Equal(BrakingSnapshot.Empty, test.Current);
+        Assert.Equal(BrakingSnapshot.Empty, test.Current with { CompletedRuns = 0 }); // the counter never goes down
     }
 
     [Fact]

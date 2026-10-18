@@ -9,9 +9,10 @@ namespace ForzaTelemetry.Core.Performance;
 /// packet interval. Both engines instead assume speed changes linearly between the two straddling packets and
 /// solve for the fraction of the interval where the line was crossed; the same fraction then gives the
 /// interpolated game time and distance. Keeping that in one place guarantees both engines agree on it and on
-/// what "standing still" means.
+/// what "standing still" means. Public only so the App's unit conversion shares the ONE mile constant (<see cref="KmhPerMph"/>)
+/// instead of keeping a copy that could drift.
 /// </remarks>
-internal static class SpeedCrossing
+public static class SpeedCrossing
 {
     /// <summary>Below this speed (km/h) the car counts as standing still.</summary>
     public const double StandstillKmh = 1.0;

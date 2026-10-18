@@ -28,6 +28,7 @@ public enum AccelerationState
 /// <param name="HundredTo200KmhSeconds">100-200 km/h "rolling" time: 100 km/h crossing to 200 km/h crossing of the same run.</param>
 /// <param name="ZeroTo60MphSeconds">0-60 mph time (96.56 km/h).</param>
 /// <param name="SixtyTo130MphSeconds">60-130 mph time, from the same run.</param>
+/// <param name="CompletedRuns">How many runs the timer has KEPT since it was created; it only ever grows (not even <see cref="AccelerationTimer.Reset"/> lowers it). A reader that remembers the last value it saw can tell "a run was kept since I looked" without comparing result values, which repeat (two identical runs) and cannot tell a dropped run from a kept one.</param>
 /// <remarks>
 /// The last three parameters were added after the first release and DEFAULT to null, so positional and named
 /// construction and <c>with</c> expressions within this solution keep compiling and behaving the same. It is NOT
@@ -43,7 +44,8 @@ public sealed record AccelerationSnapshot(
     double? QuarterMileTrapSpeedKmh,
     double? HundredTo200KmhSeconds = null,
     double? ZeroTo60MphSeconds = null,
-    double? SixtyTo130MphSeconds = null)
+    double? SixtyTo130MphSeconds = null,
+    long CompletedRuns = 0)
 {
     /// <summary>The initial snapshot: idle, nothing measured.</summary>
     public static AccelerationSnapshot Empty { get; } = new(AccelerationState.Idle, 0, null, null, null, null);

@@ -108,14 +108,25 @@ public sealed class PerformanceViewModelTests : IDisposable
 
         /// <summary>One packet through the engines (as the receive loop does) and one UI refresh from it (as the tick does).</summary>
         public TelemetryPacket Feed(
-            double speed, double distance = 0, byte gear = 1, bool raceOn = true, uint stepMs = 20, byte throttle = 0, byte brake = 0)
+            double speed,
+            double distance = 0,
+            byte gear = 1,
+            bool raceOn = true,
+            uint stepMs = 20,
+            byte throttle = 0,
+            byte brake = 0,
+            bool refresh = true)
         {
             var packet = Packet(speed, distance, gear, raceOn, throttle, brake);
             CarChanges.OnPacket(packet); // first, like the app: it must see a new car before the engines do
             Acceleration.OnPacket(packet);
             Braking.OnPacket(packet);
             TopSpeed.OnPacket(packet);
-            Vm.Refresh(packet);
+            if (refresh)
+            {
+                Vm.Refresh(packet); // false: the engines move on between two UI ticks (a whole stop can fit in one)
+            }
+
             _ms += stepMs;
             return packet;
         }
@@ -145,21 +156,21 @@ public sealed class PerformanceViewModelTests : IDisposable
         /// (40 m/s, 10 m/s^2) the closed forms are exact: 100 km/h to the 1 km/h standstill is 38.58 m in 2.75 s, and 60 mph is 35.97 m in
         /// 2.65 s. The distance grows with the speed, so the engines get a real stopping distance.
         /// </summary>
-        public void BrakeHard(double fromSpeed = 40, double decel = 10)
+        public void BrakeHard(double fromSpeed = 40, double decel = 10, bool refresh = true)
         {
             double distance = 0;
             for (var i = 0; i < 5; i++)
             {
-                Feed(fromSpeed, distance, gear: 5);
+                Feed(fromSpeed, distance, gear: 5, refresh: refresh);
                 distance += fromSpeed * 0.02;
             }
 
             for (var t = 0.02; fromSpeed - (decel * t) > 0; t += 0.02)
             {
-                Feed(fromSpeed - (decel * t), distance + (fromSpeed * t) - (decel * t * t / 2), gear: 5, brake: 255);
+                Feed(fromSpeed - (decel * t), distance + (fromSpeed * t) - (decel * t * t / 2), gear: 5, brake: 255, refresh: refresh);
             }
 
-            Feed(0, distance + (fromSpeed * fromSpeed / (2 * decel)), gear: 5, brake: 255);
+            Feed(0, distance + (fromSpeed * fromSpeed / (2 * decel)), gear: 5, brake: 255, refresh: refresh);
         }
 
         /// <summary>Brakes from the given speed to a standstill (the timer arms again).</summary>
@@ -589,7 +600,7 @@ public sealed class PerformanceViewModelTests : IDisposable
         Assert.Equal("--", rig.Vm.ZeroTo100Text);
         Assert.Equal("--", rig.Vm.TopSpeedText);
         Assert.False(rig.Vm.HasCar);
-        Assert.Equal(AccelerationSnapshot.Empty, rig.Acceleration.Current);
+        Assert.Equal(AccelerationSnapshot.Empty, rig.Acceleration.Current with { CompletedRuns = 0 }); // the counter never goes down
         Assert.Equal(0, rig.TopSpeed.TopSpeedMs);
         Assert.Single(rig.Vm.Rows); // the best of the previous session is still there
     }
@@ -1049,7 +1060,46 @@ public sealed class PerformanceViewModelTests : IDisposable
         Assert.True(rig.Vm.ExtraWindowIsNewBest); // 0-100 improved too
     }
 
+    [Fact]
+    public void A_kept_partial_run_saves_only_what_it_measured_and_never_wipes_older_bests()
+    {
+        var rig = NewRig();
+        rig.Stand();
+        rig.Launch(10.0);
+        rig.BrakeToStop(100, 800);
+        var key = new CarKey(1234, 780);
+        var before = rig.History.Find(key)!;
+        Assert.NotNull(before.ZeroTo100Seconds);
+
+        // A quicker launch that ends at 99 km/h: past 60 mph, short of 100 km/h, then the driver lifts. A mph player's 0-60 is real.
+        rig.Launch(2.5, accel: 11);
+        rig.Feed(15, 35, throttle: 255);
+
+        var after = rig.History.Find(key)!;
+        Assert.True(after.ZeroTo60MphSeconds < before.ZeroTo60MphSeconds);
+        Assert.Equal(before.ZeroTo100Seconds, after.ZeroTo100Seconds); // not measured by this run: untouched
+        Assert.Equal(before.QuarterMileSeconds, after.QuarterMileSeconds);
+        Assert.True(rig.Vm.ZeroTo60MphIsNewBest);
+        Assert.False(rig.Vm.ZeroTo100IsNewBest);
+    }
+
     // ---- Braking ------------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void A_stop_that_finishes_between_two_ticks_is_saved_exactly_when_the_counter_moves_even_with_equal_values()
+    {
+        var rig = NewRig();
+        rig.BrakeHard(decel: 10);
+        var key = new CarKey(1234, 780);
+        Assert.Equal(38.58, rig.History.Find(key)!.BrakeHundredMeters!.Value, precision: 2);
+
+        // The whole second stop happens with no UI tick in between (Braking, Done and Armed all pass unseen), and it is better.
+        rig.BrakeHard(decel: 11, refresh: false);
+        rig.Feed(0, 0, gear: 5);
+
+        Assert.Equal(35.07, rig.History.Find(key)!.BrakeHundredMeters!.Value, precision: 2);
+        Assert.True(rig.Vm.BrakingIsNewBest);
+    }
 
     [Fact]
     public void Before_any_data_the_braking_tile_is_empty_and_says_waiting()
@@ -1078,9 +1128,10 @@ public sealed class PerformanceViewModelTests : IDisposable
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, Strings.PerfBrakeStateArmed, "100", "km/h"), rig.Vm.BrakingStateText);
 
         rig.Units.SpeedUnit = SpeedUnit.Mph;
-        Assert.Equal(string.Format(CultureInfo.CurrentCulture, Strings.PerfBrakeStateArmed, "62", "mph"), rig.Vm.BrakingStateText);
-        rig.Feed(20, 1.2, gear: 4);
-        Assert.Equal(string.Format(CultureInfo.CurrentCulture, Strings.PerfBrakeStateIdle, "65", "mph"), rig.Vm.BrakingStateText);
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture, Strings.PerfBrakeStateArmed, "60", "mph"), rig.Vm.BrakingStateText); // the 60-0 mph test's own lines
+        rig.Feed(20, 1.2, gear: 4, stepMs: 400); // falls through the line coasting: the 0.3 s brake ramp starts...
+        rig.Feed(20, 1.3, gear: 4); // ...and runs out with no brake, which disarms
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture, Strings.PerfBrakeStateIdle, "63", "mph"), rig.Vm.BrakingStateText);
         rig.Units.SpeedUnit = SpeedUnit.Kmh;
 
         var rig2 = NewRig();

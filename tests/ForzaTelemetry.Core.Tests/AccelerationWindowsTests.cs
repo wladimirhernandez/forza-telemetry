@@ -113,7 +113,7 @@ public class AccelerationWindowsTests
 
         timer.Reset();
 
-        Assert.Equal(AccelerationSnapshot.Empty, timer.Current);
+        Assert.Equal(AccelerationSnapshot.Empty, timer.Current with { CompletedRuns = 0 }); // the counter never goes down
     }
 
     // A car that tops out at 204 km/h: it crosses 200 km/h and the quarter mile but can never reach 130 mph.
@@ -167,7 +167,7 @@ public class AccelerationWindowsTests
     }
 
     [Fact]
-    public void A_run_with_only_mph_windows_never_overwrites_the_previous_completed_result()
+    public void A_run_with_only_mph_windows_is_kept_and_shows_its_own_values()
     {
         var timer = new AccelerationTimer();
         Launch(timer, 10, durationSeconds: 12);
@@ -180,10 +180,107 @@ public class AccelerationWindowsTests
         Assert.NotNull(timer.Current.ZeroTo60MphSeconds);
         timer.OnPacket(TestPackets.Drive(34000, 15f, 9100f) with { Accel = 255 }); // speed collapses: lift
 
+        // A mph player's 0-60 is a real result even though 100 km/h was never reached: the run is KEPT. The completed snapshot is
+        // this run's (nulls for what it did not measure); older bests live in the per-car history, which merges per field.
         var snap = timer.Current;
         Assert.NotEqual(AccelerationState.Running, snap.State);
-        Assert.Equal(first.ZeroTo100KmhSeconds, snap.ZeroTo100KmhSeconds);
-        Assert.Equal(first.ZeroTo60MphSeconds, snap.ZeroTo60MphSeconds);
-        Assert.Equal(first.QuarterMileSeconds, snap.QuarterMileSeconds);
+        Assert.NotNull(snap.ZeroTo60MphSeconds);
+        Assert.Null(snap.ZeroTo100KmhSeconds);
+        Assert.Equal(first.CompletedRuns + 1, snap.CompletedRuns);
+    }
+
+    // A slow car: ramps to 25 m/s (90 km/h) over 5 s and holds it, so it covers the quarter mile without ever reaching 100 km/h.
+    private static void SlowCarRun(AccelerationTimer timer, double seconds)
+    {
+        for (uint ms = 0; ms < 1000; ms += 20)
+        {
+            timer.OnPacket(TestPackets.Drive(ms, 0f, 0f));
+        }
+
+        for (var ms = 1000u; ms <= 1000 + (seconds * 1000); ms += 20)
+        {
+            var s = (ms - 1000) / 1000.0;
+            var speed = Math.Min(5 * s, 25);
+            var distance = s <= 5 ? 2.5 * s * s : 62.5 + (25 * (s - 5));
+            timer.OnPacket(TestPackets.Drive(ms, (float)speed, (float)distance) with { Accel = 255 });
+        }
+    }
+
+    [Fact]
+    public void A_slow_car_keeps_its_quarter_mile_even_though_it_never_reaches_100_kmh()
+    {
+        var timer = new AccelerationTimer();
+        SlowCarRun(timer, seconds: 20);
+        Assert.Equal(AccelerationState.Running, timer.Current.State);
+
+        for (uint ms = 21020; ms <= 21700; ms += 20) // throttle lifted for over half a second: the run ends
+        {
+            timer.OnPacket(TestPackets.Drive(ms, 25f, 62.5f + (25 * (float)((ms - 1000) / 1000.0 - 5))) with { Accel = 0 });
+        }
+
+        var snap = timer.Current;
+        Assert.Equal(AccelerationState.Done, snap.State);
+        Assert.NotNull(snap.QuarterMileSeconds);
+        Assert.Null(snap.ZeroTo100KmhSeconds);
+        Assert.Equal(1, snap.CompletedRuns);
+    }
+
+    [Fact]
+    public void A_run_that_measured_nothing_is_dropped_and_not_counted()
+    {
+        var timer = new AccelerationTimer();
+        for (uint ms = 0; ms < 1000; ms += 20)
+        {
+            timer.OnPacket(TestPackets.Drive(ms, 0f, 0f));
+        }
+
+        for (uint ms = 1000; ms < 1500; ms += 20) // creeps at 7 km/h, then stops again
+        {
+            timer.OnPacket(TestPackets.Drive(ms, 2f, (ms - 1000) * 0.002f) with { Accel = 255 });
+        }
+
+        timer.OnPacket(TestPackets.Drive(1500, 0f, 1f));
+
+        Assert.Equal(0, timer.Current.CompletedRuns);
+        Assert.Null(timer.Current.ZeroTo100KmhSeconds);
+    }
+
+    [Fact]
+    public void A_rolling_start_with_the_throttle_still_off_does_not_end_the_run()
+    {
+        var timer = new AccelerationTimer();
+        for (uint ms = 0; ms < 1000; ms += 20)
+        {
+            timer.OnPacket(TestPackets.Drive(ms, 0f, 0f));
+        }
+
+        // Rolls off at 6 km/h with the pedal untouched for 0.8 s (over the old 0.5 s lift hold), then floors it.
+        for (var ms = 1000u; ms < 1800; ms += 20)
+        {
+            timer.OnPacket(TestPackets.Drive(ms, 1.7f, (ms - 1000) * 0.0017f) with { Accel = 0 });
+        }
+
+        for (var ms = 1800u; ms <= 3000; ms += 20)
+        {
+            var s = (ms - 1800) / 1000.0;
+            timer.OnPacket(TestPackets.Drive(ms, (float)(1.7 + (10 * s)), (float)(1.4 + (1.7 * s) + (5 * s * s))) with { Accel = 255 });
+        }
+
+        Assert.Equal(AccelerationState.Running, timer.Current.State);
+    }
+
+    [Fact]
+    public void Completed_runs_only_ever_grows_and_survives_reset()
+    {
+        var timer = new AccelerationTimer();
+        Launch(timer, 10, durationSeconds: 12);
+        Assert.Equal(1, timer.Current.CompletedRuns);
+
+        timer.Reset();
+        Assert.Equal(1, timer.Current.CompletedRuns);
+
+        timer.OnPacket(TestPackets.Drive(30000, 0f, 9000f));
+        Launch(timer, 10, durationSeconds: 12, t0: 31000);
+        Assert.Equal(2, timer.Current.CompletedRuns);
     }
 }

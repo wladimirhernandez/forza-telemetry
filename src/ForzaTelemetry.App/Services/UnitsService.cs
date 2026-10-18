@@ -17,7 +17,7 @@ namespace ForzaTelemetry.App.Services;
 public sealed partial class UnitsService : ObservableObject
 {
     /// <summary>Kilometers in one international mile (exact by definition).</summary>
-    public const double KilometersPerMile = 1.609344;
+    public const double KilometersPerMile = ForzaTelemetry.Core.Performance.SpeedCrossing.KmhPerMph;
 
     /// <summary>Creates a service in metric units (km/h, °C) that does not follow any settings; for tests and the designer.</summary>
     public UnitsService()

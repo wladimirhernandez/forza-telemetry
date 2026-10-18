@@ -35,9 +35,6 @@ public sealed class AccelerationTimer : IPacketObserver
     /// <summary>Below this speed (1 km/h, in m/s) the car counts as standing still.</summary>
     private const double StandstillMs = SpeedCrossing.StandstillMs;
 
-    /// <summary>Kilometers per hour in one mile per hour; kept here for callers of the original public API.</summary>
-    public const double KmhPerMph = SpeedCrossing.KmhPerMph;
-
     /// <summary>A quarter mile in meters.</summary>
     public const double QuarterMileMeters = 402.336;
 
@@ -66,6 +63,11 @@ public sealed class AccelerationTimer : IPacketObserver
     /// <summary>How long (game ms) the throttle must stay lifted to end the run.</summary>
     private const double LiftHoldMs = 500;
 
+    // The lift rule stays OFF until the launch is really under way: once the car passed 30 km/h, or a second went by. A rolling start
+    // (already creeping while the throttle is still at zero) must not be read as "the driver lifted" before the pedal was pressed.
+    private static readonly double LiftArmSpeedMs = SpeedCrossing.KmhToMs(30);
+    private const double LiftArmAfterMs = 1000;
+
     private readonly object _gate = new();
     private AccelerationSnapshot _published = AccelerationSnapshot.Empty;
 
@@ -77,7 +79,9 @@ public sealed class AccelerationTimer : IPacketObserver
     private double _startDistance;
     private readonly double?[] _crossings = new double?[LineSpeeds.Length]; // seconds since run start, per line
     private double _maxSpeedMs;
+    private bool _liftRuleArmed;
     private double? _throttleLiftedSinceMs;
+    private long _completedRuns; // never reset: readers compare it with the last value they saw
     private double? _quarterTime;
     private double? _quarterTrap;
     private double _latestTimeMs;
@@ -102,10 +106,10 @@ public sealed class AccelerationTimer : IPacketObserver
         lock (_gate)
         {
             _state = AccelerationState.Idle;
-            _lastCompleted = AccelerationSnapshot.Empty;
+            _lastCompleted = AccelerationSnapshot.Empty with { CompletedRuns = _completedRuns };
             _previous = null; // never interpolate across the reset
             ClearRun();
-            Publish(AccelerationSnapshot.Empty);
+            Publish(_lastCompleted);
         }
     }
 
@@ -257,6 +261,13 @@ public sealed class AccelerationTimer : IPacketObserver
 
         _maxSpeedMs = Math.Max(_maxSpeedMs, current.Speed);
 
+        _liftRuleArmed |= current.Speed >= LiftArmSpeedMs || current.TimestampMS - _startTimeMs >= LiftArmAfterMs;
+        if (!_liftRuleArmed)
+        {
+            _latestTimeMs = current.TimestampMS;
+            return; // still launching: neither a low throttle nor a falling speed means "lifted" yet
+        }
+
         // "The driver lifted" ends the run so windows that can never be reached (a car topping out between
         // 200 km/h and 130 mph) do not keep it open for minutes and later record a bogus late crossing.
         // Either speed falls 5 km/h under the run's peak, or the throttle stays lifted for half a second of
@@ -274,7 +285,7 @@ public sealed class AccelerationTimer : IPacketObserver
 
         if (lifted)
         {
-            Abort(standstill: false); // keeps the run only if 0-100 km/h was measured
+            Abort(standstill: false); // keeps the run only if a window the pages show was measured (see Abort)
             return;
         }
 
@@ -284,22 +295,27 @@ public sealed class AccelerationTimer : IPacketObserver
 
     private void Finish()
     {
+        _completedRuns++;
         _state = AccelerationState.Done;
         _lastCompleted = Build(AccelerationState.Done, 0);
         Publish(_lastCompleted);
     }
 
     /// <summary>
-    /// Ends a run that cannot continue. If 0-100 km/h was measured, the partial results are kept as the
-    /// completed run - a driver who lifts after the line should not lose the time. Otherwise (nothing, or only
-    /// an mph window such as 0-60) the run is dropped and the previous completed result stays, so a short
-    /// partial can never wipe the classic results.
+    /// Ends a run that cannot continue. If a window the pages show was measured (0-100 km/h, 0-60 mph or the quarter mile),
+    /// the partial results are kept as the completed run - a driver who lifts after the line should not lose the time, and
+    /// a mph player's 0-60 (done below 100 km/h) or a slow car's quarter mile is a real result. Otherwise the run is dropped
+    /// and the previous completed result stays.
+    /// <para>
+    /// A kept partial shows THIS run's values (nulls for what it did not reach); it does not wipe older bests, because those
+    /// live in the per-car history, which merges field by field and only ever improves a value it has.
+    /// </para>
     /// </summary>
     private void Abort(bool standstill)
     {
         if (_state == AccelerationState.Running)
         {
-            if (_crossings[Line100] is not null)
+            if (_crossings[Line100] is not null || _crossings[Line60Mph] is not null || _quarterTime is not null)
             {
                 Finish();
                 if (standstill)
@@ -327,6 +343,7 @@ public sealed class AccelerationTimer : IPacketObserver
     {
         Array.Clear(_crossings);
         _maxSpeedMs = 0;
+        _liftRuleArmed = false;
         _throttleLiftedSinceMs = null;
         _quarterTime = null;
         _quarterTrap = null;
@@ -346,7 +363,8 @@ public sealed class AccelerationTimer : IPacketObserver
         _quarterTrap,
         HundredTo200KmhSeconds: Window(_crossings[Line100], _crossings[Line200]),
         ZeroTo60MphSeconds: _crossings[Line60Mph],
-        SixtyTo130MphSeconds: Window(_crossings[Line60Mph], _crossings[Line130Mph]));
+        SixtyTo130MphSeconds: Window(_crossings[Line60Mph], _crossings[Line130Mph]),
+        CompletedRuns: _completedRuns);
 
     private static double? Window(double? from, double? to) => from is not null && to is not null ? to - from : null;
 

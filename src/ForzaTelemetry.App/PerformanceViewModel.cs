@@ -115,9 +115,8 @@ public sealed record CarPerformanceRow(
 /// re-measured when it changes. The table and the saved history hold every window whichever unit is showing.
 /// </para>
 /// <para>
-/// <b>Braking</b> is a second, independent test (<see cref="BrakingTest"/>: armed above 105 km/h, measured from the 100 km/h line
-/// to a stop). It has its own run edge here, like the acceleration one: when a stop finishes with a result, its distances are saved
-/// under the car that started it.
+/// <b>Braking</b> is a second, independent test (<see cref="BrakingTest"/>: 100-0 km/h and 60-0 mph from one state machine). Like
+/// the acceleration one it is saved when a run ENDS, recognised by the engine's completion counter, under the car that started it.
 /// </para>
 /// </remarks>
 public sealed partial class PerformanceViewModel : ObservableObject
@@ -140,18 +139,22 @@ public sealed partial class PerformanceViewModel : ObservableObject
     private int _carClass;
     private int _drivetrain;
 
-    // Run edge detection (see the class remarks). The "results" are the four measured values of a snapshot.
+    // Run edge detection (see the class remarks). A kept run is recognised by the engine's CompletedRuns counter growing, never by
+    // comparing result values: values repeat (two identical runs) and a dropped run leaves the old values showing.
     private bool _wasRunning;
-    private Results _restingResults;
-    private Results _resultsBeforeRun;
     private CarKey? _runCar;
     private bool _aborted;
 
-    // The same edge detection for the braking test: a stop that finished with a distance is saved under the car that began it.
+    // The same for the braking test: a stop that finished with a distance is saved under the car that began it.
     private bool _wasBraking;
-    private BrakeResults _restingBrake;
-    private BrakeResults _brakeBeforeRun;
     private CarKey? _brakeCar;
+
+    // The counters last seen. They only ever grow in the engines (a reset does not lower them), so after anything that empties
+    // the engines or changes who is driving, the next consistent read ADOPTS the engines' values as the new baseline
+    // (_baselinePending) instead of treating a run finished before the change as a new one.
+    private long _seenRuns;
+    private long _seenBrakes;
+    private bool _baselinePending = true;
 
     // The last top speed folded into the history for the current car.
     private double _mergedTopSpeedKmh;
@@ -172,8 +175,6 @@ public sealed partial class PerformanceViewModel : ObservableObject
         double? HundredTo200,
         double? ZeroTo60Mph,
         double? SixtyTo130Mph);
-
-    private readonly record struct BrakeResults(double? Meters100, double? Seconds100, double? MetersSixtyMph, double? SecondsSixtyMph);
 
     /// <param name="acceleration">The engine that times the runs (fed by the receive loop).</param>
     /// <param name="topSpeed">The engine that tracks the session top speed (fed by the receive loop).</param>
@@ -506,6 +507,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
         // The engines are written by the receive loop, so they are not reset from this (UI) thread: the loop is asked to, and
         // does it on its next packet. Until then the detector reports the reset as pending and ReadEngines shows them empty.
         _carChanges.RequestEngineReset();
+        _baselinePending = true;
         ForgetRun();
         _snapshot = AccelerationSnapshot.Empty;
         _brakingSnapshot = BrakingSnapshot.Empty;
@@ -547,6 +549,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
         IsReplaySession = isReplay;
         _car = null;
         _live = false;
+        _baselinePending = true;
         ForgetRun();
         _snapshot = AccelerationSnapshot.Empty;
         _brakingSnapshot = BrakingSnapshot.Empty;
@@ -620,6 +623,14 @@ public sealed partial class PerformanceViewModel : ObservableObject
             return false;
         }
 
+        if (_baselinePending && !resetPending)
+        {
+            // Nothing that finished before this point belongs to the car or session on screen now.
+            _seenRuns = snapshot.CompletedRuns;
+            _seenBrakes = braking.CompletedRuns;
+            _baselinePending = false;
+        }
+
         _snapshot = snapshot;
         _brakingSnapshot = braking;
         _topSpeedKmh = topSpeedKmh;
@@ -657,6 +668,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
             _drivetrain = change.Drivetrain;
 
             // What the screen last read belongs to the previous car; the engines were reset for this one.
+            _baselinePending = true;
             _snapshot = AccelerationSnapshot.Empty;
             _brakingSnapshot = BrakingSnapshot.Empty;
             _topSpeedKmh = 0;
@@ -736,19 +748,14 @@ public sealed partial class PerformanceViewModel : ObservableObject
             s.ZeroTo60MphSeconds,
             s.SixtyTo130MphSeconds);
 
-    private static BrakeResults BrakeResultsOf(BrakingSnapshot s) =>
-        new(s.HundredToZeroMeters, s.HundredToZeroSeconds, s.SixtyToZeroMphMeters, s.SixtyToZeroMphSeconds);
-
     private void TrackRun(AccelerationSnapshot snapshot)
     {
         var running = snapshot.State == AccelerationState.Running;
 
         if (running && !_wasRunning)
         {
-            // The run starts: remember who is driving and what the screen showed just before, so the end can tell
-            // "this run measured something" from "this run was dropped and the old result is still showing".
+            // The run starts: remember who is driving, so the result is saved under that car.
             _runCar = _car;
-            _resultsBeforeRun = _restingResults;
             ClearNewBest();
             _aborted = false;
         }
@@ -757,25 +764,24 @@ public sealed partial class PerformanceViewModel : ObservableObject
             FinishRun(snapshot);
         }
 
-        if (!running)
-        {
-            _restingResults = ResultsOf(snapshot);
-        }
-
         _wasRunning = running;
     }
 
     private void FinishRun(AccelerationSnapshot snapshot)
     {
-        var results = ResultsOf(snapshot);
-        if (results == _resultsBeforeRun)
+        if (snapshot.CompletedRuns <= _seenRuns)
         {
-            // The engine dropped the run (nothing was measured): the old result is still showing. If the car is still
+            // The engine dropped the run (nothing it shows was measured): the old result is still showing. If the car is still
             // moving the state line says so, instead of silently going back to "ready".
             _aborted = snapshot.State == AccelerationState.Idle;
             return;
         }
 
+        _seenRuns = snapshot.CompletedRuns;
+
+        // A kept run may be partial (only 0-60 mph, only the quarter mile): its unmeasured windows are null here, and the history
+        // merges field by field, so a null never touches a stored best.
+        var results = ResultsOf(snapshot);
         if (_runCar is { } car)
         {
             var improved = MergeIfLive(
@@ -805,9 +811,11 @@ public sealed partial class PerformanceViewModel : ObservableObject
     }
 
     /// <summary>
-    /// The braking counterpart of <see cref="TrackRun"/>: a stop that is measured becomes a saved result when it ENDS, under the car
-    /// that was driven when it began. A stop the engine dropped (the brake was released, the throttle came back) leaves the previous
-    /// result on screen and saves nothing.
+    /// The braking counterpart of <see cref="TrackRun"/>: a stop that is measured becomes a saved result when it FINISHES, under the car
+    /// that was driven when it began. The test's <see cref="BrakingSnapshot.CompletedRuns"/> counter says that a stop finished since the
+    /// last tick, so it is saved exactly once even when the state went Braking, Done, Armed (or Braking again) between two ticks, or the
+    /// numbers equal the previous stop's. A stop the engine dropped (the brake was released, the throttle came back) never moves the
+    /// counter: the previous result stays on screen and nothing is saved.
     /// </summary>
     private void TrackBraking(BrakingSnapshot snapshot)
     {
@@ -816,29 +824,26 @@ public sealed partial class PerformanceViewModel : ObservableObject
         if (braking && !_wasBraking)
         {
             _brakeCar = _car;
-            _brakeBeforeRun = _restingBrake;
             BrakeHundredIsNewBest = false;
             BrakeSixtyMphIsNewBest = false;
         }
-        else if (!braking && _wasBraking)
-        {
-            FinishBraking(snapshot);
-        }
 
-        if (!braking)
+        if (snapshot.CompletedRuns > _seenBrakes)
         {
-            _restingBrake = BrakeResultsOf(snapshot);
+            _seenBrakes = snapshot.CompletedRuns;
+            SaveBraking(snapshot.GetCompletedResult());
+            _brakeCar = braking ? _car : null; // a stop already under way again belongs to whoever drives now
         }
 
         _wasBraking = braking;
     }
 
-    private void FinishBraking(BrakingSnapshot snapshot)
+    private void SaveBraking(BrakingSnapshot result)
     {
-        var results = BrakeResultsOf(snapshot);
-        if (results == _brakeBeforeRun || _brakeCar is not { } car)
+        // A whole stop can start and end between two ticks (then no edge named its car): it belongs to the current one.
+        if ((_brakeCar ?? _car) is not { } car)
         {
-            return; // dropped (nothing new was measured): the old result is still showing and nothing is saved
+            return;
         }
 
         var improved = MergeIfLive(
@@ -846,7 +851,13 @@ public sealed partial class PerformanceViewModel : ObservableObject
             _carClass,
             _drivetrain,
             new PerformanceResult(
-                null, null, null, null, null, BrakeHundredMeters: results.Meters100, BrakeSixtyMphMeters: results.MetersSixtyMph));
+                null,
+                null,
+                null,
+                null,
+                null,
+                BrakeHundredMeters: result.HundredToZeroMeters,
+                BrakeSixtyMphMeters: result.SixtyToZeroMphMeters));
         FlushIfLive();
 
         BrakeHundredIsNewBest = improved.BrakeHundred;
@@ -901,14 +912,10 @@ public sealed partial class PerformanceViewModel : ObservableObject
     private void ForgetRun()
     {
         _wasRunning = false;
-        _restingResults = default;
-        _resultsBeforeRun = default;
         _runCar = null;
         _aborted = false;
         _mergedTopSpeedKmh = 0;
         _wasBraking = false;
-        _restingBrake = default;
-        _brakeBeforeRun = default;
         _brakeCar = null;
         BrakeHundredIsNewBest = false;
         BrakeSixtyMphIsNewBest = false;
@@ -989,10 +996,11 @@ public sealed partial class PerformanceViewModel : ObservableObject
         };
     }
 
-    // The braking engine arms above 105 km/h and starts timing at the 100 km/h line (see BrakingTest). The sentences quote those
-    // speeds in the player's unit.
-    private const double BrakeArmKmh = 105;
-    private const double BrakeStartKmh = 100;
+    // The braking engine runs two tests (see BrakingTest): 100-0 km/h arms at 105 km/h and starts at the 100 km/h line, 60-0 mph arms
+    // at 63 mph and starts at the 60 mph line. The sentences quote the lines of the test the tile shows, in the player's unit.
+    private double BrakeArmKmh => IsMph ? 63 * SpeedCrossing.KmhPerMph : 105;
+
+    private double BrakeStartKmh => IsMph ? 60 * SpeedCrossing.KmhPerMph : 100;
 
     private string ArmingText(string format, double kmh) =>
         string.Format(CultureInfo.CurrentCulture, format, _units.FormatSpeed(kmh), _units.SpeedLabel);
