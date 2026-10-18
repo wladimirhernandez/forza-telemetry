@@ -23,7 +23,7 @@ public class AccelerationTimerTests
         for (var ms = launchMs; ms <= launchMs + (durationSeconds * 1000); ms += stepMs)
         {
             var s = (ms - launchMs) / 1000.0;
-            timer.OnPacket(TestPackets.Drive(ms, (float)(a * s), (float)(0.5 * a * s * s), gear));
+            timer.OnPacket(TestPackets.Drive(ms, (float)(a * s), (float)(0.5 * a * s * s), gear) with { Accel = 255 });
         }
     }
 

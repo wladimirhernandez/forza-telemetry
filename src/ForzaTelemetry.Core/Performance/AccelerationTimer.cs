@@ -1,7 +1,8 @@
 namespace ForzaTelemetry.Core.Performance;
 
 /// <summary>
-/// Measures 0-100 km/h, 0-200 km/h and the quarter mile (with trap speed) from a stream of packets.
+/// Measures 0-100 km/h, 0-200 km/h, 100-200 km/h, 0-60 mph, 60-130 mph and the quarter mile (with trap speed)
+/// from a stream of packets. All windows come from ONE run and one interpolation routine.
 /// </summary>
 /// <remarks>
 /// <para><b>State machine.</b> Idle -> Armed (race on and speed under 1 km/h) -> Running (first movement,
@@ -32,13 +33,38 @@ namespace ForzaTelemetry.Core.Performance;
 public sealed class AccelerationTimer : IPacketObserver
 {
     /// <summary>Below this speed (1 km/h, in m/s) the car counts as standing still.</summary>
-    private const double StandstillMs = 1.0 / 3.6;
+    private const double StandstillMs = SpeedCrossing.StandstillMs;
 
-    private const double Target100Ms = 100.0 / 3.6;
-    private const double Target200Ms = 200.0 / 3.6;
+    /// <summary>Kilometers per hour in one mile per hour; kept here for callers of the original public API.</summary>
+    public const double KmhPerMph = SpeedCrossing.KmhPerMph;
 
     /// <summary>A quarter mile in meters.</summary>
     public const double QuarterMileMeters = 402.336;
+
+    // Measurement lines, as one table: index -> target speed (m/s). A run keeps one nullable crossing time
+    // per line, so adding a window is one more row, not another copy of the same if-block. 130 mph
+    // (209.2 km/h) is above 200 km/h, which is why a run needs an "end" rule besides "all lines reached".
+    private const int Line100 = 0;
+    private const int Line200 = 1;
+    private const int Line60Mph = 2;
+    private const int Line130Mph = 3;
+
+    private static readonly double[] LineSpeeds =
+    [
+        SpeedCrossing.KmhToMs(100),
+        SpeedCrossing.KmhToMs(200),
+        SpeedCrossing.MphToMs(60),
+        SpeedCrossing.MphToMs(130),
+    ];
+
+    /// <summary>Speed (m/s) the car must fall below its run maximum to count as "the driver lifted" (5 km/h).</summary>
+    private const double LiftDropMs = 5.0 / 3.6;
+
+    /// <summary>Raw throttle (0..255) at or below which the pedal counts as lifted (about 10%).</summary>
+    private const byte ThrottleLifted = 25;
+
+    /// <summary>How long (game ms) the throttle must stay lifted to end the run.</summary>
+    private const double LiftHoldMs = 500;
 
     private readonly object _gate = new();
     private AccelerationSnapshot _published = AccelerationSnapshot.Empty;
@@ -49,8 +75,9 @@ public sealed class AccelerationTimer : IPacketObserver
     private AccelerationSnapshot _lastCompleted = AccelerationSnapshot.Empty;
     private double _startTimeMs;
     private double _startDistance;
-    private double? _zeroTo100;
-    private double? _zeroTo200;
+    private readonly double?[] _crossings = new double?[LineSpeeds.Length]; // seconds since run start, per line
+    private double _maxSpeedMs;
+    private double? _throttleLiftedSinceMs;
     private double? _quarterTime;
     private double? _quarterTrap;
     private double _latestTimeMs;
@@ -63,13 +90,7 @@ public sealed class AccelerationTimer : IPacketObserver
             lock (_gate)
             {
                 return _state == AccelerationState.Running
-                    ? new AccelerationSnapshot(
-                        AccelerationState.Running,
-                        Math.Max(0, (_latestTimeMs - _startTimeMs) / 1000.0),
-                        _zeroTo100,
-                        _zeroTo200,
-                        _quarterTime,
-                        _quarterTrap)
+                    ? Build(AccelerationState.Running, Math.Max(0, (_latestTimeMs - _startTimeMs) / 1000.0))
                     : _published;
             }
         }
@@ -192,13 +213,8 @@ public sealed class AccelerationTimer : IPacketObserver
         ClearRun();
         _state = AccelerationState.Running;
 
-        var v0 = (double)previous.Speed;
-        var v1 = (double)current.Speed;
-        var fraction = v1 > v0 ? Math.Clamp((StandstillMs - v0) / (v1 - v0), 0, 1) : 1;
-        var intervalMs = (double)current.TimestampMS - previous.TimestampMS;
-
-        _startTimeMs = previous.TimestampMS + (fraction * intervalMs);
-        _startDistance = previous.DistanceTraveled + (fraction * ((double)current.DistanceTraveled - previous.DistanceTraveled));
+        _startTimeMs = SpeedCrossing.TimeMs(previous, current, StandstillMs);
+        _startDistance = SpeedCrossing.Distance(previous, current, StandstillMs);
     }
 
     /// <summary>Checks whether the interval between two packets contains any of the three measurement lines.</summary>
@@ -212,14 +228,13 @@ public sealed class AccelerationTimer : IPacketObserver
 
         double v0 = previous.Speed, v1 = current.Speed;
 
-        if (_zeroTo100 is null && v0 < Target100Ms && v1 >= Target100Ms)
+        for (var i = 0; i < LineSpeeds.Length; i++)
         {
-            _zeroTo100 = CrossingTimeSeconds(previous, intervalMs, v0, v1, Target100Ms);
-        }
-
-        if (_zeroTo200 is null && v0 < Target200Ms && v1 >= Target200Ms)
-        {
-            _zeroTo200 = CrossingTimeSeconds(previous, intervalMs, v0, v1, Target200Ms);
+            var target = LineSpeeds[i];
+            if (_crossings[i] is null && v0 < target && v1 >= target)
+            {
+                _crossings[i] = (SpeedCrossing.TimeMs(previous, current, target) - _startTimeMs) / 1000.0;
+            }
         }
 
         var d0 = previous.DistanceTraveled - _startDistance;
@@ -232,17 +247,34 @@ public sealed class AccelerationTimer : IPacketObserver
         }
     }
 
-    private double CrossingTimeSeconds(TelemetryPacket previous, double intervalMs, double v0, double v1, double target)
-    {
-        var fraction = (target - v0) / (v1 - v0);
-        return ((previous.TimestampMS + (fraction * intervalMs)) - _startTimeMs) / 1000.0;
-    }
-
     private void UpdateRunning(TelemetryPacket current)
     {
-        if (_quarterTime is not null && _zeroTo200 is not null)
+        if (_quarterTime is not null && _crossings[Line200] is not null && _crossings[Line130Mph] is not null)
         {
             Finish();
+            return;
+        }
+
+        _maxSpeedMs = Math.Max(_maxSpeedMs, current.Speed);
+
+        // "The driver lifted" ends the run so windows that can never be reached (a car topping out between
+        // 200 km/h and 130 mph) do not keep it open for minutes and later record a bogus late crossing.
+        // Either speed falls 5 km/h under the run's peak, or the throttle stays lifted for half a second of
+        // GAME time (a gear change cuts the throttle for far less than that).
+        var lifted = _maxSpeedMs - current.Speed >= LiftDropMs;
+        if (current.Accel <= ThrottleLifted)
+        {
+            _throttleLiftedSinceMs ??= current.TimestampMS;
+            lifted |= current.TimestampMS - _throttleLiftedSinceMs >= LiftHoldMs;
+        }
+        else
+        {
+            _throttleLiftedSinceMs = null;
+        }
+
+        if (lifted)
+        {
+            Abort(standstill: false); // keeps the run only if 0-100 km/h was measured
             return;
         }
 
@@ -253,21 +285,21 @@ public sealed class AccelerationTimer : IPacketObserver
     private void Finish()
     {
         _state = AccelerationState.Done;
-        _lastCompleted = new AccelerationSnapshot(
-            AccelerationState.Done, 0, _zeroTo100, _zeroTo200, _quarterTime, _quarterTrap);
+        _lastCompleted = Build(AccelerationState.Done, 0);
         Publish(_lastCompleted);
     }
 
     /// <summary>
-    /// Ends a run that cannot continue. If it already measured something (0-100 or the quarter mile), those
-    /// partial results are kept as the completed run - a driver who lifts after the line should not lose the
-    /// time. A run with nothing measured is dropped and the previous completed result stays.
+    /// Ends a run that cannot continue. If 0-100 km/h was measured, the partial results are kept as the
+    /// completed run - a driver who lifts after the line should not lose the time. Otherwise (nothing, or only
+    /// an mph window such as 0-60) the run is dropped and the previous completed result stays, so a short
+    /// partial can never wipe the classic results.
     /// </summary>
     private void Abort(bool standstill)
     {
         if (_state == AccelerationState.Running)
         {
-            if (_zeroTo100 is not null || _zeroTo200 is not null || _quarterTime is not null)
+            if (_crossings[Line100] is not null)
             {
                 Finish();
                 if (standstill)
@@ -293,11 +325,30 @@ public sealed class AccelerationTimer : IPacketObserver
 
     private void ClearRun()
     {
-        _zeroTo100 = null;
-        _zeroTo200 = null;
+        Array.Clear(_crossings);
+        _maxSpeedMs = 0;
+        _throttleLiftedSinceMs = null;
         _quarterTime = null;
         _quarterTrap = null;
     }
+
+    /// <summary>
+    /// Builds a snapshot from the run's raw crossing times. Windows that start above 0 km/h (100-200 km/h,
+    /// 60-130 mph) are DIFFERENCES of two crossings of the same run, so they need no clock of their own:
+    /// the common start offset cancels out.
+    /// </summary>
+    private AccelerationSnapshot Build(AccelerationState state, double elapsedSeconds) => new(
+        state,
+        elapsedSeconds,
+        _crossings[Line100],
+        _crossings[Line200],
+        _quarterTime,
+        _quarterTrap,
+        HundredTo200KmhSeconds: Window(_crossings[Line100], _crossings[Line200]),
+        ZeroTo60MphSeconds: _crossings[Line60Mph],
+        SixtyTo130MphSeconds: Window(_crossings[Line60Mph], _crossings[Line130Mph]));
+
+    private static double? Window(double? from, double? to) => from is not null && to is not null ? to - from : null;
 
     private void Publish(AccelerationSnapshot snapshot) => _published = snapshot;
 }
