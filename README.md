@@ -51,7 +51,7 @@ Short version:
 
 The game only sends packets while you are driving, so nothing shows up in menus or while paused.
 
-Xbox: the console and the PC must be on the same network (wired or Wi-Fi). If you use a VPN on the PC, enable its "LAN access" option. The installer creates a Windows Firewall rule for UDP 5300 on private networks only.
+Xbox: the console and the PC must be on the same network (wired or Wi-Fi). If you use a VPN on the PC, enable its "LAN access" option. The installer creates a Windows Firewall rule for UDP 5300 on private networks by default (an optional, not recommended installer task also allows public networks).
 
 Full step-by-step guide with troubleshooting: [docs/data-out-setup.md](docs/data-out-setup.md).
 

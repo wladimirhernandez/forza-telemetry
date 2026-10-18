@@ -58,16 +58,20 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [CustomMessages]
-en.UserDataKept=Your settings, recordings and logs were kept in your user profile (under %%APPDATA%%\ForzaTelemetry and %%LOCALAPPDATA%%\ForzaTelemetry). The uninstaller does not remove them. Delete those folders by hand if you no longer need them.
-es.UserDataKept=Sus ajustes, grabaciones y registros se conservaron en su perfil de usuario (en %%APPDATA%%\ForzaTelemetry y %%LOCALAPPDATA%%\ForzaTelemetry). El desinstalador no los elimina. Elimine esas carpetas manualmente si ya no los necesita.
+en.UserDataKept=Your settings and logs were kept in your user profile: settings in %%APPDATA%%\ForzaTelemetry and logs in %%LOCALAPPDATA%%\ForzaTelemetry\logs. The uninstaller does not remove them. Delete those folders by hand if you no longer need them.
+es.UserDataKept=Sus ajustes y registros se conservaron en su perfil de usuario: los ajustes en %%APPDATA%%\ForzaTelemetry y los registros en %%LOCALAPPDATA%%\ForzaTelemetry\logs. El desinstalador no los elimina. Elimine esas carpetas manualmente si ya no los necesita.
 en.FirewallGroup=Network:
 es.FirewallGroup=Red:
+en.FirewallPublicTask=Also allow on public networks (not recommended)
+es.FirewallPublicTask=Permitir tambien en redes publicas (no recomendado)
 en.FirewallTask=Allow Forza Telemetry through Windows Firewall (UDP port {#DataOutPort}, private networks)
 es.FirewallTask=Permitir Forza Telemetry en el Firewall de Windows (puerto UDP {#DataOutPort}, redes privadas)
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+; Default: private networks only (see the comment in [Run]). The public-network task is opt-in and not recommended.
 Name: "firewall"; Description: "{cm:FirewallTask}"; GroupDescription: "{cm:FirewallGroup}"
+Name: "firewallpublic"; Description: "{cm:FirewallPublicTask}"; GroupDescription: "{cm:FirewallGroup}"; Flags: unchecked
 
 [Files]
 Source: "{#StageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -84,15 +88,23 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app
 ;  - profile=private: it is open on home/trusted networks only, never on public Wi-Fi.
 ;  - localport=5300: just the Data Out port.
 ; The delete first keeps upgrades and reinstalls from piling up duplicate rules (its exit code is ignored).
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#FirewallRule}"""; Flags: runhidden; Tasks: firewall
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#FirewallRule}"" dir=in action=allow protocol=UDP localport={#DataOutPort} program=""{app}\{#AppExe}"" profile=private"; Flags: runhidden; Tasks: firewall; StatusMsg: "{cm:FirewallTask}"
+; The optional public-network task widens the same rule to profile=private,public (not recommended: open Wi-Fi).
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#FirewallRule}"""; Flags: runhidden; Tasks: firewall firewallpublic
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#FirewallRule}"" dir=in action=allow protocol=UDP localport={#DataOutPort} program=""{app}\{#AppExe}"" profile=private"; Flags: runhidden; Tasks: firewall; Check: not PublicTaskSelected; StatusMsg: "{cm:FirewallTask}"
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#FirewallRule}"" dir=in action=allow protocol=UDP localport={#DataOutPort} program=""{app}\{#AppExe}"" profile=private,public"; Flags: runhidden; Tasks: firewallpublic; StatusMsg: "{cm:FirewallPublicTask}"
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#FirewallRule}"""; Flags: runhidden; RunOnceId: "DeleteFirewallRule"
 
 [Code]
-{ The uninstaller never deletes anything in the user profile (settings, recordings, logs). Say so once, when it ends. }
+{ True when the user ticked the optional public-network firewall task. }
+function PublicTaskSelected: Boolean;
+begin
+  Result := WizardIsTaskSelected('firewallpublic');
+end;
+
+{ The uninstaller never deletes anything in the user profile (settings, logs). Say so once, when it ends. }
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usPostUninstall then

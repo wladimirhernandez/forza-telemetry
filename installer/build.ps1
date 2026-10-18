@@ -11,7 +11,7 @@
     antivirus products. A plain folder is simpler and the installer compresses it anyway.
 
 .PARAMETER Version
-    Installer version, x.y.z. Default: the latest git tag (a leading "v" is removed), else 0.1.0.
+    Installer version, x.y.z with an optional pre-release suffix such as -rc.1. Default: the latest git tag (a leading "v" is removed), else 0.1.0.
 
 .PARAMETER IsccPath
     Optional explicit path to ISCC.exe. Otherwise looked up on PATH, in %LOCALAPPDATA%\Programs\Inno Setup 6 and in
@@ -23,7 +23,7 @@
 #Requires -Version 5.1
 [CmdletBinding()]
 param(
-    [ValidatePattern('^\d+\.\d+\.\d+$')] [string] $Version,
+    [ValidatePattern('^\d+\.\d+\.\d+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$')] [string] $Version,
     [string] $IsccPath,
     [switch] $SkipTests
 )
@@ -35,7 +35,7 @@ function Write-Step([string] $Text) { Write-Host ''; Write-Host "== $Text" }
 function Get-DefaultVersion {
     try {
         $tag = (& git describe --tags --abbrev=0 2>$null)
-        if ($LASTEXITCODE -eq 0 -and $tag -match '^v?(\d+\.\d+\.\d+)$') { return $Matches[1] }
+        if ($LASTEXITCODE -eq 0 -and $tag -match '^v?(\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?)$') { return $Matches[1] }
     }
     catch { }
     return '0.1.0'
@@ -59,9 +59,11 @@ function Find-Iscc([string] $Explicit) {
     throw 'ISCC.exe not found. Install Inno Setup 6 (https://jrsoftware.org/isdl.php) or pass -IsccPath.'
 }
 
+$pushed = $false
 try {
     $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-    Set-Location -LiteralPath $root
+    Push-Location -LiteralPath $root
+    $pushed = $true
 
     if (-not $Version) { $Version = Get-DefaultVersion }
     Write-Host "Version: $Version"
@@ -106,4 +108,7 @@ catch {
     Write-Host ''
     Write-Host "BUILD FAILED: $($_.Exception.Message)"
     exit 1
+}
+finally {
+    if ($pushed) { Pop-Location }
 }

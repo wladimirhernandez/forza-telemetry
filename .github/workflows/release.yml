@@ -3,7 +3,7 @@ name: Release
 # Runs when a version tag such as v1.0.0 is pushed. Builds the installer and attaches it to a GitHub Release.
 on:
   push:
-    tags: ['v*']
+    tags: ['v*.*.*'] # v1.0.0, v1.1.0-rc.1, ... (build.ps1 validates the exact version format)
 
 permissions:
   contents: write # needed to create the release and upload assets
@@ -21,10 +21,24 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
 
-      - name: Build installer
+      # Fail early if the owner-facing placeholders were never filled in.
+      - name: Release guard (no placeholders)
         shell: pwsh
         run: |
-          $version = '${{ github.ref_name }}'.TrimStart('v')
+          $files = 'LICENSE', 'installer/ForzaTelemetry.iss'
+          $bad = Select-String -Path $files -Pattern '<COPYRIGHT HOLDER>', '<OWNER>', '<REPO>' -SimpleMatch
+          if ($bad) {
+            $bad | ForEach-Object { Write-Host "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }
+            throw 'Placeholders remain. Fill them in before releasing.'
+          }
+
+      # The tag goes through an environment variable, never interpolated into the script text (injection risk).
+      - name: Build installer
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          $version = $env:TAG.TrimStart('v')
           ./installer/build.ps1 -Version $version
 
       # TODO (future): code-sign the installer here, for example with SignPath Foundation (free for open source):
