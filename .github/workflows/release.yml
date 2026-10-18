@@ -25,8 +25,9 @@ jobs:
       - name: Release guard (no placeholders)
         shell: pwsh
         run: |
-          $files = 'LICENSE', 'installer/ForzaTelemetry.iss'
-          $bad = Select-String -Path $files -Pattern '<COPYRIGHT HOLDER>', '<OWNER>', '<REPO>' -SimpleMatch
+          # The csproj spells the angle brackets as XML entities, so its form of the placeholder is listed too.
+          $files = 'LICENSE', 'installer/ForzaTelemetry.iss', 'src/ForzaTelemetry.App/ForzaTelemetry.App.csproj'
+          $bad = Select-String -Path $files -Pattern '<COPYRIGHT HOLDER>', '&lt;COPYRIGHT HOLDER&gt;', '<OWNER>', '<REPO>' -SimpleMatch
           if ($bad) {
             $bad | ForEach-Object { Write-Host "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }
             throw 'Placeholders remain. Fill them in before releasing.'

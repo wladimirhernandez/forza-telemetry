@@ -13,6 +13,35 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
+  <PropertyGroup Label="Identity">
+    <!--
+      What Windows shows for the exe: the Explorer icon, the file properties, the installer's add/remove entry.
+      The icon is the same file the installer uses (installer\assets\app.ico), so the two cannot drift apart.
+    -->
+    <ApplicationIcon>..\..\installer\assets\app.ico</ApplicationIcon>
+
+    <!--
+      The product name is a WORKING TITLE (the Forza trademark is not meant to be the final name). It lives in two places only:
+      here, for the file properties, and the AppTitle string in Resources\Strings*.resx, for everything the user sees inside the
+      app. The file description follows this property, so a rename here covers the Task Manager entry too.
+    -->
+    <Product>Forza Telemetry</Product>
+    <AssemblyTitle>$(Product)</AssemblyTitle>
+
+    <!--
+      0.1.0 is only the default for a plain `dotnet build`. installer\build.ps1 (and the release workflow) pass -p:Version=x.y.z
+      from the release tag, which overrides this; the app reads it back at run time (AppInfo.Version) for the About card and the log.
+    -->
+    <Version>0.1.0</Version>
+
+    <!--
+      Placeholders on purpose, matching the LICENSE and the installer: the owner fills in the real name once, and the release
+      workflow's placeholder guard refuses to publish while any of these remain. Angle brackets are escaped for XML.
+    -->
+    <Company>&lt;COPYRIGHT HOLDER&gt;</Company>
+    <Copyright>Copyright (c) 2026 &lt;COPYRIGHT HOLDER&gt;</Copyright>
+  </PropertyGroup>
+
   <ItemGroup>
     <!-- Versions are centrally managed in the root Directory.Packages.props. -->
     <PackageReference Include="CommunityToolkit.Mvvm" />
@@ -23,6 +52,15 @@
     -->
     <PackageReference Include="Serilog.Extensions.Logging" />
     <PackageReference Include="Serilog.Sinks.File" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      The window and title-bar icon, loaded at run time as a WPF resource (pack URI). The same .ico the exe is stamped with by
+      ApplicationIcon above; linked, not copied, so there is one file. It is embedded in the assembly, so the window shows its
+      icon with nothing extra to install.
+    -->
+    <Resource Include="..\..\installer\assets\app.ico" Link="Resources\app.ico" />
   </ItemGroup>
 
   <ItemGroup>
