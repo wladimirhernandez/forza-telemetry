@@ -176,7 +176,7 @@ public partial class App : Application, IAppRestarter
         var lapsPage = new LapsViewModel(engines.Laps);
 
         // The insights pages read the engines the receive loop feeds; they are only refreshed while their tab is showing.
-        var analysisPage = new AnalysisViewModel(engines.History, units);
+        var analysisPage = new AnalysisViewModel(engines.History, units, engines.LapTraces);
         var mapPage = new MapViewModel(engines.Path, engines.History, units);
         var tuningPage = new TuningViewModel(engines.Dyno, engines.History, engines.Bottoming, units, carNames: carNames);
 

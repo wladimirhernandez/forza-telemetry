@@ -263,4 +263,61 @@ public static class InsightsStrings
 
     /// <summary>"Drive to see tuning insights."</summary>
     public static string TuningEmptyHint => ResourceManager.GetString("TuningEmptyHint", Culture)!;
+
+    /// <summary>"Analysis view"</summary>
+    public static string AnalysisModeName => ResourceManager.GetString("AnalysisModeName", Culture)!;
+
+    /// <summary>"Live traces"</summary>
+    public static string ModeLive => ResourceManager.GetString("ModeLive", Culture)!;
+
+    /// <summary>"Lap comparison"</summary>
+    public static string ModeCompare => ResourceManager.GetString("ModeCompare", Culture)!;
+
+    /// <summary>"Current lap compared with the best lap, by distance"</summary>
+    public static string CompareChartName => ResourceManager.GetString("CompareChartName", Culture)!;
+
+    /// <summary>"No best lap to compare yet"</summary>
+    public static string CompareEmptyTitle => ResourceManager.GetString("CompareEmptyTitle", Culture)!;
+
+    /// <summary>"Complete a full lap, starting from the line. ..."</summary>
+    public static string CompareEmptyHint => ResourceManager.GetString("CompareEmptyHint", Culture)!;
+
+    /// <summary>"You joined this lap midway, so it cannot be compared by distance. The next lap will be."</summary>
+    public static string CompareNotComparable => ResourceManager.GetString("CompareNotComparable", Culture)!;
+
+    /// <summary>"Current lap"</summary>
+    public static string CompareLegendCurrent => ResourceManager.GetString("CompareLegendCurrent", Culture)!;
+
+    /// <summary>"Best lap"</summary>
+    public static string CompareLegendBest => ResourceManager.GetString("CompareLegendBest", Culture)!;
+
+    /// <summary>"Gap to best (s)"</summary>
+    public static string CompareLaneDelta => ResourceManager.GetString("CompareLaneDelta", Culture)!;
+
+    /// <summary>"Slower"</summary>
+    public static string CompareSlower => ResourceManager.GetString("CompareSlower", Culture)!;
+
+    /// <summary>"Faster"</summary>
+    public static string CompareFaster => ResourceManager.GetString("CompareFaster", Culture)!;
+
+    /// <summary>"Current"</summary>
+    public static string CompareHeadCurrent => ResourceManager.GetString("CompareHeadCurrent", Culture)!;
+
+    /// <summary>"Best"</summary>
+    public static string CompareHeadBest => ResourceManager.GetString("CompareHeadBest", Culture)!;
+
+    /// <summary>"At {0} {1}"</summary>
+    public static string CompareAtFormat => ResourceManager.GetString("CompareAtFormat", Culture)!;
+
+    /// <summary>"Best lap"</summary>
+    public static string CompareTileBest => ResourceManager.GetString("CompareTileBest", Culture)!;
+
+    /// <summary>"Current lap"</summary>
+    public static string CompareTileCurrent => ResourceManager.GetString("CompareTileCurrent", Culture)!;
+
+    /// <summary>"Gap to best"</summary>
+    public static string CompareTileGap => ResourceManager.GetString("CompareTileGap", Culture)!;
+
+    /// <summary>"Distance into the lap"</summary>
+    public static string CompareTileDistance => ResourceManager.GetString("CompareTileDistance", Culture)!;
 }

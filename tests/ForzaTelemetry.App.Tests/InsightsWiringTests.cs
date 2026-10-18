@@ -25,7 +25,7 @@ public class InsightsWiringTests
         {
             Engines = new TelemetryEngines();
             var units = new UnitsService();
-            Analysis = new AnalysisViewModel(Engines.History, units);
+            Analysis = new AnalysisViewModel(Engines.History, units, Engines.LapTraces);
             Map = new MapViewModel(Engines.Path, Engines.History, units);
             Tuning = new TuningViewModel(Engines.Dyno, Engines.History, Engines.Bottoming, units);
             Settings = new SettingsService(new MemoryStore(), AppSettings.Default);
@@ -125,7 +125,8 @@ public class InsightsWiringTests
     {
         var engines = new TelemetryEngines();
 
-        Assert.Equal(9, engines.Observers.Count);
+        Assert.Equal(10, engines.Observers.Count);
+        Assert.Contains(engines.LapTraces, engines.Observers);
         Assert.Contains(engines.History, engines.Observers);
         Assert.Contains(engines.Path, engines.Observers);
         Assert.Contains(engines.Dyno, engines.Observers);

@@ -255,4 +255,61 @@
   <data name="TuningEmptyHint" xml:space="preserve">
     <value>Drive to see tuning insights.</value>
   </data>
+  <data name="AnalysisModeName" xml:space="preserve">
+    <value>Analysis view</value>
+  </data>
+  <data name="ModeLive" xml:space="preserve">
+    <value>Live traces</value>
+  </data>
+  <data name="ModeCompare" xml:space="preserve">
+    <value>Lap comparison</value>
+  </data>
+  <data name="CompareChartName" xml:space="preserve">
+    <value>Current lap compared with the best lap, by distance</value>
+  </data>
+  <data name="CompareEmptyTitle" xml:space="preserve">
+    <value>No best lap to compare yet</value>
+  </data>
+  <data name="CompareEmptyHint" xml:space="preserve">
+    <value>Complete a full lap, starting from the line. Your fastest complete lap becomes the reference, and the lap you are driving is laid over it by distance.</value>
+  </data>
+  <data name="CompareNotComparable" xml:space="preserve">
+    <value>You joined this lap midway, so it cannot be compared by distance. The next lap will be.</value>
+  </data>
+  <data name="CompareLegendCurrent" xml:space="preserve">
+    <value>Current lap</value>
+  </data>
+  <data name="CompareLegendBest" xml:space="preserve">
+    <value>Best lap</value>
+  </data>
+  <data name="CompareLaneDelta" xml:space="preserve">
+    <value>Gap to best (s)</value>
+  </data>
+  <data name="CompareSlower" xml:space="preserve">
+    <value>Slower</value>
+  </data>
+  <data name="CompareFaster" xml:space="preserve">
+    <value>Faster</value>
+  </data>
+  <data name="CompareHeadCurrent" xml:space="preserve">
+    <value>Current</value>
+  </data>
+  <data name="CompareHeadBest" xml:space="preserve">
+    <value>Best</value>
+  </data>
+  <data name="CompareAtFormat" xml:space="preserve">
+    <value>At {0} {1}</value>
+  </data>
+  <data name="CompareTileBest" xml:space="preserve">
+    <value>Best lap</value>
+  </data>
+  <data name="CompareTileCurrent" xml:space="preserve">
+    <value>Current lap</value>
+  </data>
+  <data name="CompareTileGap" xml:space="preserve">
+    <value>Gap to best</value>
+  </data>
+  <data name="CompareTileDistance" xml:space="preserve">
+    <value>Distance into the lap</value>
+  </data>
 </root>

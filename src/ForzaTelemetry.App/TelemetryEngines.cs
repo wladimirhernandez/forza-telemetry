@@ -29,6 +29,7 @@ public sealed class TelemetryEngines
         Braking = new BrakingTest();
         TopSpeed = new TopSpeedTracker();
         Laps = new LapTracker();
+        LapTraces = new LapTraceRecorder();
         CarChanges = new CarChangeDetector(TopSpeed, Acceleration, Braking);
 
         // The engines behind the Analysis, Map and Tuning pages. They are plain observers (nothing resets anything else),
@@ -39,7 +40,7 @@ public sealed class TelemetryEngines
         Bottoming = new SuspensionBottomingCounter();
 
         // CarChanges first: it freezes and resets the engines that follow it (see its remarks).
-        Observers = [CarChanges, Acceleration, Braking, TopSpeed, Laps, History, Path, Dyno, Bottoming];
+        Observers = [CarChanges, Acceleration, Braking, TopSpeed, Laps, LapTraces, History, Path, Dyno, Bottoming];
     }
 
     /// <summary>
@@ -61,6 +62,7 @@ public sealed class TelemetryEngines
         Acceleration.Reset();
         Braking.Reset();
         Laps.Reset();
+        LapTraces.Reset();
         History.Clear();
         Path.Clear();
         Bottoming.Reset();
@@ -77,6 +79,9 @@ public sealed class TelemetryEngines
 
     /// <summary>The lap list and live delta.</summary>
     public LapTracker Laps { get; }
+
+    /// <summary>The per-metre trace of the lap in progress and of the best complete lap: the Analysis page's lap comparison.</summary>
+    public LapTraceRecorder LapTraces { get; }
 
     /// <summary>Notices a change of car on every packet.</summary>
     public CarChangeDetector CarChanges { get; }

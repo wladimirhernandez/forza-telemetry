@@ -43,13 +43,13 @@ public sealed class LapTracker : IPacketObserver
     public const int MaxSamplesPerLap = 6000;
 
     /// <summary>A lap seen from its start has a CurrentLap below this many seconds on the first packet.</summary>
-    private const double FullLapStartToleranceSeconds = 1.0;
+    internal const double FullLapStartToleranceSeconds = 1.0;
 
     /// <summary>Minimum distance between recorded samples, meters.</summary>
-    private const double SampleSpacingMeters = 1.0;
+    internal const double SampleSpacingMeters = 1.0;
 
     /// <summary>CurrentLap dropping by more than this within the same lap number means the lap was restarted.</summary>
-    private const double RestartDropSeconds = 1.0;
+    internal const double RestartDropSeconds = 1.0;
 
     private readonly object _gate = new();
 

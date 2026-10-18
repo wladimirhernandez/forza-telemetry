@@ -16,7 +16,7 @@ Eight tabs, each one keyboard-reachable with Ctrl+1 to Ctrl+8:
 | **Performance** | Times 0-100 and 0-200 km/h, the quarter mile and your top speed, and keeps the best of each per car. |
 | **Laps** | Best, last and current lap with a live delta against your best, and the list of every lap. |
 | **Sessions** | Records what the game sends to a file and plays it back later at 0.5x to 4x, driving every other tab as if it were live. Rename, delete and open the folder from here. |
-| **Analysis** | Live speed, RPM, throttle, brake and steering traces over the last seconds, stacked on one time axis. |
+| **Analysis** | Live speed, RPM, throttle, brake and steering traces over the last seconds, stacked on one time axis; or switch to Lap comparison to lay the lap you are driving over your best lap, by distance, with a time-gap lane. |
 | **Map** | The path you drove, colored by speed, with braking points marked. Works on live data and on replays. |
 | **Tuning** | Power and torque curves captured from your full-throttle pulls, plus understeer and oversteer, tire temperature and suspension bottoming hints. |
 | **Settings** | UDP port, units (km/h or mph, Celsius or Fahrenheit), language (English or Spanish), listening on launch, this PC's IP address and a step-by-step Data Out guide, with a warning if Windows treats your network as Public. |

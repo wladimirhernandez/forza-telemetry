@@ -11,12 +11,13 @@ namespace ForzaTelemetry.App.Tests;
 /// </summary>
 public class ResourceParityTests
 {
-    public static TheoryData<string> Sets => new() { nameof(SetupStrings), nameof(CarNameStrings) };
+    public static TheoryData<string> Sets => new() { nameof(SetupStrings), nameof(CarNameStrings), nameof(InsightsStrings) };
 
     private static ResourceManager ManagerOf(string name) => name switch
     {
         nameof(SetupStrings) => SetupStrings.ResourceManager,
         nameof(CarNameStrings) => CarNameStrings.ResourceManager,
+        nameof(InsightsStrings) => InsightsStrings.ResourceManager,
         _ => throw new ArgumentOutOfRangeException(nameof(name))
     };
 

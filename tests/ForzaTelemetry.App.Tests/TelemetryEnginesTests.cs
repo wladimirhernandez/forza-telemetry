@@ -32,6 +32,7 @@ public class TelemetryEnginesTests
         Assert.True(engines.Path.Count > 0);
         Assert.True(engines.TopSpeed.TopSpeedMs > 0);
         Assert.NotEmpty(engines.Laps.Current.Laps);
+        Assert.True(engines.LapTraces.Status.CurrentCount > 0);
         Assert.True(engines.CarChanges.HasPendingChanges);
 
         engines.BeginSession();
@@ -40,6 +41,7 @@ public class TelemetryEnginesTests
         Assert.Equal(0, engines.Path.Count);
         Assert.Equal(0, engines.TopSpeed.TopSpeedMs);
         Assert.Empty(engines.Laps.Current.Laps);
+        Assert.Equal(0, engines.LapTraces.Status.CurrentCount);
         Assert.Equal(0, engines.Bottoming.Counts.Total);
         Assert.False(engines.CarChanges.HasPendingChanges); // the unhandled change of the old session is dropped
     }
