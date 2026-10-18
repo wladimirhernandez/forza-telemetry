@@ -78,7 +78,7 @@ public sealed partial class DataOutViewModel : ObservableObject
     /// <summary>Re-reads this PC's LAN addresses (synchronously; used once at startup).</summary>
     public void Refresh()
     {
-        Apply(_networkInfo?.GetLanAddresses() ?? []);
+        Apply(ReadAddresses(_networkInfo));
         _ = RefreshNetworkCategoryAsync(); // fire and forget by design: it never throws and must not delay startup
     }
 
@@ -90,7 +90,7 @@ public sealed partial class DataOutViewModel : ObservableObject
     public async Task RefreshAsync()
     {
         var network = _networkInfo;
-        var addresses = network is null ? [] : await Task.Run(network.GetLanAddresses);
+        var addresses = network is null ? [] : await Task.Run(() => ReadAddresses(network));
         Apply(addresses);
 
         // Not awaited: the Start that called this must not wait for a COM lookup. The warning appears when it lands.
@@ -135,6 +135,28 @@ public sealed partial class DataOutViewModel : ObservableObject
         if (version == _categoryLookupVersion)
         {
             IsPublicNetwork = category == NetworkCategory.Public;
+        }
+    }
+
+    /// <summary>
+    /// Reads the adapters, treating ANY failure as "none found". The address is a convenience (the dashboard works without it),
+    /// and this runs in the constructor at startup and inside every Start, so an adapter-enumeration failure must degrade to
+    /// the "not found" text instead of ending the app or failing the Start.
+    /// </summary>
+    private IReadOnlyList<LanAddress> ReadAddresses(INetworkInfo? network)
+    {
+        try
+        {
+            return network?.GetLanAddresses() ?? [];
+        }
+        catch (Exception ex)
+        {
+            if (_logger is not null)
+            {
+                AppLog.LanAddressesUnavailable(_logger, ex);
+            }
+
+            return [];
         }
     }
 

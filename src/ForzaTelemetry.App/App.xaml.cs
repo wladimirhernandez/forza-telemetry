@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
+using ForzaTelemetry.App.Resources;
 using ForzaTelemetry.App.Services;
 using ForzaTelemetry.Core;
 using ForzaTelemetry.Core.Recording;
@@ -64,7 +65,10 @@ public partial class App : Application, IAppRestarter
         catch (Exception ex)
         {
             AppLog.StartupFailed(_logger, ex);
-            MessageBox.Show(ex.Message, "Startup error", MessageBoxButton.OK, MessageBoxImage.Error);
+            // Without culture data WPF itself cannot lay out text (its font cache constructs cultures), so no fallback can
+            // save the start: say what is wrong and how to fix it instead of showing a type-initializer stack message.
+            var message = LanguageService.IsInvariantGlobalization ? Strings.StartupInvariantGlobalization : ex.Message;
+            MessageBox.Show(message, "Startup error", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
         }
     }
@@ -74,13 +78,17 @@ public partial class App : Application, IAppRestarter
         var loggerFactory = _logging!.Factory;
 
         // Settings first: the language must be applied BEFORE anything reads a localized string (see LanguageService).
-        // A missing or corrupt file is not an error here: the store logs it and hands back the defaults.
+        // A missing or corrupt file is not an error here: the store logs it and hands back the defaults. The guard covers
+        // what the store does not (an unusable path, a blocked folder): factory settings, and the app still opens.
         // Before anything can change the culture: remember what Windows gave us, so "System" keeps meaning that after Apply.
         LanguageService.CaptureSystemCulture();
 
         var store = new JsonSettingsStore(JsonSettingsStore.DefaultPath, loggerFactory.CreateLogger<JsonSettingsStore>());
-        _settings = new SettingsService(store, store.Load());
-        var culture = LanguageService.Apply(_settings.Current.Language);
+        _settings = new SettingsService(store, StartupGuard.Run(_logger, "load settings", store.Load, AppSettings.Default));
+
+        // A culture the runtime cannot load (invariant globalization, missing culture data) is logged and skipped: the
+        // text stays on the neutral English resources instead of the app refusing to start.
+        var culture = LanguageService.Apply(_settings.Current.Language, _logger);
         AppLog.LanguageApplied(_logger, _settings.Current.Language.ToString(), culture.Name);
 
         // The factory (not an instance) lets Stop/Start rebuild the UDP listener and rebind the port. It reads the port
@@ -141,7 +149,7 @@ public partial class App : Application, IAppRestarter
         // The per-car bests are read once here; a missing or damaged file is not an error (the store logs it).
         var history = new PerformanceHistoryStore(
             PerformanceHistoryStore.DefaultPath, TimeProvider.System, loggerFactory.CreateLogger<PerformanceHistoryStore>());
-        history.Load();
+        StartupGuard.Run(_logger, "load performance history", history.Load);
         _performance = new PerformanceViewModel(
             engines.Acceleration, engines.TopSpeed, engines.CarChanges, history, units, new WpfConfirmationService());
 

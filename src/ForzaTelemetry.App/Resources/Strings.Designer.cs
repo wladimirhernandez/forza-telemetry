@@ -1506,5 +1506,14 @@ namespace ForzaTelemetry.App.Resources {
             }
         }
 
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The app cannot start because this machine runs .NET without culture data.
+        /// </summary>
+        public static string StartupInvariantGlobalization {
+            get {
+                return ResourceManager.GetString("StartupInvariantGlobalization", resourceCulture)!;
+            }
+        }
     }
 }

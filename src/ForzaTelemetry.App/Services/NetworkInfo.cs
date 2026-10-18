@@ -10,7 +10,19 @@ public sealed class NetworkInfo : INetworkInfo
     {
         try
         {
-            var adapters = NetworkInterface.GetAllNetworkInterfaces().Select(ToInfo).ToList();
+            var adapters = new List<NetworkAdapterInfo>();
+            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                try
+                {
+                    adapters.Add(ToInfo(nic));
+                }
+                catch (NetworkInformationException)
+                {
+                    // One adapter that cannot describe itself (a virtual NIC mid-reconfiguration) must not hide the others.
+                }
+            }
+
             return LanAddressSelector.Select(adapters);
         }
         catch (NetworkInformationException)

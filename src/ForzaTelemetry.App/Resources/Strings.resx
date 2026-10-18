@@ -499,4 +499,7 @@
   <data name="ErrorReplayFailed" xml:space="preserve">
     <value>Could not play the recording: {0}</value>
   </data>
+  <data name="StartupInvariantGlobalization" xml:space="preserve">
+    <value>The app cannot start because this machine runs .NET without culture data (invariant globalization). Remove the DOTNET_SYSTEM_GLOBALIZATION_INVARIANT environment variable, or set InvariantGlobalization to false, and open the app again.</value>
+  </data>
 </root>

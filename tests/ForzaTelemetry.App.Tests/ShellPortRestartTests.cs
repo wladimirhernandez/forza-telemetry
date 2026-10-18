@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using ForzaTelemetry.App.Resources;
 using ForzaTelemetry.App.Services;
 using ForzaTelemetry.Core;
+using Microsoft.Extensions.Logging;
 
 namespace ForzaTelemetry.App.Tests;
 
@@ -20,10 +21,10 @@ public class ShellPortRestartTests
     /// <summary>A listener factory like the app's: reads the port from the settings, and "fails" for the ports in <see cref="BusyPorts"/>.</summary>
     private sealed class Rig
     {
-        public Rig(INetworkInfo? networkInfo = null)
+        public Rig(INetworkInfo? networkInfo = null, ILogger? dataOutLogger = null)
         {
             Settings = new SettingsService(new MemoryStore(), AppSettings.Default);
-            DataOut = new DataOutViewModel(Settings.Current.UdpPort, networkInfo);
+            DataOut = new DataOutViewModel(Settings.Current.UdpPort, networkInfo, logger: dataOutLogger);
             Service = new TelemetryService(() =>
             {
                 PortsTried.Add(Settings.Current.UdpPort);
@@ -117,8 +118,8 @@ public class ShellPortRestartTests
     [Fact]
     public async Task A_parked_port_restart_still_runs_when_the_command_in_flight_throws()
     {
-        var network = new GatedThrowingNetworkInfo();
-        var rig = new Rig(network);
+        var network = new GatedThrowingLogger();
+        var rig = new Rig(new OneAddressNetworkInfo(), network); // a real lookup, so the Start awaits it on the thread pool
         await rig.Shell.StartCommand.ExecuteAsync(null); // running on 5300
         Assert.True(rig.Service.IsRunning);
 
@@ -140,8 +141,17 @@ public class ShellPortRestartTests
         await rig.Shell.StopCommand.ExecuteAsync(null);
     }
 
-    /// <summary>Returns no addresses, except that the next call after <see cref="ArmNextCall"/> waits for <see cref="Release"/> and then throws.</summary>
-    private sealed class GatedThrowingNetworkInfo : INetworkInfo
+    private sealed class OneAddressNetworkInfo : INetworkInfo
+    {
+        public IReadOnlyList<LanAddress> GetLanAddresses() => [new LanAddress("Wi-Fi", IPAddress.Parse("192.168.0.10"))];
+    }
+
+    /// <summary>
+    /// A logger that works, except that the next call after <see cref="ArmNextCall"/> waits for <see cref="Release"/> and then throws.
+    /// It is how this test makes the Start command fail from the inside: the address lookup itself no longer can (an adapter-enumeration
+    /// failure degrades to "not found"), but the Start still logs the addresses it read, on the same path.
+    /// </summary>
+    private sealed class GatedThrowingLogger : ILogger
     {
         private volatile bool _armed;
 
@@ -151,17 +161,19 @@ public class ShellPortRestartTests
 
         public void ArmNextCall() => _armed = true;
 
-        public IReadOnlyList<LanAddress> GetLanAddresses()
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
             if (_armed)
             {
                 _armed = false;
                 Entered.Set();
                 Release.Wait(TimeSpan.FromSeconds(5));
-                throw new InvalidOperationException("The adapter lookup failed.");
+                throw new InvalidOperationException("The log sink failed.");
             }
-
-            return [new LanAddress("Wi-Fi", IPAddress.Parse("192.168.0.10"))];
         }
     }
 }

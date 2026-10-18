@@ -499,4 +499,7 @@
   <data name="ErrorReplayFailed" xml:space="preserve">
     <value>No se pudo reproducir la grabación: {0}</value>
   </data>
+  <data name="StartupInvariantGlobalization" xml:space="preserve">
+    <value>La aplicación no puede iniciar porque este equipo ejecuta .NET sin datos de cultura (globalización invariante). Quita la variable de entorno DOTNET_SYSTEM_GLOBALIZATION_INVARIANT, o pon InvariantGlobalization en false, y vuelve a abrir la aplicación.</value>
+  </data>
 </root>

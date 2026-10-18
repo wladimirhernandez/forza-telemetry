@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.Extensions.Logging;
 
 namespace ForzaTelemetry.App.Services;
 
@@ -27,6 +28,14 @@ public static class LanguageService
     public static CultureInfo SystemCulture => _systemCulture ?? CaptureSystemCulture();
 
     /// <summary>
+    /// True when the runtime runs without culture data (<c>DOTNET_SYSTEM_GLOBALIZATION_INVARIANT</c> or the runtimeconfig switch).
+    /// The app survives that for the language choice (see <see cref="ResolveCulture(AppLanguage, ILogger?)"/>), but WPF itself cannot
+    /// draw text there, so the startup dialog uses this to explain the cause.
+    /// </summary>
+    public static bool IsInvariantGlobalization =>
+        AppContext.TryGetSwitch("System.Globalization.Invariant", out var invariant) && invariant;
+
+    /// <summary>
     /// Remembers the culture Windows gave this process. Idempotent: only the FIRST call records anything, so a later call
     /// (after <see cref="Apply"/> changed the thread's culture) can never overwrite the original.
     /// <para>
@@ -44,25 +53,67 @@ public static class LanguageService
     internal static CultureInfo CaptureOnce(ref CultureInfo? slot, CultureInfo current) => slot ??= current;
 
     /// <summary>
-    /// The culture to force for <paramref name="language"/>, or null for "System": leave the process on whatever Windows
-    /// provides.
+    /// The culture to force for <paramref name="language"/>, or null when nothing is forced: "System" (leave the process on
+    /// whatever Windows provides), or a language whose culture cannot be loaded on this machine.
     /// </summary>
-    public static CultureInfo? ResolveCulture(AppLanguage language) => language switch
+    /// <remarks>
+    /// <b>Why this never throws.</b> <c>CultureInfo.GetCultureInfo("es")</c> throws <see cref="CultureNotFoundException"/> when the
+    /// runtime has no culture data: invariant-globalization mode (<c>DOTNET_SYSTEM_GLOBALIZATION_INVARIANT</c>, set by some
+    /// hardened or minimal images) and a missing ICU/NLS both do it. This runs in the composition root, before the main window and
+    /// its error handling exist, so a throw here used to end the app with "Startup failed" over a cosmetic choice. The
+    /// fallback is the culture the process already has (in those environments the invariant one), whose resource lookups land
+    /// on the neutral English strings, so every screen still has text.
+    /// </remarks>
+    /// <param name="language">The user's choice.</param>
+    /// <param name="logger">Receives a warning when the culture is unavailable; optional.</param>
+    public static CultureInfo? ResolveCulture(AppLanguage language, ILogger? logger = null) =>
+        ResolveCulture(language, CultureInfo.GetCultureInfo, logger);
+
+    /// <summary>The same, with the culture lookup passed in so a test can make it fail like invariant-globalization mode does.</summary>
+    internal static CultureInfo? ResolveCulture(AppLanguage language, Func<string, CultureInfo> lookup, ILogger? logger)
     {
-        AppLanguage.English => CultureInfo.GetCultureInfo("en"),
-        AppLanguage.Spanish => CultureInfo.GetCultureInfo("es"),
-        _ => null
-    };
+        var name = language switch
+        {
+            AppLanguage.English => "en",
+            AppLanguage.Spanish => "es",
+            _ => null
+        };
+
+        if (name is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return lookup(name);
+        }
+        catch (Exception ex)
+        {
+            // Every exception, not only CultureNotFoundException: the lookup is platform code (ICU/NLS, globalization
+            // switches), and the cost of a surprise here is the whole app failing to open. The log keeps the evidence.
+            if (logger is not null)
+            {
+                AppLog.CultureUnavailable(logger, ex, name);
+            }
+
+            return null;
+        }
+    }
 
     /// <summary>
     /// Sets the UI culture for the current thread (the UI thread, which is where the XAML is loaded) and as the default
-    /// for threads created afterwards. Returns the culture now in effect.
+    /// for threads created afterwards. Returns the culture now in effect; when the chosen culture cannot be loaded, that is
+    /// simply the one the process already had (see <see cref="ResolveCulture(AppLanguage, ILogger?)"/>).
     /// </summary>
-    public static CultureInfo Apply(AppLanguage language)
+    public static CultureInfo Apply(AppLanguage language, ILogger? logger = null) =>
+        Apply(language, CultureInfo.GetCultureInfo, logger);
+
+    internal static CultureInfo Apply(AppLanguage language, Func<string, CultureInfo> lookup, ILogger? logger)
     {
         CaptureSystemCulture(); // before anything below can change the culture (see that method)
 
-        if (ResolveCulture(language) is { } culture)
+        if (ResolveCulture(language, lookup, logger) is { } culture)
         {
             CultureInfo.CurrentUICulture = culture;
             CultureInfo.DefaultThreadCurrentUICulture = culture;

@@ -91,6 +91,12 @@ internal static partial class AppLog
     [LoggerMessage(EventId = 134, Level = LogLevel.Warning, Message = "Could not keep a copy of the corrupt file {Path} (it is about to be replaced by defaults).")]
     public static partial void CorruptCopyFailed(ILogger logger, string path);
 
+    [LoggerMessage(EventId = 135, Level = LogLevel.Warning, Message = "The '{Culture}' culture is not available on this machine (invariant globalization or missing culture data); the interface stays on the neutral English text.")]
+    public static partial void CultureUnavailable(ILogger logger, Exception exception, string culture);
+
+    [LoggerMessage(EventId = 136, Level = LogLevel.Warning, Message = "Startup step '{Step}' failed; continuing with a safe default.")]
+    public static partial void StartupStepFailed(ILogger logger, Exception exception, string step);
+
     // ---- Network profile (140s) ----
 
     [LoggerMessage(EventId = 140, Level = LogLevel.Warning, Message = "Could not read the Windows network profile; the Public-network warning is skipped.")]
@@ -98,6 +104,9 @@ internal static partial class AppLog
 
     [LoggerMessage(EventId = 141, Level = LogLevel.Information, Message = "Network profile of {Address}: {Category}.")]
     public static partial void NetworkProfile(ILogger logger, string address, string category);
+
+    [LoggerMessage(EventId = 142, Level = LogLevel.Warning, Message = "Could not read this PC's network adapters; the Data Out address shows as not found.")]
+    public static partial void LanAddressesUnavailable(ILogger logger, Exception exception);
 
     // ---- Performance history (150s) ----
 
