@@ -24,6 +24,7 @@ public partial class App : Application, IAppRestarter
 
     private TelemetryService? _telemetryService;
     private SessionRecorder? _recorder;
+    private SessionsViewModel? _sessions;
     private SettingsService? _settings;
     private PerformanceViewModel? _performance;
     private DispatcherTimerTicker? _ticker;
@@ -129,7 +130,7 @@ public partial class App : Application, IAppRestarter
 
         // The recordings folder, created on demand (%APPDATA%/ForzaTelemetry/recordings), and the page that records into it and
         // replays from it. The page asks the shell (below) to start and stop replays; the shell attaches itself to it.
-        var sessionsPage = new SessionsViewModel(
+        var sessionsPage = _sessions = new SessionsViewModel(
             _telemetryService,
             recorder,
             new RecordingLibrary(RecordingLibrary.DefaultFolder, TimeProvider.System, loggerFactory.CreateLogger<RecordingLibrary>()),
@@ -199,6 +200,9 @@ public partial class App : Application, IAppRestarter
     protected override void OnExit(ExitEventArgs e)
     {
         _ticker?.Stop();
+
+        // A library scan started by a recording stop must not finish into a closing dispatcher: cancel it and silence it.
+        _sessions?.Shutdown();
 
         // Blocking here is safe: StopAsync awaits with ConfigureAwait(false) all the way down, so it never needs
         // the UI thread to resume (no sync-over-async deadlock), and the process is exiting anyway. Waiting

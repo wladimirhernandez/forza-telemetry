@@ -51,11 +51,12 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
     // What the top bar says it is replaying ("2026-10-18 01:23"), set by PlayAsync. Only meaningful while replaying.
     private string _replayLabel = "";
 
-    // True once the Performance page saved the session that is on screen (a Stop did it). BeginFreshSession saves it itself only
-    // when this is false, i.e. when the session ended WITHOUT a Stop (a mid-stream fault): saving twice would re-merge the same
-    // numbers and touch the history file for nothing. Cleared when a session begins, and when a port move carries one on (that
-    // stops and restarts the listener WITHIN one session, so what happens next is not saved yet).
-    private bool _sessionSaved;
+    // True once the CURRENT live session got a listener running (it may have faulted since). A retry after a fault carries the
+    // session on only when this is true: the user is looking at laps and bests that really happened. If it is false the session
+    // never started (the port was busy), so the retry is its first real start. It is a property of the SESSION, not of the latest
+    // attempt: a listener that died mid-stream, then failed to rebind on port A, must still keep the session when port B works
+    // (the failed attempt would otherwise look like "never started"). Cleared when a fresh session begins.
+    private bool _sessionEstablished;
 
     // The port the LAST Start tried to bind (read from the settings at that moment, not when an error is shown). A port
     // change while the listener is running or has failed updates the settings at once, so the settings port can differ
@@ -573,7 +574,9 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
                     // - the listener ran and DIED mid-stream (a socket error, the adapter went away): the session the user is
                     //   looking at is still theirs, laps and bests included, and moving to another port carries on with it.
                     //   Wiping it because the network hiccuped would be the data loss the running-port move avoids.
-                    await StartCoreAsync(continuesSession: !_telemetryService.StartFailed);
+                    // The session decides, not the last attempt: a failed retry after a mid-stream fault is a START failure too,
+                    // yet the session behind it was established (see _sessionEstablished).
+                    await StartCoreAsync(continuesSession: _sessionEstablished);
                 }
             });
         }
@@ -624,16 +627,17 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
         // packets. Before it starts nothing else touches them and the reset is exact. The price is that a Start that then
         // fails (port in use) leaves the screens empty, which is honest: the previous session is over once the user asked
         // for another one. (A port move continues the session and skips this.)
-        if (continuesSession)
-        {
-            _sessionSaved = false; // the same session goes on: what happens next is not saved yet
-        }
-        else
+        if (!continuesSession)
         {
             BeginFreshSession(isReplay: false);
         }
 
         await _telemetryService.StartAsync();
+
+        if (_telemetryService.IsRunning)
+        {
+            _sessionEstablished = true;
+        }
 
         // After the service started (it dropped its own stale Latest) and on the UI thread (this continuation
         // resumes there, so no tick can interleave): wipe the previous session's LIVE values from the dashboard.
@@ -648,7 +652,7 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
     /// <list type="number">
     /// <item>The previous session's top speed is saved first: the engines are about to forget it, and a session that ended in a
     /// fault never went through Stop. The loop is not running, so this read cannot race a change of car. A session that DID go
-    /// through Stop was saved by it (<see cref="_sessionSaved"/>) and is not saved a second time.</item>
+    /// through Stop is saved again, harmlessly: the merge is idempotent and the flush does nothing when nothing changed.</item>
     /// <item>The ENGINES are reset (one call, <see cref="TelemetryEngines.BeginSession"/>), including the car-change detector.</item>
     /// <item>The screens reset only what they DISPLAY, after their source is empty.</item>
     /// </list>
@@ -656,15 +660,12 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
     /// <param name="isReplay">The new session is a recording being replayed: the Performance page then saves nothing from it.</param>
     private void BeginFreshSession(bool isReplay)
     {
-        if (!_sessionSaved)
-        {
-            Performance?.EndSession();
-        }
+        Performance?.EndSession();
+        _sessionEstablished = false; // the session that is starting has no listener yet
 
         _engines?.BeginSession();
 
         Performance?.BeginSession(isReplay);
-        _sessionSaved = false; // the session that is starting has saved nothing yet
         Laps?.BeginSession();
         Analysis?.BeginSession();
         Map?.BeginSession();
@@ -687,7 +688,6 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
         // Unlike the dashboard, the Performance numbers stay on screen (the user stops to READ the result); only unsaved
         // bests are written out and the state line stops claiming the timer is armed.
         Performance?.EndSession();
-        _sessionSaved = true;
         Laps?.EndSession();
         Refresh();
     }

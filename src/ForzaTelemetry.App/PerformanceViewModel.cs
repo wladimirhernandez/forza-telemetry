@@ -329,7 +329,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
         if (consistent)
         {
             SaveTopSpeedOfCurrentCar();
-            _history.Flush();
+            FlushIfLive();
         }
 
         // The engines are written by the receive loop, so they are not reset from this (UI) thread: the loop is asked to, and
@@ -389,8 +389,8 @@ public sealed partial class PerformanceViewModel : ObservableObject
     public void EndSession()
     {
         Refresh(null);
-        SaveTopSpeedOfCurrentCar(); // a no-op for a replay (see IsReplaySession)
-        _history.Flush();
+        SaveTopSpeedOfCurrentCar();
+        FlushIfLive();
     }
 
     /// <summary>
@@ -464,16 +464,16 @@ public sealed partial class PerformanceViewModel : ObservableObject
                 // The old car's best is saved under the OLD car's class and drivetrain (they travel in the change, because
                 // the fields below describe the new car by now), then the cards are cleared: the engines were reset, and the
                 // screen would otherwise keep showing the previous car's results as if they were this one's.
-                if (change.PreviousTopSpeedKmh > 0 && !IsReplaySession)
+                if (change.PreviousTopSpeedKmh > 0)
                 {
-                    _history.Merge(
+                    MergeIfLive(
                         previous,
                         change.PreviousClass,
                         change.PreviousDrivetrain,
                         new PerformanceResult(null, null, null, null, change.PreviousTopSpeedKmh));
                 }
 
-                _history.Flush();
+                FlushIfLive();
                 ForgetRun();
             }
 
@@ -559,16 +559,16 @@ public sealed partial class PerformanceViewModel : ObservableObject
             return;
         }
 
-        if (_runCar is { } car && !IsReplaySession)
+        if (_runCar is { } car)
         {
-            var improved = _history.Merge(
+            var improved = MergeIfLive(
                 car,
                 _carClass,
                 _drivetrain,
                 new PerformanceResult(
                     results.ZeroTo100, results.ZeroTo200, results.Quarter, results.Trap, PositiveOrNull(_topSpeedKmh)));
             _mergedTopSpeedKmh = Math.Max(_mergedTopSpeedKmh, _topSpeedKmh);
-            _history.Flush();
+            FlushIfLive();
 
             ZeroTo100IsNewBest = improved.ZeroTo100;
             ZeroTo200IsNewBest = improved.ZeroTo200;
@@ -585,7 +585,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
         if (latest is { IsRaceOn: true } && _topSpeedKmh > _mergedTopSpeedKmh && latest.SpeedKmh < _topSpeedKmh * TopSpeedSettledRatio)
         {
             SaveTopSpeedOfCurrentCar();
-            _history.Flush();
+            FlushIfLive();
         }
     }
 
@@ -593,16 +593,30 @@ public sealed partial class PerformanceViewModel : ObservableObject
     {
         // The value read by the last consistent ReadEngines, which always belongs to _car (see there).
         var top = _topSpeedKmh;
-        if (IsReplaySession || _car is not { } car || top <= 0)
+        if (_car is not { } car || top <= 0)
         {
             return;
         }
 
-        var improved = _history.Merge(car, _carClass, _drivetrain, new PerformanceResult(null, null, null, null, top));
+        var improved = MergeIfLive(car, _carClass, _drivetrain, new PerformanceResult(null, null, null, null, top));
         _mergedTopSpeedKmh = top;
         if (improved.TopSpeed)
         {
             TopSpeedIsNewBest = true;
+        }
+    }
+
+    // The ONE place that decides "a replay never saves": every write to the per-car history goes through these two, so no call
+    // site can forget the check (and the per-tick top-speed path cannot flush during a replay). A replay measures and shows; it
+    // changes nothing, in memory or on disk.
+    private PerformanceImprovements MergeIfLive(CarKey car, int carClass, int drivetrain, PerformanceResult result) =>
+        IsReplaySession ? default : _history.Merge(car, carClass, drivetrain, result);
+
+    private void FlushIfLive()
+    {
+        if (!IsReplaySession)
+        {
+            _history.Flush();
         }
     }
 

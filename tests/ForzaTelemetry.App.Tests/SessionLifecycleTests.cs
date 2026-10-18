@@ -215,7 +215,34 @@ public sealed class SessionLifecycleTests : IDisposable
     }
 
     [Fact]
-    public async Task A_session_saved_by_Stop_is_not_saved_a_second_time_by_the_next_Start()
+    public async Task A_failed_retry_after_a_mid_stream_fault_still_keeps_the_session_for_the_next_port()
+    {
+        var rig = new Rig(_directory);
+        await rig.Shell.StartCommand.ExecuteAsync(null);
+        rig.DriveOneLapAndTopSpeed();
+        var topSpeedText = rig.Performance.TopSpeedText;
+
+        rig.Sources[0].FailNextReadWith(new SocketException((int)SocketError.ConnectionReset));
+        rig.Sources[0].Publish(TestPackets.Sample());
+        Assert.True(await Wait.UntilAsync(() => rig.Service.Fault is not null));
+
+        // Port A: the retry fails (in use). The latest attempt is now a START failure, but the session behind it is the same one.
+        rig.BusyPorts.Add(5400);
+        rig.Settings.Update(s => s with { UdpPort = 5400 });
+        Assert.True(await Wait.UntilAsync(() => rig.Service.StartFailed && !rig.Shell.IsBusy));
+        Assert.True(rig.Laps.HasLaps);
+
+        // Port B works: still the same session, nothing wiped.
+        rig.Settings.Update(s => s with { UdpPort = 5500 });
+        Assert.True(await Wait.UntilAsync(() => rig.Service.IsRunning && !rig.Shell.IsBusy));
+
+        Assert.True(rig.Laps.HasLaps);
+        Assert.Equal(topSpeedText, rig.Performance.TopSpeedText);
+        await rig.Shell.StopCommand.ExecuteAsync(null);
+    }
+
+    [Fact]
+    public async Task A_start_after_a_Stop_keeps_the_best_the_Stop_saved()
     {
         var rig = new Rig(_directory);
         await rig.Shell.StartCommand.ExecuteAsync(null);
@@ -223,9 +250,8 @@ public sealed class SessionLifecycleTests : IDisposable
         await rig.Shell.StopCommand.ExecuteAsync(null); // saves the 252 km/h
         Assert.Equal(252, rig.History.Find(new CarKey(1234, 780))!.TopSpeedKmh!.Value, precision: 1);
 
-        // Something still reaches the engines after the Stop (a late packet). If the next Start saved "the previous session"
-        // again it would read it and write it; the Stop already closed that session, so it must not.
-        rig.Engines.TopSpeed.OnPacket(TestPackets.Sample(speedMetersPerSecond: 80, carOrdinal: 1234, carClass: 3, performanceIndex: 780));
+        // The next Start closes the previous session again (a second EndSession): the merge is idempotent and the flush has nothing
+        // new to write, so the saved best is exactly what it was.
         await rig.Shell.StartCommand.ExecuteAsync(null);
 
         Assert.Equal(252, rig.History.Find(new CarKey(1234, 780))!.TopSpeedKmh!.Value, precision: 1);

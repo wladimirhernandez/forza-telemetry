@@ -654,6 +654,23 @@ public sealed class PerformanceViewModelTests : IDisposable
     }
 
     [Fact]
+    public void A_replay_never_writes_the_history_file_even_when_something_is_unsaved_and_the_top_speed_settles()
+    {
+        var rig = NewRig();
+        // Something unsaved in memory (a live Merge whose Flush has not happened): any Flush during the replay would write it.
+        rig.History.Merge(new CarKey(9, 9), 2, 1, new PerformanceResult(null, null, null, null, 150));
+        rig.Vm.BeginSession(isReplay: true);
+
+        rig.Feed(70, gear: 5);
+        rig.Feed(70, gear: 5);
+        rig.Feed(40, gear: 5); // well below the peak: the "settled" path that saves a live session's top speed
+        rig.Vm.Refresh(null);
+
+        Assert.False(File.Exists(rig.HistoryPath));
+        Assert.Null(rig.History.Find(new CarKey(1234, 780)));
+    }
+
+    [Fact]
     public void A_replay_still_shows_what_it_measured_while_it_plays()
     {
         var rig = NewRig();

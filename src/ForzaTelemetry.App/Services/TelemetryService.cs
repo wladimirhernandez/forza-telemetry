@@ -273,6 +273,7 @@ public sealed class TelemetryService : IAsyncDisposable
     private async Task RunLoopAsync(ITelemetrySource source, CancellationToken ct)
     {
         var replay = source as ReplayTelemetrySource;
+        Exception? failure = null;
         try
         {
             await foreach (var packet in source.ReadPacketsAsync(ct).ConfigureAwait(false))
@@ -301,15 +302,19 @@ public sealed class TelemetryService : IAsyncDisposable
             // place that cleared IsRunning, so for a moment (the fault write plus the log call) a thread polling
             // "Fault is not null" could read IsRunning == true. Volatile.Write is a release store, so a reader that
             // observes the fault (an acquire read) is guaranteed to observe the earlier IsRunning write too.
-            Volatile.Write(ref _isRunning, false);
-            ReleaseReplay(replay); // before the fault is visible, so "faulted" never coexists with "still replaying this file"
-            Volatile.Write(ref _fault, ex);
-            AppLog.LoopFaulted(_logger, ex);
+            // The fault is only RECORDED here and published in the finally, after the loop is marked stopped and the replay released
+            // (one release for every way out of the loop, in the order the readers rely on).
+            failure = ex;
         }
         finally
         {
             Volatile.Write(ref _isRunning, false);
-            ReleaseReplay(replay);
+            ReleaseReplay(replay); // before the fault is visible, so "faulted" never coexists with "still replaying this file"
+            if (failure is not null)
+            {
+                Volatile.Write(ref _fault, failure);
+                AppLog.LoopFaulted(_logger, failure);
+            }
         }
     }
 

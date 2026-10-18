@@ -51,7 +51,7 @@ No .NET install is needed: the installer is self-contained.
 ## Install
 
 1. Download the latest `ForzaTelemetry-Setup-<version>.exe` from the [GitHub Releases](../../releases) page.
-2. Run it. It asks for administrator rights because it adds a Windows Firewall rule for the telemetry port.
+2. Run it. It asks for administrator rights because it adds a Windows Firewall rule for the app.
 3. Verify the download against the SHA-256 file published next to it, if you like.
 
 Early builds are not code-signed, so Windows SmartScreen may warn that the publisher is unknown. Choose **More info**, then **Run anyway** if you trust the source.
@@ -67,7 +67,7 @@ Short version:
 
 The game only sends packets while you are driving, so nothing shows up in menus or while paused.
 
-Xbox: the console and the PC must be on the same network (wired or Wi-Fi). If you use a VPN on the PC, enable its "LAN access" option. The installer creates a Windows Firewall rule for UDP 5300 on private networks by default (an optional, not recommended installer task also allows public networks).
+Xbox: the console and the PC must be on the same network (wired or Wi-Fi). If you use a VPN on the PC, enable its "LAN access" option. The installer creates a Windows Firewall rule for the app (UDP, any port, so changing the port in Settings keeps working) on private networks by default (an optional, not recommended installer task also allows public networks).
 
 Full step-by-step guide with troubleshooting: [docs/data-out-setup.md](docs/data-out-setup.md).
 

@@ -197,9 +197,10 @@ public sealed partial class SessionsViewModel : ObservableObject
     private Exception? _reportedPlaybackFault;
     private bool _syncingSpeed;
 
-    // The speed a restart keeps: the new source starts at 1x, but a user who chose 2x and pressed restart did not ask for 1x.
-    // Set only around a restart; null the rest of the time, so every other new replay starts at 1x.
-    private double? _carriedSpeed;
+    // Set by Shutdown: the app is closing. A library scan still in flight is cancelled and its continuation (which would write
+    // properties on a dispatcher that is going away) does nothing.
+    private readonly CancellationTokenSource _shutdown = new();
+    private bool _shuttingDown;
 
     private Task _libraryRefresh = Task.CompletedTask;
 
@@ -420,6 +421,17 @@ public sealed partial class SessionsViewModel : ObservableObject
     /// </summary>
     internal Task PendingLibraryRefresh => _libraryRefresh;
 
+    /// <summary>
+    /// The app is closing: cancels the library scan the last recording stop left running, and makes its continuation inert, so it
+    /// never touches this page (or a closing dispatcher) afterwards. Cancelling, not waiting: the continuation would need the
+    /// UI thread that is blocked in the exit path, so a wait could only ever run into its timeout.
+    /// </summary>
+    public void Shutdown()
+    {
+        _shuttingDown = true;
+        _shutdown.Cancel();
+    }
+
     // The fire-and-forget wrapper: nobody awaits it, so it must not let anything escape (an unobserved exception would be lost
     // or, worse, tear the process down) and must leave a trace.
     private async Task RefreshLibraryQuietlyAsync()
@@ -549,14 +561,23 @@ public sealed partial class SessionsViewModel : ObservableObject
             return;
         }
 
-        _carriedSpeed = SelectedSpeed;
-        try
+        // The new source starts at 1x, but a user who chose 2x and pressed restart did not ask for 1x: the chosen speed is applied
+        // to the new source right here, once the host has started it, instead of being smuggled to RefreshPlayer through a field.
+        var speed = SelectedSpeed;
+        await _host.RestartReplayAsync();
+
+        if (_service.Replay is { } replay)
         {
-            await _host.RestartReplayAsync();
-        }
-        finally
-        {
-            _carriedSpeed = null;
+            // The tick may already have noticed the new source and reset the selector to 1x while the host was working: claim the
+            // source as tracked and put the selector back, without writing it to the source a second time.
+            _trackedReplay = replay;
+            _syncingSpeed = true;
+            SelectedSpeed = speed;
+            _syncingSpeed = false;
+            if (speed != ReplaySpeed.Normal)
+            {
+                replay.Speed = speed;
+            }
         }
     }
 
@@ -588,7 +609,7 @@ public sealed partial class SessionsViewModel : ObservableObject
     [RelayCommand]
     public async Task RefreshLibraryAsync()
     {
-        if (Rows.Any(row => row.IsEditing))
+        if (_shuttingDown || Rows.Any(row => row.IsEditing))
         {
             return;
         }
@@ -597,13 +618,17 @@ public sealed partial class SessionsViewModel : ObservableObject
         IsLoading = Rows.Count == 0;
         try
         {
-            var items = await _library.ScanAsync(excludePath: _recordingPath);
-            if (version != _loadVersion || Rows.Any(row => row.IsEditing))
+            var items = await _library.ScanAsync(excludePath: _recordingPath, ct: _shutdown.Token);
+            if (_shuttingDown || version != _loadVersion || Rows.Any(row => row.IsEditing))
             {
                 return;
             }
 
             Rows = items.Select(item => new RecordingRowViewModel(item, this, IsPlayingFile(item.Path))).ToList();
+        }
+        catch (OperationCanceledException) when (_shuttingDown)
+        {
+            // The app is closing and cancelled the scan: nothing to show, nothing to report.
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -612,7 +637,7 @@ public sealed partial class SessionsViewModel : ObservableObject
         }
         finally
         {
-            if (version == _loadVersion)
+            if (!_shuttingDown && version == _loadVersion)
             {
                 IsLoading = false;
             }
@@ -780,16 +805,11 @@ public sealed partial class SessionsViewModel : ObservableObject
         if (!ReferenceEquals(replay, _trackedReplay))
         {
             // A different replay began (or ended): a new source always starts at 1x, so the selector follows without writing back.
-            // (a restart is the exception: it keeps the speed the user had chosen).
+            // (a restart is the exception: RestartReplayAsync puts the speed the user had chosen back right after it).
             _trackedReplay = replay;
-            var speed = _carriedSpeed ?? ReplaySpeed.Normal;
             _syncingSpeed = true;
-            SelectedSpeed = speed;
+            SelectedSpeed = ReplaySpeed.Normal;
             _syncingSpeed = false;
-            if (replay is not null && speed != ReplaySpeed.Normal)
-            {
-                replay.Speed = speed;
-            }
 
             _reportedPlaybackFault = null;
         }

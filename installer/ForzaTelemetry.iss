@@ -22,8 +22,9 @@
 #define AppPublisher "<COPYRIGHT HOLDER>"
 #define AppExe       "ForzaTelemetry.App.exe"
 #define AppUrl       "https://github.com/<OWNER>/<REPO>"
-#define FirewallRule "Forza Telemetry (UDP 5300)"
-#define DataOutPort  "5300"
+#define FirewallRule "Forza Telemetry (UDP)"
+; The name earlier versions used (it quoted a port the rule no longer pins). Removed on install and uninstall so no orphan stays.
+#define LegacyFirewallRule "Forza Telemetry (UDP 5300)"
 
 [Setup]
 ; Fixed once. Never change it, or upgrades will install side by side instead of replacing.
@@ -64,8 +65,8 @@ en.FirewallGroup=Network:
 es.FirewallGroup=Red:
 en.FirewallPublicTask=Also allow on public networks (not recommended)
 es.FirewallPublicTask=Permitir tambien en redes publicas (no recomendado)
-en.FirewallTask=Allow Forza Telemetry through Windows Firewall (UDP port {#DataOutPort}, private networks)
-es.FirewallTask=Permitir Forza Telemetry en el Firewall de Windows (puerto UDP {#DataOutPort}, redes privadas)
+en.FirewallTask=Allow Forza Telemetry through Windows Firewall (UDP, private networks)
+es.FirewallTask=Permitir Forza Telemetry en el Firewall de Windows (UDP, redes privadas)
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -84,18 +85,21 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app
 
 [Run]
 ; Why the rule is scoped this way: the game (or an Xbox) sends UDP to this PC, so Windows needs an INBOUND allow rule.
-;  - program=...: only this executable may receive on the port, not every program on the machine.
+;  - program=...: only this executable may receive, not every program on the machine.
 ;  - profile=private: it is open on home/trusted networks only, never on public Wi-Fi.
-;  - localport=5300: just the Data Out port.
+;  - NO localport: the port is a setting the user can change in the app, and a rule pinned to 5300 would silently block any other
+;    port. Scoping by program is what keeps it narrow (it only ever applies to this executable).
 ; The delete first keeps upgrades and reinstalls from piling up duplicate rules (its exit code is ignored).
 ; The optional public-network task widens the same rule to profile=private,public (not recommended: open Wi-Fi).
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#FirewallRule}"""; Flags: runhidden; Tasks: firewall firewallpublic
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#FirewallRule}"" dir=in action=allow protocol=UDP localport={#DataOutPort} program=""{app}\{#AppExe}"" profile=private"; Flags: runhidden; Tasks: firewall; Check: not PublicTaskSelected; StatusMsg: "{cm:FirewallTask}"
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#FirewallRule}"" dir=in action=allow protocol=UDP localport={#DataOutPort} program=""{app}\{#AppExe}"" profile=private,public"; Flags: runhidden; Tasks: firewallpublic; StatusMsg: "{cm:FirewallPublicTask}"
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#LegacyFirewallRule}"""; Flags: runhidden; Tasks: firewall firewallpublic
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#FirewallRule}"" dir=in action=allow protocol=UDP program=""{app}\{#AppExe}"" profile=private"; Flags: runhidden; Tasks: firewall; Check: not PublicTaskSelected; StatusMsg: "{cm:FirewallTask}"
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#FirewallRule}"" dir=in action=allow protocol=UDP program=""{app}\{#AppExe}"" profile=private,public"; Flags: runhidden; Tasks: firewallpublic; StatusMsg: "{cm:FirewallPublicTask}"
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#FirewallRule}"""; Flags: runhidden; RunOnceId: "DeleteFirewallRule"
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#LegacyFirewallRule}"""; Flags: runhidden; RunOnceId: "DeleteLegacyFirewallRule"
 
 [Code]
 { True when the user ticked the optional public-network firewall task. }

@@ -36,6 +36,22 @@ public sealed class SessionsViewModelTests
         }
     }
 
+    /// <summary>A host whose restart is the real shell's, with a page tick landing right after the new source starts.</summary>
+    private sealed class TickingHost(SessionsRig rig) : ISessionsHost
+    {
+        public bool IsBusy => false;
+
+        public async Task RestartReplayAsync()
+        {
+            await rig.Shell.RestartReplayAsync();
+            rig.Sessions.Refresh(); // the tick notices the new source before the page continues
+        }
+
+        public Task PlayAsync(string path, string label) => rig.Shell.PlayAsync(path, label);
+
+        public Task StopReplayAsync() => rig.Shell.StopReplayAsync();
+    }
+
     // ---- Record: when it is possible ----------------------------------------------------------------------
 
     [Fact]
@@ -633,6 +649,40 @@ public sealed class SessionsViewModelTests
         Assert.Equal(ReplaySpeed.Double, rig.Service.Replay!.Speed);
         Assert.Equal(ReplaySpeed.Double, rig.Sessions.SelectedSpeed);
         await rig.Shell.StopReplayAsync();
+    }
+
+    [Fact]
+    public async Task A_restart_applies_the_speed_to_the_new_source_even_when_the_tick_saw_it_first()
+    {
+        using var rig = new SessionsRig(pauseReplayAtStart: true, replaySpeed: ReplaySpeed.Normal);
+        var path = await rig.AddRecordingAsync("drive", packets: 20);
+        await rig.Shell.PlayAsync(path, "label");
+        rig.Sessions.Refresh();
+        rig.Sessions.SelectedSpeed = ReplaySpeed.Quadruple;
+        var host = new TickingHost(rig);
+        rig.Sessions.Attach(host);
+
+        await rig.Sessions.RestartCommand.ExecuteAsync(null);
+
+        // The tick ran between the host starting the new source and the page getting control back: it reset the selector to 1x.
+        // The page puts the chosen speed back on the selector and on the source, right after the host returned.
+        Assert.Equal(ReplaySpeed.Quadruple, rig.Service.Replay!.Speed);
+        Assert.Equal(ReplaySpeed.Quadruple, rig.Sessions.SelectedSpeed);
+        await rig.Shell.StopReplayAsync();
+    }
+
+    [Fact]
+    public async Task Shutdown_makes_a_library_refresh_do_nothing_and_not_fail()
+    {
+        using var rig = new SessionsRig();
+        await rig.AddRecordingAsync("drive", packets: 3);
+
+        rig.Sessions.Shutdown();
+        await rig.Sessions.RefreshLibraryAsync();
+
+        Assert.Empty(rig.Sessions.Rows); // the scan never published into the page
+        Assert.False(rig.Sessions.IsLoading);
+        await rig.Sessions.PendingLibraryRefresh; // nothing left running, nothing faulted
     }
 
     [Fact]
