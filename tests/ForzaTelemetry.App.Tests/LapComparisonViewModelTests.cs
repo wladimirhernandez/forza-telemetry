@@ -25,10 +25,10 @@ public class LapComparisonViewModelTests
     /// <summary>One lap at constant speed, 100 ms per packet, up to <paramref name="stopAtSeconds"/>.</summary>
     private static void DriveLap(
         LapTraceRecorder recorder, int lapsCompleted, double lapSeconds, double startDistance, double lastLap = 0,
-        double? stopAtSeconds = null)
+        double? stopAtSeconds = null, double startAtSeconds = 0)
     {
         var speed = Length / lapSeconds;
-        for (var t = 0.0; t <= (stopAtSeconds ?? lapSeconds) + 1e-9; t += 0.1)
+        for (var t = startAtSeconds; t <= (stopAtSeconds ?? lapSeconds) + 1e-9; t += 0.1)
         {
             recorder.OnPacket(Packet(lapsCompleted, t, startDistance + (speed * t), lastLap));
         }
@@ -252,5 +252,43 @@ public class LapComparisonViewModelTests
 
         Assert.False(page.ShowLiveEmpty);
         Assert.True(page.IsCompareMode);
+    }
+
+    [Fact]
+    public void The_lap_in_progress_is_copied_only_from_where_the_last_copy_ended()
+    {
+        var (vm, recorder, _) = Rig();
+        DriveLap(recorder, 0, 20, 0, stopAtSeconds: 3.0);
+        vm.Refresh();
+        var first = vm.CurrentCount;
+        Assert.True(first > 2);
+
+        // Overwrite a sample the view model already copied: a copy from the start would restore it, a tail copy leaves it alone.
+        vm.CurrentTrace[0] = new LapTraceSample { DistanceMeters = -1 };
+        DriveLap(recorder, 0, 20, 0, stopAtSeconds: 4.0, startAtSeconds: 3.1);
+        vm.Refresh();
+
+        Assert.True(vm.CurrentCount > first);
+        Assert.Equal(-1, vm.CurrentTrace[0].DistanceMeters);
+        Assert.Equal(recorder.Status.CurrentCount, vm.CurrentCount);
+        Assert.True(vm.CurrentTrace[vm.CurrentCount - 1].DistanceMeters > vm.CurrentTrace[first - 1].DistanceMeters);
+    }
+
+    [Fact]
+    public void A_new_lap_is_copied_from_its_first_sample()
+    {
+        var (vm, recorder, _) = Rig();
+        DriveLap(recorder, 0, 20, 0);
+        recorder.OnPacket(Packet(1, 0.0, 1000, lastLap: 20));
+        DriveLap(recorder, 1, 22, 1000, lastLap: 20, stopAtSeconds: 2.0);
+        vm.Refresh();
+        vm.CurrentTrace[0] = new LapTraceSample { DistanceMeters = -1 };
+
+        recorder.OnPacket(Packet(2, 0.0, 2000, lastLap: 22)); // lap 2 ended: the lap in progress is a new one
+        DriveLap(recorder, 2, 22, 2000, lastLap: 22, stopAtSeconds: 1.0);
+        vm.Refresh();
+
+        Assert.Equal(0, vm.CurrentTrace[0].DistanceMeters); // the first sample of the new lap, not the marker left by the old copy
+        Assert.Equal(recorder.Status.CurrentCount, vm.CurrentCount);
     }
 }

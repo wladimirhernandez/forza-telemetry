@@ -249,4 +249,92 @@ public class LapTraceRecorderTests
         Assert.Equal(3, copied);
         Assert.Equal(0, small[0].DistanceMeters);
     }
+
+    [Fact]
+    public void The_tail_copy_gives_only_the_samples_recorded_since_the_reader_last_copied()
+    {
+        var recorder = new LapTraceRecorder();
+        DriveLap(recorder, 0, 20, 0, stopAtSeconds: 2.0); // 50 m/s: a sample every 100 ms
+        var first = recorder.Status;
+        var buffer = new LapTraceSample[LapTraceRecorder.MaxSamplesPerLap];
+        var copied = recorder.CopyCurrentTailTo(first.CurrentLapId, 0, buffer);
+        Assert.Equal(first.CurrentCount, copied);
+
+        DriveLap(recorder, 0, 20, 0, startAtSeconds: 2.1, stopAtSeconds: 3.0);
+        var tail = recorder.CopyCurrentTailTo(first.CurrentLapId, copied, buffer.AsSpan(copied));
+
+        var all = Current(recorder);
+        Assert.Equal(all.Length - copied, tail);
+        Assert.Equal(all.Select(s => s.DistanceMeters), buffer[..(copied + tail)].Select(s => s.DistanceMeters));
+    }
+
+    [Fact]
+    public void The_tail_copy_refuses_a_lap_that_is_no_longer_the_one_asked_for()
+    {
+        var recorder = new LapTraceRecorder();
+        DriveLap(recorder, 0, 20, 0, stopAtSeconds: 2.0);
+        var lapId = recorder.Status.CurrentLapId;
+        var buffer = new LapTraceSample[LapTraceRecorder.MaxSamplesPerLap];
+
+        recorder.OnPacket(Packet(1, 0.0, 1000, lastLap: 20)); // the lap ended
+
+        Assert.NotEqual(lapId, recorder.Status.CurrentLapId);
+        Assert.Equal(-1, recorder.CopyCurrentTailTo(lapId, 5, buffer));
+        Assert.Equal(-1, recorder.CopyCurrentTailTo(recorder.Status.CurrentLapId, 99, buffer)); // beyond what was recorded
+    }
+
+    [Fact]
+    public void A_restarted_lap_and_a_reset_are_new_laps_for_the_tail_copy()
+    {
+        var recorder = new LapTraceRecorder();
+        DriveLap(recorder, 0, 20, 0, stopAtSeconds: 3.0);
+        var original = recorder.Status.CurrentLapId;
+
+        recorder.OnPacket(Packet(0, 0.0, 1500)); // the lap clock jumped back: the player restarted the lap
+        var restarted = recorder.Status.CurrentLapId;
+        recorder.Reset();
+
+        Assert.NotEqual(original, restarted);
+        Assert.NotEqual(restarted, recorder.Status.CurrentLapId);
+    }
+
+    [Fact]
+    public void The_tracker_and_the_recorder_agree_on_which_lap_is_the_reference()
+    {
+        // Lap 1 (20 s) is a full lap, lap 2 is joined midway and is FASTER (15 s), lap 3 is the lap being compared. Neither may take
+        // lap 2 as the reference, and both must compare lap 3 with lap 1 by the same numbers.
+        var tracker = new LapTracker();
+        var recorder = new LapTraceRecorder();
+        void Feed(TelemetryPacket packet)
+        {
+            tracker.OnPacket(packet);
+            recorder.OnPacket(packet);
+        }
+
+        for (var t = 0.0; t <= 20 + 1e-9; t += 0.1)
+        {
+            Feed(Packet(0, t, 50 * t));
+        }
+
+        for (var t = 5.0; t <= 15 + 1e-9; t += 0.1) // joined at 5 s: not seen from the start
+        {
+            Feed(Packet(1, t, 1000 + (66.6 * t), lastLap: t == 5.0 ? 20 : 0));
+        }
+
+        Feed(Packet(2, 0.0, 2000, lastLap: 15));
+        var best = Best(recorder);
+        for (var t = 0.1; t <= 12 + 1e-9; t += 0.1)
+        {
+            Feed(Packet(2, t, 2000 + (40 * t)));
+            var expected = LapTraceMath.DeltaSeconds(best, 40 * t, t);
+            var actual = tracker.Current.DeltaSeconds;
+            Assert.Equal(expected is null, actual is null);
+            if (expected is { } e)
+            {
+                Assert.Equal(e, actual!.Value, 3);
+            }
+        }
+
+        Assert.Equal(20, recorder.Status.BestLapSeconds);
+    }
 }

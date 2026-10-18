@@ -16,30 +16,15 @@ public static class LapTraceMath
     {
         sample = default;
 
-        // Written as a negated >= so NaN (which compares false with everything) is rejected too.
-        if (trace.Length < 2 || !(distanceMeters >= trace[0].DistanceMeters) || distanceMeters > trace[^1].DistanceMeters)
+        // The lookup is shared with the live delta (LapInterpolation), NaN handling included.
+        if (!LapInterpolation.TryLocate(trace, distanceMeters, out var low, out var high, out var position))
         {
             return false;
         }
 
-        int low = 0, high = trace.Length - 1;
-        while (high - low > 1)
-        {
-            var mid = (low + high) / 2;
-            if (trace[mid].DistanceMeters <= distanceMeters)
-            {
-                low = mid;
-            }
-            else
-            {
-                high = mid;
-            }
-        }
-
         var a = trace[low];
         var b = trace[high];
-        var span = (double)b.DistanceMeters - a.DistanceMeters;
-        var t = span <= 0 ? 0 : (float)((distanceMeters - a.DistanceMeters) / span);
+        var t = (float)position;
         sample = new LapTraceSample
         {
             DistanceMeters = (float)distanceMeters,

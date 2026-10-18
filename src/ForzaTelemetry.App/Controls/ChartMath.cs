@@ -49,6 +49,23 @@ public static class ChartMath
     }
 
     /// <summary>
+    /// The length the distance axis spans: <paramref name="baseLengthMeters"/> (the reference lap), widened in steps of a tenth of it
+    /// only when <paramref name="currentLengthMeters"/> runs past it. A scale that followed the growing lap metre by metre would
+    /// move everything drawn on it (the reference lap included) every time; this one changes at most ten times for a lap twice as long.
+    /// </summary>
+    public static double StableAxisMeters(double baseLengthMeters, double currentLengthMeters)
+    {
+        var baseLength = double.IsFinite(baseLengthMeters) ? Math.Max(1, baseLengthMeters) : 1;
+        if (!(currentLengthMeters > baseLength) || !double.IsFinite(currentLengthMeters))
+        {
+            return baseLength;
+        }
+
+        var step = baseLength / 10;
+        return baseLength + (Math.Ceiling(((currentLengthMeters - baseLength) / step) - 1e-9) * step);
+    }
+
+    /// <summary>
     /// Two value axes that share ONE grid: the same number of divisions for both, each with a round step (1, 2 or 5
     /// times a power of ten) whose top is at least the given value.
     /// </summary>

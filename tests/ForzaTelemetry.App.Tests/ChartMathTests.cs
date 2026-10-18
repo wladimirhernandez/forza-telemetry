@@ -164,4 +164,31 @@ public class ChartMathTests
 
         Assert.Empty(output);
     }
+
+    [Theory]
+    [InlineData(1000, 0, 1000)] // no lap in progress yet
+    [InlineData(1000, 400, 1000)] // a shorter lap in progress never changes the axis
+    [InlineData(1000, 1000, 1000)]
+    [InlineData(1000, 1001, 1100)] // past the end: widened by a tenth of the best lap, not by the metre
+    [InlineData(1000, 1100, 1100)]
+    [InlineData(1000, 1101, 1200)]
+    [InlineData(0, 0, 1)] // a best lap of no length still gives a usable axis
+    [InlineData(double.NaN, 0, 1)]
+    public void The_distance_axis_follows_the_best_lap_and_widens_only_in_steps(double best, double current, double expected)
+    {
+        Assert.Equal(expected, ChartMath.StableAxisMeters(best, current), 6);
+    }
+
+    [Fact]
+    public void A_lap_in_progress_growing_metre_by_metre_changes_the_axis_only_a_few_times()
+    {
+        var distinct = new HashSet<double>();
+
+        for (var meters = 0; meters <= 2000; meters++)
+        {
+            distinct.Add(ChartMath.StableAxisMeters(1000, meters));
+        }
+
+        Assert.Equal(11, distinct.Count); // 1000 .. 2000 in tenths, instead of 2001 different scales
+    }
 }

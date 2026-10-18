@@ -97,7 +97,15 @@ public sealed class LapCompareChart : FrameworkElement
     private double _axisMeters = 1;
     private double _pxPerMeter = 1;
     private double _deltaRange = 0.5;
-    private (double PxPerMeter, double SpeedAxisMax, Size Size) _bestKey;
+    private (double AxisMeters, double SpeedAxisMax, Size Size) _bestKey;
+
+    // The gap to the best lap at every sample of the lap in progress, computed once per rebuild (see UpdateGap).
+    private double[] _gap = [];
+    private int _gapCount;
+    private LapTraceSample[]? _gapBestTrace;
+    private int _gapBestVersion = -1;
+    private int _gapBestCount;
+    private float _gapLastDistance, _gapLastTime;
     private double _hoverX = double.NaN;
 
     private StreamGeometry? _bestSpeed, _bestThrottle, _bestBrake, _bestSteer;
@@ -261,11 +269,10 @@ public sealed class LapCompareChart : FrameworkElement
         _plotRight = size.Width - GutterRight;
         _plotBottom = size.Height - AxisHeight;
 
-        // The axis covers the longer of the two laps; the best lap's whole length is the normal case.
-        var lengthMeters = Math.Max(best[^1].DistanceMeters, current.IsEmpty ? 0 : current[^1].DistanceMeters);
-        _axisMeters = Math.Max(1, lengthMeters);
-        var pxPerMeter = (_plotRight - _plotLeft) / _axisMeters;
-        _pxPerMeter = pxPerMeter;
+        // The axis is the best lap's length, widened in steps only when the lap in progress runs past it (see ChartMath.StableAxisMeters):
+        // the best lap's pixels depend on this scale, and a scale that grew with every metre driven would rebuild them every time.
+        _axisMeters = ChartMath.StableAxisMeters(best[^1].DistanceMeters, current.IsEmpty ? 0 : current[^1].DistanceMeters);
+        _pxPerMeter = (_plotRight - _plotLeft) / _axisMeters;
 
         // Lanes share the plot height by weight; the gaps between them carry the separators.
         double[] weights = [1.5, 0.8, 0.8, 0.9, 1.2];
@@ -286,12 +293,13 @@ public sealed class LapCompareChart : FrameworkElement
         var speedAxisMax = ChartMath.NiceCeiling(Math.Max(maxSpeed, SpeedScale * 10), 3).Max;
 
         // The gap lane is symmetric about zero so "ahead" and "behind" get the same room; never tighter than half a second.
+        UpdateGap(best, current);
         double maxAbs = 0;
-        foreach (var s in current)
+        for (var i = 0; i < current.Length; i++)
         {
-            if (LapTraceMath.DeltaSeconds(best, s.DistanceMeters, s.TimeSeconds) is { } d)
+            if (!double.IsNaN(_gap[i]))
             {
-                maxAbs = Math.Max(maxAbs, Math.Abs(d));
+                maxAbs = Math.Max(maxAbs, Math.Abs(_gap[i]));
             }
         }
 
@@ -306,41 +314,73 @@ public sealed class LapCompareChart : FrameworkElement
             y += laneHeight + LaneGap;
         }
 
-        // The best lap's lines depend on the pixel mapping too, not only on its own samples: a longer current lap stretches the
-        // x axis and a faster one raises the speed axis, and either moves the best lap's pixels.
-        var bestKey = (pxPerMeter, speedAxisMax, size);
+        // The best lap's lines depend on the pixel mapping too, not only on its own samples: a current lap that outgrows the axis
+        // widens it (in steps) and a faster one raises the speed axis, and either moves the best lap's pixels. Both move rarely.
+        var bestKey = (_axisMeters, speedAxisMax, size);
         if (_bestDirty || bestKey != _bestKey)
         {
             _bestDirty = false;
             _bestKey = bestKey;
             var scale = SpeedScale;
-            (_bestSpeed, _) = BuildSeries(best, s => s.SpeedMs * scale, _lanes[LaneSpeed], fill: false);
-            (_bestThrottle, _) = BuildSeries(best, s => s.Throttle, _lanes[LaneThrottle], fill: false);
-            (_bestBrake, _) = BuildSeries(best, s => s.Brake, _lanes[LaneBrake], fill: false);
-            (_bestSteer, _) = BuildSeries(best, s => s.Steer, _lanes[LaneSteer], fill: false);
+            (_bestSpeed, _) = BuildSeries(best, (_, s) => s.SpeedMs * scale, _lanes[LaneSpeed], fill: false);
+            (_bestThrottle, _) = BuildSeries(best, (_, s) => s.Throttle, _lanes[LaneThrottle], fill: false);
+            (_bestBrake, _) = BuildSeries(best, (_, s) => s.Brake, _lanes[LaneBrake], fill: false);
+            (_bestSteer, _) = BuildSeries(best, (_, s) => s.Steer, _lanes[LaneSteer], fill: false);
         }
 
         _currentDirty = false;
         var speedScale = SpeedScale;
-        (_curSpeed, _curSpeedFill) = BuildSeries(current, s => s.SpeedMs * speedScale, _lanes[LaneSpeed], fill: true);
-        (_curThrottle, _curThrottleFill) = BuildSeries(current, s => s.Throttle, _lanes[LaneThrottle], fill: true);
-        (_curBrake, _curBrakeFill) = BuildSeries(current, s => s.Brake, _lanes[LaneBrake], fill: true);
-        (_curSteer, _) = BuildSeries(current, s => s.Steer, _lanes[LaneSteer], fill: false);
+        (_curSpeed, _curSpeedFill) = BuildSeries(current, (_, s) => s.SpeedMs * speedScale, _lanes[LaneSpeed], fill: true);
+        (_curThrottle, _curThrottleFill) = BuildSeries(current, (_, s) => s.Throttle, _lanes[LaneThrottle], fill: true);
+        (_curBrake, _curBrakeFill) = BuildSeries(current, (_, s) => s.Brake, _lanes[LaneBrake], fill: true);
+        (_curSteer, _) = BuildSeries(current, (_, s) => s.Steer, _lanes[LaneSteer], fill: false);
 
-        // A span cannot be captured by the lambda below, so it captures the array and the count and slices inside.
-        var referenceArray = BestTrace!;
-        var referenceCount = Math.Clamp(BestCount, 0, referenceArray.Length);
-        (_deltaLine, _deltaArea) = BuildSeries(
-            current,
-            s => LapTraceMath.DeltaSeconds(referenceArray.AsSpan(0, referenceCount), s.DistanceMeters, s.TimeSeconds) ?? double.NaN,
-            _lanes[LaneDelta],
-            fill: true,
-            baselineValue: 0);
+        // The gap lane reads the buffer filled above: no second (or third) binary search per sample.
+        (_deltaLine, _deltaArea) = BuildSeries(current, (i, _) => _gap[i], _lanes[LaneDelta], fill: true, baselineValue: 0);
+    }
+
+    /// <summary>
+    /// Fills <see cref="_gap"/> with the lap in progress's gap to the best lap at each of its samples (NaN where the best lap does
+    /// not cover that distance). While the same best lap is shown and the lap in progress only grew (new samples appended), the
+    /// values already computed are kept and only the new tail is looked up; anything else (a new best lap, a new lap, a reset)
+    /// recomputes from the start. "Only grew" is checked on the last kept sample, not assumed: a lap change between two rebuilds
+    /// must never leave the previous lap's gaps under the new lap's samples.
+    /// </summary>
+    private void UpdateGap(ReadOnlySpan<LapTraceSample> best, ReadOnlySpan<LapTraceSample> current)
+    {
+        var keep = 0;
+        if (_gapCount > 0
+            && ReferenceEquals(_gapBestTrace, BestTrace) && _gapBestVersion == BestVersion && _gapBestCount == best.Length
+            && current.Length >= _gapCount
+            && current[_gapCount - 1].DistanceMeters == _gapLastDistance && current[_gapCount - 1].TimeSeconds == _gapLastTime)
+        {
+            keep = _gapCount;
+        }
+
+        if (_gap.Length < current.Length)
+        {
+            Array.Resize(ref _gap, Math.Max(current.Length, _gap.Length * 2)); // keeps the values already computed
+        }
+
+        for (var i = keep; i < current.Length; i++)
+        {
+            _gap[i] = LapTraceMath.DeltaSeconds(best, current[i].DistanceMeters, current[i].TimeSeconds) ?? double.NaN;
+        }
+
+        _gapCount = current.Length;
+        _gapBestTrace = BestTrace;
+        _gapBestVersion = BestVersion;
+        _gapBestCount = best.Length;
+        if (current.Length > 0)
+        {
+            _gapLastDistance = current[^1].DistanceMeters;
+            _gapLastTime = current[^1].TimeSeconds;
+        }
     }
 
     /// <summary>Builds the stroked line (and optionally the area between it and the baseline) of one series.</summary>
     private (StreamGeometry? Line, StreamGeometry? Fill) BuildSeries(
-        ReadOnlySpan<LapTraceSample> trace, Func<LapTraceSample, double> value, Lane lane, bool fill, double? baselineValue = null)
+        ReadOnlySpan<LapTraceSample> trace, Func<int, LapTraceSample, double> value, Lane lane, bool fill, double? baselineValue = null)
     {
         if (trace.Length < 1)
         {
@@ -386,9 +426,10 @@ public sealed class LapCompareChart : FrameworkElement
     /// <summary>
     /// Fills <see cref="_points"/> with the pixel-space points of one series, keeping at most four per pixel column (the first, the
     /// lowest, the highest and the last, in drive order): a 6000-sample lap on a 1000 px plot stays a faithful, light polyline.
-    /// Samples whose value is NaN (a gap lane with no reference there) are skipped.
+    /// Samples whose value is NaN (a gap lane with no reference there) are skipped. The value function gets the sample's index
+    /// as well, so a series computed once per rebuild (the gap) is read from its buffer instead of recomputed per call.
     /// </summary>
-    private void FillPoints(ReadOnlySpan<LapTraceSample> trace, Func<LapTraceSample, double> value, Lane lane)
+    private void FillPoints(ReadOnlySpan<LapTraceSample> trace, Func<int, LapTraceSample, double> value, Lane lane)
     {
         _points.Clear();
         Span<int> picks = stackalloc int[4];
@@ -404,7 +445,7 @@ public sealed class LapCompareChart : FrameworkElement
             double low = double.PositiveInfinity, high = double.NegativeInfinity;
             while (j < trace.Length && Math.Floor(trace[j].DistanceMeters * _pxPerMeter) == column)
             {
-                var v = value(trace[j]);
+                var v = value(j, trace[j]);
                 if (!double.IsNaN(v))
                 {
                     first = first < 0 ? j : first;
@@ -441,7 +482,7 @@ public sealed class LapCompareChart : FrameworkElement
                     }
 
                     previous = pick;
-                    _points.Add(new Point(DistanceToX(trace[pick].DistanceMeters), lane.Y(value(trace[pick]))));
+                    _points.Add(new Point(DistanceToX(trace[pick].DistanceMeters), lane.Y(value(pick, trace[pick]))));
                 }
             }
 

@@ -42,28 +42,14 @@ public sealed class LapTracker : IPacketObserver
     /// <summary>Capacity of the per-lap sample arrays: one sample per metre, so laps up to 6 km are fully recorded.</summary>
     public const int MaxSamplesPerLap = 6000;
 
-    /// <summary>A lap seen from its start has a CurrentLap below this many seconds on the first packet.</summary>
-    internal const double FullLapStartToleranceSeconds = 1.0;
-
-    /// <summary>Minimum distance between recorded samples, meters.</summary>
-    internal const double SampleSpacingMeters = 1.0;
-
-    /// <summary>CurrentLap dropping by more than this within the same lap number means the lap was restarted.</summary>
-    internal const double RestartDropSeconds = 1.0;
-
     private readonly object _gate = new();
 
     // ---- Writer-owned state (scalars below are read by Current under _gate) ----
-    private bool _hasPrevious;
-    private int _lapsCompleted;
-    private double _previousCurrentLap;
-    private double _lapStartDistance;
-    private bool _currentLapValid;
-    private double[] _currentDistances = new double[MaxSamplesPerLap];
-    private double[] _currentTimes = new double[MaxSamplesPerLap];
+    // Lap boundaries and sample spacing are decided by the detector the lap trace recorder uses too (see LapBoundaryDetector).
+    private readonly LapBoundaryDetector _boundary = new();
+    private LapPoint[] _current = new LapPoint[MaxSamplesPerLap];
     private int _currentCount;
-    private double[] _bestDistances = new double[MaxSamplesPerLap];
-    private double[] _bestTimes = new double[MaxSamplesPerLap];
+    private LapPoint[] _best = new LapPoint[MaxSamplesPerLap];
     private int _bestCount;
     private double? _bestSampleLapTime;
     private double? _lastLap;
@@ -83,8 +69,8 @@ public sealed class LapTracker : IPacketObserver
         {
             lock (_gate)
             {
-                return _hasPrevious
-                    ? new LapSnapshot(_lapsCompleted + 1, _shownCurrentLap, _shownLastLap, _shownBestLap, _shownDelta, _laps)
+                return _boundary.HasPrevious
+                    ? new LapSnapshot(_boundary.LapsCompleted + 1, _shownCurrentLap, _shownLastLap, _shownBestLap, _shownDelta, _laps)
                     : LapSnapshot.Empty;
             }
         }
@@ -98,11 +84,7 @@ public sealed class LapTracker : IPacketObserver
     {
         lock (_gate)
         {
-            _hasPrevious = false;
-            _lapsCompleted = 0;
-            _previousCurrentLap = 0;
-            _lapStartDistance = 0;
-            _currentLapValid = false;
+            _boundary.Reset();
             _currentCount = 0;
             ResetSession(); // lap list, best/last and the reference samples
             _shownCurrentLap = 0;
@@ -130,39 +112,31 @@ public sealed class LapTracker : IPacketObserver
     {
         double currentLap = packet.CurrentLap;
 
-        if (!_hasPrevious)
+        switch (_boundary.Classify(packet))
         {
-            StartLap(packet.LapNumber, packet.DistanceTraveled, currentLap);
-            _hasPrevious = true;
-        }
-        else if (packet.LapNumber < _lapsCompleted)
-        {
-            ResetSession();
-            StartLap(packet.LapNumber, packet.DistanceTraveled, currentLap);
-        }
-        else if (packet.LapNumber > _lapsCompleted)
-        {
-            CompleteLap(packet);
-            StartLap(packet.LapNumber, packet.DistanceTraveled, currentLap);
-        }
-        else if (currentLap < _previousCurrentLap - RestartDropSeconds)
-        {
-            // Same lap number but the lap clock jumped back: the player restarted the lap.
-            StartLap(packet.LapNumber, packet.DistanceTraveled, currentLap);
+            case LapBoundary.RaceRestarted:
+                ResetSession();
+                StartLap(packet, currentLap);
+                break;
+            case LapBoundary.LapCompleted:
+                CompleteLap(packet);
+                StartLap(packet, currentLap);
+                break;
+            case LapBoundary.FirstPacket:
+            case LapBoundary.LapRestarted: // same lap number but the lap clock jumped back: the player restarted the lap
+                StartLap(packet, currentLap);
+                break;
         }
 
-        _previousCurrentLap = currentLap;
+        _boundary.Advance(currentLap);
         RecordSample(packet.DistanceTraveled, currentLap);
         UpdateShown(packet, currentLap);
     }
 
-    private void StartLap(int lapsCompleted, double distance, double currentLap)
+    private void StartLap(TelemetryPacket packet, double currentLap)
     {
-        _lapsCompleted = lapsCompleted;
-        _lapStartDistance = distance;
+        _boundary.StartLap(packet.LapNumber, packet.DistanceTraveled, currentLap);
         _currentCount = 0; // reuse the preallocated arrays
-        _currentLapValid = currentLap <= FullLapStartToleranceSeconds;
-        _previousCurrentLap = currentLap;
     }
 
     private void ResetSession()
@@ -176,12 +150,8 @@ public sealed class LapTracker : IPacketObserver
 
     private void CompleteLap(TelemetryPacket packet)
     {
-        // More than one lap completed since the last packet we saw (a dropped burst, a pause: 3 -> 5). The lap the packet reports
-        // (LastLap, number LapNumber) is NOT the one whose clock and distance samples we hold: those belong to the lap in progress
-        // before the jump. So its samples must never become the delta reference, and the lap in progress is no fallback for the
-        // reported lap's time either.
-        var skippedLaps = packet.LapNumber - _lapsCompleted > 1;
-        double time = packet.LastLap > 0 ? packet.LastLap : skippedLaps ? 0 : _previousCurrentLap;
+        var finished = _boundary.Finish(packet);
+        var time = finished.Time;
 
         // The packet's LapNumber is the number of laps COMPLETED, so the lap that just ended is lap number LapNumber. Taking
         // it from the packet (not from "my previous count + 1") keeps the list in step with CurrentLapNumber in two cases:
@@ -208,11 +178,10 @@ public sealed class LapTracker : IPacketObserver
 
         // Only a lap observed from its start (and long enough to interpolate), and whose samples really are the reported lap's,
         // can be the delta reference.
-        if (!skippedLaps && _currentLapValid && _currentCount >= 2 && (_bestSampleLapTime is null || time < _bestSampleLapTime))
+        if (_boundary.CanBeReference(finished, _currentCount) && (_bestSampleLapTime is null || time < _bestSampleLapTime))
         {
-            // Swap instead of copy: the old reference arrays become the scratch space for the next lap.
-            (_bestDistances, _currentDistances) = (_currentDistances, _bestDistances);
-            (_bestTimes, _currentTimes) = (_currentTimes, _bestTimes);
+            // Swap instead of copy: the old reference array becomes the scratch space for the next lap.
+            (_best, _current) = (_current, _best);
             _bestCount = _currentCount;
             _bestSampleLapTime = time;
         }
@@ -223,62 +192,33 @@ public sealed class LapTracker : IPacketObserver
 
     private void RecordSample(double distance, double lapTime)
     {
-        var distanceIntoLap = distance - _lapStartDistance;
-        if (distanceIntoLap < 0)
+        var lastDistance = _currentCount > 0 ? _current[_currentCount - 1].Distance : 0;
+        if (!_boundary.ShouldRecord(distance, _currentCount, lastDistance))
         {
             return;
         }
 
-        if (_currentCount > 0 && distanceIntoLap - _currentDistances[_currentCount - 1] < SampleSpacingMeters)
-        {
-            return;
-        }
-
-        if (_currentCount >= MaxSamplesPerLap)
-        {
-            _currentLapValid = false; // free roam / absurdly long lap: stop recording, never a reference
-            return;
-        }
-
-        _currentDistances[_currentCount] = distanceIntoLap;
-        _currentTimes[_currentCount] = lapTime;
+        _current[_currentCount] = new LapPoint(distance - _boundary.LapStartDistance, lapTime);
         _currentCount++;
     }
 
-    /// <summary>Best-lap time at a given distance into the lap, by binary search plus linear interpolation.</summary>
+    /// <summary>Best-lap time at a given distance into the lap, by the interpolation shared with the lap trace.</summary>
     private double? BestTimeAt(double distanceIntoLap)
     {
-        if (_bestCount < 2 || distanceIntoLap < _bestDistances[0] || distanceIntoLap > _bestDistances[_bestCount - 1])
+        if (!LapInterpolation.TryLocate(_best.AsSpan(0, _bestCount), distanceIntoLap, out var low, out var high, out var t))
         {
             return null; // outside the recorded range of the reference lap
         }
 
-        int low = 0, high = _bestCount - 1;
-        while (high - low > 1)
-        {
-            var mid = (low + high) / 2;
-            if (_bestDistances[mid] <= distanceIntoLap)
-            {
-                low = mid;
-            }
-            else
-            {
-                high = mid;
-            }
-        }
-
-        var span = _bestDistances[high] - _bestDistances[low];
-        return span <= 0
-            ? _bestTimes[low]
-            : _bestTimes[low] + ((distanceIntoLap - _bestDistances[low]) / span * (_bestTimes[high] - _bestTimes[low]));
+        return _best[low].Time + (t * (_best[high].Time - _best[low].Time));
     }
 
     private void UpdateShown(TelemetryPacket packet, double currentLap)
     {
         double? delta = null;
-        if (_currentLapValid)
+        if (_boundary.CurrentLapValid)
         {
-            var best = BestTimeAt(packet.DistanceTraveled - _lapStartDistance);
+            var best = BestTimeAt(packet.DistanceTraveled - _boundary.LapStartDistance);
             if (best is not null)
             {
                 delta = currentLap - best;

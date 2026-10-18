@@ -14,7 +14,8 @@ namespace ForzaTelemetry.App;
 /// <b>Cheap refresh.</b> Same contract as <see cref="AnalysisViewModel"/>: the shell calls <see cref="Refresh"/> only while the page
 /// is showing, the sample arrays are allocated once here and rewritten in place, and the chart is told to rebuild only through
 /// <see cref="DataVersion"/>. The recorder's own versions decide what to copy, so the best lap (which changes a few times per
-/// session) is not copied 20 times a second.
+/// session) is not copied 20 times a second, and the lap in progress is copied only from where the last copy ended (its samples
+/// are only ever appended until the lap changes).
 /// </para>
 /// <para>
 /// <b>What is compared.</b> The recorder keeps the lap in progress only when it was seen from the start line
@@ -34,6 +35,8 @@ public sealed partial class LapComparisonViewModel : ObservableObject
     private readonly UnitsService _units;
 
     private int _seenCurrentVersion = -1;
+    private int _seenCurrentLapId = -1;
+    private int _copiedCurrent; // how many samples of lap _seenCurrentLapId are in CurrentTrace
     private int _seenBestVersion = -1;
     private bool _seenComparable;
     private string _seenUnitKey = "";
@@ -131,6 +134,8 @@ public sealed partial class LapComparisonViewModel : ObservableObject
     public void BeginSession()
     {
         _seenCurrentVersion = -1;
+        _seenCurrentLapId = -1;
+        _copiedCurrent = 0;
         _seenBestVersion = -1;
         _seenComparable = false;
         CurrentCount = 0;
@@ -167,13 +172,25 @@ public sealed partial class LapComparisonViewModel : ObservableObject
         // "Comparable" can flip without a new sample (the array filled up in free roam), hence its own check.
         if (status.CurrentVersion != _seenCurrentVersion || status.CurrentIsComparable != _seenComparable)
         {
-            _seenCurrentVersion = status.CurrentVersion;
-            _seenComparable = status.CurrentIsComparable;
-            var copied = _recorder.CopyCurrentTo(CurrentTrace);
+            // Only the samples recorded since the last copy, while it is still the same lap: they are appended, never rewritten. A new
+            // lap (or a reset) starts from its first sample. The recorder says "no longer that lap" (-1) when a lap started between
+            // the Status read and the copy; then nothing is marked as seen and the next tick copies from the start.
+            var sameLap = status.CurrentLapId == _seenCurrentLapId && status.CurrentCount >= _copiedCurrent;
+            var from = sameLap ? _copiedCurrent : 0;
+            var lapId = sameLap ? _seenCurrentLapId : status.CurrentLapId;
+            var added = _recorder.CopyCurrentTailTo(lapId, from, CurrentTrace.AsSpan(from));
+            if (added >= 0)
+            {
+                // The version read BEFORE the copy: a sample recorded in between makes the next tick copy again, never skip.
+                _seenCurrentVersion = status.CurrentVersion;
+                _seenComparable = status.CurrentIsComparable;
+                _seenCurrentLapId = lapId;
+                _copiedCurrent = from + added;
 
-            // A lap joined midway has no honest "distance into the lap": it is not drawn (see the class remarks).
-            CurrentCount = status.CurrentIsComparable ? copied : 0;
-            changed = true;
+                // A lap joined midway has no honest "distance into the lap": it is not drawn (see the class remarks).
+                CurrentCount = status.CurrentIsComparable ? _copiedCurrent : 0;
+                changed = true;
+            }
         }
 
         if (changed)

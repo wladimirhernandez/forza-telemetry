@@ -10,7 +10,7 @@ namespace ForzaTelemetry.Core.Laps;
 /// already 0..1 and steering -1..1, converted once here instead of in every renderer (same convention as
 /// <see cref="Insights.TelemetrySample"/>).
 /// </remarks>
-public readonly struct LapTraceSample
+public readonly struct LapTraceSample : ILapPoint
 {
     /// <summary>Distance driven since the lap began, in meters.</summary>
     public float DistanceMeters { get; init; }
@@ -32,4 +32,6 @@ public readonly struct LapTraceSample
 
     /// <summary>The game's gear number.</summary>
     public byte Gear { get; init; }
+
+    double ILapPoint.DistanceInLap => DistanceMeters;
 }
