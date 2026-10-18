@@ -128,6 +128,21 @@ public class DashboardViewModelTests
         await vm.StopCommand.ExecuteAsync(null);
     }
 
+    [Theory]
+    [InlineData(99, false)]
+    [InlineData(100, true)]
+    [InlineData(999, true)]
+    [InlineData(1000, false)]
+    public async Task Car_info_requires_a_performance_index_in_100_to_999(int performanceIndex, bool expected)
+    {
+        var (vm, source, service) = await StartedAsync();
+
+        await PublishAndRefreshAsync(vm, source, service, TestPackets.Sample(performanceIndex: performanceIndex));
+
+        Assert.Equal(expected, vm.HasCarInfo);
+        await vm.StopCommand.ExecuteAsync(null);
+    }
+
     [Fact]
     public async Task Car_info_is_hidden_until_a_packet_has_a_performance_index()
     {

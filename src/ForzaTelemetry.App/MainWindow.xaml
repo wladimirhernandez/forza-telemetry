@@ -92,7 +92,7 @@
             </Grid.RowDefinitions>
 
             <!-- Title bar: the transparent-background Grid is what receives the mouse for dragging. -->
-            <Grid Grid.Row="0" Background="Transparent" KeyboardNavigation.TabIndex="1" MouseLeftButtonDown="OnDragAreaMouseDown"
+            <Grid Grid.Row="0" Background="Transparent" KeyboardNavigation.TabIndex="1" KeyboardNavigation.TabNavigation="Local" MouseLeftButtonDown="OnDragAreaMouseDown"
                   MouseMove="OnDragAreaMouseMove" MouseLeftButtonUp="OnDragAreaMouseUp" LostMouseCapture="OnDragAreaLostCapture">
                 <TextBlock Text="{x:Static res:Strings.AppTitle}" Style="{StaticResource MutedLabel}"
                            VerticalAlignment="Center" Margin="28,0,0,0" />
@@ -147,8 +147,11 @@
             </Grid>
 
             <!-- Top bar: status pills on the left, actions on the right. -->
-            <!-- Tab order: the primary action first, then the window buttons (TabIndex orders sibling containers). -->
-            <Grid Grid.Row="1" Margin="28,4,28,0" KeyboardNavigation.TabIndex="0">
+            <!-- Tab order: the primary action first, then the window buttons. TabIndex only orders siblings inside one
+                 keyboard-navigation scope, and a plain Grid (TabNavigation=Continue) does not form its own scope, so its
+                 TabIndex was ignored and focus started on the title-bar glyphs. TabNavigation="Local" makes each bar a
+                 tab group, which is what makes its TabIndex count (0 = this bar, 1 = the title bar). -->
+            <Grid Grid.Row="1" Margin="28,4,28,0" KeyboardNavigation.TabIndex="0" KeyboardNavigation.TabNavigation="Local">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                     <!--
                       Connection pill. The dot color comes from a DataTrigger per ConnectionState: the view model

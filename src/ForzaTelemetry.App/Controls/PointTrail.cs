@@ -34,6 +34,21 @@ public sealed class PointTrail
         }
     }
 
+    /// <summary>
+    /// Pushes only when the point differs from the newest stored one, so a re-render that carries no new data
+    /// (resize, DPI change) cannot fill the trail with duplicates. Returns whether a sample was stored.
+    /// </summary>
+    public bool PushIfChanged(double x, double y)
+    {
+        if (Count > 0 && FromNewest(0) == (x, y))
+        {
+            return false;
+        }
+
+        Push(x, y);
+        return true;
+    }
+
     /// <summary>Reads a sample by age: 0 = newest, <c>Count - 1</c> = oldest.</summary>
     public (double X, double Y) FromNewest(int age)
     {

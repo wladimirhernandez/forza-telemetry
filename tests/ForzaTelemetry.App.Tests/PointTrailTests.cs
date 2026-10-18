@@ -5,6 +5,20 @@ namespace ForzaTelemetry.App.Tests;
 public class PointTrailTests
 {
     [Fact]
+    public void PushIfChanged_skips_a_repeat_of_the_newest_sample_but_stores_a_new_one()
+    {
+        var trail = new PointTrail(5);
+
+        Assert.True(trail.PushIfChanged(1, 2));
+        Assert.False(trail.PushIfChanged(1, 2));
+        Assert.Equal(1, trail.Count);
+
+        Assert.True(trail.PushIfChanged(1, 3));
+        Assert.True(trail.PushIfChanged(1, 2)); // equal to an OLDER sample, not the newest: still a change
+        Assert.Equal(3, trail.Count);
+    }
+
+    [Fact]
     public void A_new_trail_is_empty()
     {
         var trail = new PointTrail(3);

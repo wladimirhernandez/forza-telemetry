@@ -551,4 +551,48 @@ public class MainViewModelTests
 
         await vm.StopCommand.ExecuteAsync(null);
     }
+
+    [Fact]
+    public async Task Toggle_decides_from_the_live_service_state_not_the_tick_updated_IsRunning()
+    {
+        var service = new TelemetryService(() => new FakeTelemetrySource());
+        var vm = new MainViewModel(service, TimeProvider.System);
+
+        await service.StartAsync(); // the service runs, but no Refresh() ran: vm.IsRunning is still the stale false
+        Assert.False(vm.IsRunning);
+
+        await vm.ToggleListeningCommand.ExecuteAsync(null); // reading the stale flag would Start again instead
+
+        Assert.False(service.IsRunning);
+    }
+
+    [Fact]
+    public async Task Commands_cannot_overlap_while_one_is_in_flight()
+    {
+        var disposeGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var fake = new FakeTelemetrySource { DisposeGate = disposeGate };
+        var service = new TelemetryService(() => fake);
+        var vm = new MainViewModel(service, TimeProvider.System);
+        await vm.StartCommand.ExecuteAsync(null);
+
+        var stopping = vm.ToggleListeningCommand.ExecuteAsync(null); // blocks inside the source's dispose
+
+        Assert.True(vm.IsBusy);
+        Assert.False(vm.StartCommand.CanExecute(null));
+        Assert.False(vm.StopCommand.CanExecute(null));
+        Assert.False(vm.ToggleListeningCommand.CanExecute(null));
+
+        // Even called from code (which skips CanExecute) a second command is dropped, not run concurrently.
+        await vm.StopCommand.ExecuteAsync(null);
+        await vm.ToggleListeningCommand.ExecuteAsync(null);
+        Assert.False(stopping.IsCompleted);
+
+        disposeGate.SetResult();
+        await stopping;
+
+        Assert.False(vm.IsBusy);
+        Assert.False(service.IsRunning);
+        Assert.True(vm.StartCommand.CanExecute(null));
+        Assert.False(vm.StopCommand.CanExecute(null));
+    }
 }

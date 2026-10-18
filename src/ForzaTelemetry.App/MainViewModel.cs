@@ -34,6 +34,10 @@ public sealed partial class MainViewModel : ObservableObject
     private const float DefaultMaxRpm = 9000f;
     private const string NoGearLabel = "-";
 
+    // The documented range of a real performance index; 0 (menus, loading) and anything outside it is not a car.
+    private const int MinPerformanceIndex = 100;
+    private const int MaxPerformanceIndex = 999;
+
     private readonly TelemetryService _telemetryService;
     private readonly TimeProvider _timeProvider;
     private readonly INetworkInfo? _networkInfo;
@@ -454,7 +458,7 @@ public sealed partial class MainViewModel : ObservableObject
         TorqueRatio = DashboardMath.Normalize(TorqueNm, 0, _peakTorqueNm);
         BoostRatio = DashboardMath.Normalize(BoostPsi, 0, _peakBoostPsi);
 
-        HasCarInfo = p.CarPerformanceIndex > 0;
+        HasCarInfo = p.CarPerformanceIndex is >= MinPerformanceIndex and <= MaxPerformanceIndex;
         CarClassLabel = CarInfoFormatter.ClassLabel(p.CarClass);
         CarPerformanceIndex = p.CarPerformanceIndex;
         DrivetrainLabel = CarInfoFormatter.DrivetrainLabel(p.DrivetrainType);
@@ -515,18 +519,65 @@ public sealed partial class MainViewModel : ObservableObject
         _ => string.Format(CultureInfo.CurrentCulture, Strings.ErrorGeneric, fault.Message)
     };
 
-    private bool CanStart() => !IsRunning;
+    // ---- Start / Stop / Toggle ------------------------------------------------------------
+    //
+    // Three commands, one lock. They all end up in TelemetryService, so two of them overlapping (a double click on
+    // the toggle, Stop pressed while a slow Start is still awaiting) must be impossible. IsBusy is the shared
+    // "a command is in flight" flag: it disables all three buttons AND makes the guard in RunExclusiveAsync drop a
+    // call that arrives anyway (ExecuteAsync from code does not consult CanExecute). It is only touched on the UI
+    // thread, so a plain bool is enough.
+    // CanStart/CanStop read the service's LIVE state, not IsRunning: that property is only refreshed by the 20 Hz
+    // tick, so right after a Start it can still say "stopped" for up to 50 ms.
 
-    private bool CanStop() => IsRunning;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StopCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ToggleListeningCommand))]
+    private bool _isBusy;
+
+    private bool CanStart() => !IsBusy && !_telemetryService.IsRunning;
+
+    private bool CanStop() => !IsBusy && _telemetryService.IsRunning;
+
+    private bool CanToggle() => !IsBusy;
+
+    private async Task RunExclusiveAsync(Func<Task> action)
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            await action();
+        }
+        finally
+        {
+            IsBusy = false;
+            // The service's state changed while IsRunning (the tick copy) did not notify: re-evaluate the buttons now.
+            StartCommand.NotifyCanExecuteChanged();
+            StopCommand.NotifyCanExecuteChanged();
+        }
+    }
 
     // [RelayCommand]: CommunityToolkit.Mvvm's source generator turns this method into a public
-    // `StartCommand` property (an IAsyncRelayCommand) that MainWindow.xaml binds a Button.Command to.
-    // Two separate commands (Start/Stop), each with its own CanExecute, is the clearer pattern for a
-    // first look at commands: the Button's enabled state follows directly from ONE boolean condition
-    // per button, instead of one toggle button whose single Content/meaning has to flip depending on
-    // hidden state — that flip is exactly the kind of thing that is easy to get backwards early on.
+    // `StartCommand` property (an IAsyncRelayCommand) that can be bound to a Button.Command.
     [RelayCommand(CanExecute = nameof(CanStart))]
-    private async Task StartAsync()
+    private Task StartAsync() => RunExclusiveAsync(StartCoreAsync);
+
+    [RelayCommand(CanExecute = nameof(CanStop))]
+    private Task StopAsync() => RunExclusiveAsync(StopCoreAsync);
+
+    // The single Start/Stop toggle button: it does whatever the service's CURRENT state allows, decided INSIDE the
+    // lock (after any in-flight command finished), so it can never pick Start from a stale answer. The button's
+    // label/icon/look are switched by the view from IsRunning, so no text lives here.
+    [RelayCommand(CanExecute = nameof(CanToggle))]
+    private Task ToggleListeningAsync() =>
+        RunExclusiveAsync(() => _telemetryService.IsRunning ? StopCoreAsync() : StartCoreAsync());
+
+    private async Task StartCoreAsync()
     {
         RefreshDataOutAddress(); // The user may have changed network since the last Start.
         await _telemetryService.StartAsync();
@@ -537,15 +588,7 @@ public sealed partial class MainViewModel : ObservableObject
         Refresh(); // Show the result (running, or a friendly fault) immediately, without waiting for the next tick.
     }
 
-    // One command for the single Start/Stop toggle button: it does whatever the CURRENT state allows. The button's
-    // label/icon/look are switched by the view from IsRunning, so no text lives here. It has no CanExecute of its own:
-    // an [RelayCommand] async method disables itself while it is running, which also blocks a double click.
-    // StartCommand and StopCommand stay public (tests and any future shortcut use them).
-    [RelayCommand]
-    private Task ToggleListeningAsync() => IsRunning ? StopAsync() : StartAsync();
-
-    [RelayCommand(CanExecute = nameof(CanStop))]
-    private async Task StopAsync()
+    private async Task StopCoreAsync()
     {
         await _telemetryService.StopAsync();
 

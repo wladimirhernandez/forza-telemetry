@@ -56,12 +56,16 @@ public static class DashboardMath
     public static double ShiftProgress(double rpm, double maxRpm) =>
         maxRpm > 0 ? Normalize(rpm / maxRpm, ShiftBandStart, RedlineFraction) : 0;
 
+    // Floating-point noise (0.2 * 15 = 3.0000000000000004) must not light a 4th segment at an exact boundary.
+    // Far smaller than any real step (1 / segmentCount) but far larger than double rounding error.
+    private const double LitSegmentEpsilon = 1e-9;
+
     /// <summary>
     /// Number of segments to light for a 0..1 progress. Rounds UP so the very first bit of progress already lights
     /// the first segment (a strip that stays dark until 1/15 of the way feels broken).
     /// </summary>
     public static int LitSegments(double progress, int segmentCount) =>
-        (int)Math.Ceiling(Clamp01(progress) * segmentCount);
+        (int)Math.Ceiling(Clamp01(progress) * segmentCount - LitSegmentEpsilon);
 
     /// <summary>Colour zone of a shift-light segment: 0 green, 1 amber, 2 red.</summary>
     public static int ShiftZone(int segmentIndex, int segmentCount)
@@ -86,7 +90,9 @@ public static class DashboardMath
     /// <returns>x and y in -1..1 in SCREEN orientation: y grows downward, so forward acceleration comes out negative (up).</returns>
     public static (double X, double Y) ToMeterPoint(double lateralG, double longitudinalG, double maxG)
     {
-        if (maxG <= 0 || double.IsNaN(lateralG) || double.IsNaN(longitudinalG))
+        // IsFinite (not IsNaN): an Infinity would divide to Infinity and the normalisation below would turn it into NaN
+        // (Infinity / Infinity), which WPF then rejects as a drawing coordinate.
+        if (maxG <= 0 || !double.IsFinite(lateralG) || !double.IsFinite(longitudinalG))
         {
             return (0, 0);
         }

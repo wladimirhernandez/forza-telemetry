@@ -66,6 +66,16 @@ public sealed class ShiftLightStrip : FrameworkElement
     {
         // Safety net: never leave a Rendering handler behind when the control leaves the visual tree.
         Unloaded += (_, _) => StopListening();
+
+        // The mirror image: a control can be unloaded and loaded again (tab switch, re-parenting) while IsRedline
+        // never changes, so OnIsRedlineChanged would not fire again. Resume the blink here if it is still due.
+        Loaded += (_, _) =>
+        {
+            if (IsRedline)
+            {
+                StartListening();
+            }
+        };
     }
 
     /// <summary>Current engine RPM.</summary>

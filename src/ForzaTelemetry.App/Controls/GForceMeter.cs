@@ -14,10 +14,11 @@ namespace ForzaTelemetry.App.Controls;
 /// "braking = down/back" and matches the numbers shown next to the meter.)
 /// <para>
 /// <b>The trail:</b> the fading dots live in a <see cref="PointTrail"/> ring buffer sized for ~1.5 s at the 20 Hz UI
-/// refresh. A sample is recorded at the START of <see cref="OnRender"/>: WPF renders once after the view model has
-/// updated both <see cref="LateralG"/> and <see cref="LongitudinalG"/> (each change invalidates, WPF coalesces them
-/// into one render), so each recorded sample is exactly what was just drawn, and nothing is recorded while no new
-/// telemetry arrives. The fade uses <c>PushOpacity</c> (a cheap alpha multiplier applied to the dots drawn inside)
+/// refresh. A sample is recorded at the START of <see cref="OnRender"/>, but ONLY when the bound acceleration changed
+/// since the last sample (a dirty flag set by the property-changed callbacks, then <see cref="PointTrail.PushIfChanged"/>).
+/// WPF renders once after the view model has updated both <see cref="LateralG"/> and <see cref="LongitudinalG"/>, so
+/// the two changes coalesce into one sample. A render caused by anything else (resize, DPI change, a brush swap)
+/// leaves the flag clear and the trail untouched; recording on every render would fill the history with duplicates. The fade uses <c>PushOpacity</c> (a cheap alpha multiplier applied to the dots drawn inside)
 /// instead of one pre-built brush per alpha level.
 /// </para>
 /// </remarks>
@@ -30,11 +31,11 @@ public sealed class GForceMeter : FrameworkElement
 
     public static readonly DependencyProperty LateralGProperty = DependencyProperty.Register(
         nameof(LateralG), typeof(double), typeof(GForceMeter),
-        new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender));
+        new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender, OnAccelerationChanged));
 
     public static readonly DependencyProperty LongitudinalGProperty = DependencyProperty.Register(
         nameof(LongitudinalG), typeof(double), typeof(GForceMeter),
-        new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender));
+        new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.AffectsRender, OnAccelerationChanged));
 
     /// <summary>The g value at the edge of the meter. Anything beyond it is pinned to the edge.</summary>
     public static readonly DependencyProperty MaxGProperty = DependencyProperty.Register(
@@ -57,12 +58,16 @@ public sealed class GForceMeter : FrameworkElement
 
     private readonly PointTrail _trail = new(TrailLength);
     private Pen? _ringPen;
+    private bool _sampleDirty; // set when LateralG/LongitudinalG changed and the trail has not recorded it yet
 
     public int TrailResetToken
     {
         get => (int)GetValue(TrailResetTokenProperty);
         set => SetValue(TrailResetTokenProperty, value);
     }
+
+    private static void OnAccelerationChanged(DependencyObject d, DependencyPropertyChangedEventArgs e) =>
+        ((GForceMeter)d)._sampleDirty = true;
 
     private static void OnTrailResetTokenChanged(DependencyObject d, DependencyPropertyChangedEventArgs e) =>
         ((GForceMeter)d)._trail.Clear();
@@ -123,7 +128,11 @@ public sealed class GForceMeter : FrameworkElement
         drawingContext.DrawLine(_ringPen, new Point(center.X, center.Y - radius), new Point(center.X, center.Y + radius));
 
         var (x, y) = DashboardMath.ToMeterPoint(LateralG, LongitudinalG, maxG);
-        _trail.Push(x, y);
+        if (_sampleDirty)
+        {
+            _sampleDirty = false;
+            _trail.PushIfChanged(x, y);
+        }
 
         // Oldest first, so newer (more opaque) dots paint over older ones.
         for (var age = _trail.Count - 1; age >= 1; age--)

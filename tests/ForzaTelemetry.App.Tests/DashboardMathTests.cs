@@ -63,6 +63,8 @@ public class DashboardMathTests
     [InlineData(0.5, 15, 8)]
     [InlineData(1.0, 15, 15)]
     [InlineData(2.0, 15, 15)]
+    [InlineData(0.2, 15, 3)] // 0.2 * 15 = 3.0000000000000004: an exact boundary must not light a 4th segment
+    [InlineData(0.6, 5, 3)]
     public void LitSegments_rounds_up_and_clamps(double progress, int count, int expected) =>
         Assert.Equal(expected, DashboardMath.LitSegments(progress, count));
 
@@ -102,6 +104,13 @@ public class DashboardMathTests
         Assert.Equal(1.0, Math.Sqrt(x * x + y * y), precision: 6);
         Assert.True(x > 0 && y > 0);
     }
+
+    [Theory]
+    [InlineData(double.PositiveInfinity, 0)]
+    [InlineData(0, double.NegativeInfinity)]
+    [InlineData(double.PositiveInfinity, double.PositiveInfinity)]
+    public void ToMeterPoint_returns_the_center_for_Infinity(double lateral, double longitudinal) =>
+        Assert.Equal((0.0, 0.0), DashboardMath.ToMeterPoint(lateral, longitudinal, 1.5));
 
     [Fact]
     public void ToMeterPoint_returns_the_center_for_NaN() =>
