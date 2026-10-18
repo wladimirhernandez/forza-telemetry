@@ -9,9 +9,12 @@
              mc:Ignorable="d"
              d:DesignWidth="1300" d:DesignHeight="700">
     <!--
-      The Analysis page: a header with the window selector, the stacked trace chart in a card, and a strip of live
-      readouts. The DataContext is an AnalysisViewModel (handed down by the implicit DataTemplate in MainWindow).
-      The chart and the empty state share one grid cell; Visibility bound to HasData / IsEmpty decides which one shows.
+      The Analysis page: a header with the mode and window selectors, a chart card (the stacked live traces, or the current lap
+      laid over the best lap) and a strip of readouts. The DataContext is an AnalysisViewModel (handed down by the implicit
+      DataTemplate in MainWindow). Each mode's chart and its empty state share one grid cell; Visibility bound to the view model's
+      Show* flags decides which one shows. The comparison parts bind to the nested LapComparisonViewModel: its Visibility sits on an
+      outer element (bound to the page's mode) and the DataContext switch on the element inside it, because a binding on an element
+      resolves against that element's OWN DataContext.
     -->
     <UserControl.Resources>
         <!-- One live readout tile: small muted label above a big thin numeral. -->
@@ -22,6 +25,21 @@
             <Setter Property="FontSize" Value="30" />
             <Setter Property="Margin" Value="0,2,0,0" />
         </Style>
+
+        <!-- The gap tile's numeral: green when ahead of the best lap, red when behind (the Laps page's colours), plain when level or unknown. -->
+        <Style x:Key="GapValue" TargetType="TextBlock" BasedOn="{StaticResource ReadoutValue}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding GapState}" Value="Ahead">
+                    <Setter Property="Foreground" Value="{StaticResource ThrottleBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding GapState}" Value="Behind">
+                    <Setter Property="Foreground" Value="{StaticResource BrakeBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding GapState}" Value="Hidden">
+                    <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
 
     <Grid Margin="28,18,28,18">
@@ -31,31 +49,39 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Header: title on the left, time window selector on the right. -->
+        <!-- Header: title and mode selector on the left, time window selector (live mode only) on the right. -->
         <DockPanel Grid.Row="0">
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center"
+                        Visibility="{Binding IsLiveMode, Converter={StaticResource BoolToVisibility}}">
                 <TextBlock Text="{x:Static res:InsightsStrings.AnalysisWindowLabel}" Style="{StaticResource MutedLabel}"
                            VerticalAlignment="Center" Margin="0,0,12,0" />
                 <ListBox Style="{StaticResource SegmentedListBox}" ItemsSource="{Binding WindowOptions}"
                          SelectedValue="{Binding WindowSeconds, Mode=TwoWay}"
                          AutomationProperties.Name="{x:Static res:InsightsStrings.AnalysisWindowLabel}" />
             </StackPanel>
-            <TextBlock Text="{x:Static res:InsightsStrings.AnalysisTitle}" Style="{StaticResource ValueText}"
-                       FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center" />
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="{x:Static res:InsightsStrings.AnalysisTitle}" Style="{StaticResource ValueText}"
+                           FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <ListBox Style="{StaticResource SegmentedListBox}" ItemsSource="{Binding ModeOptions}"
+                         SelectedValue="{Binding Mode, Mode=TwoWay}" Margin="22,0,0,0"
+                         Visibility="{Binding HasModes, Converter={StaticResource BoolToVisibility}}"
+                         AutomationProperties.Name="{x:Static res:InsightsStrings.AnalysisModeName}" />
+            </StackPanel>
         </DockPanel>
 
         <!-- Chart card. -->
-        <Border Grid.Row="1" Style="{StaticResource CardStyle}" Margin="0,14,0,14" Padding="10,14,10,6"
-                AutomationProperties.Name="{x:Static res:InsightsStrings.AnalysisChartName}">
+        <Border Grid.Row="1" Style="{StaticResource CardStyle}" Margin="0,14,0,14" Padding="10,14,10,6">
             <Grid>
+                <!-- ===== Live traces ===== -->
                 <controls:TraceChart Samples="{Binding Samples}" SampleCount="{Binding SampleCount}"
                                      DataVersion="{Binding DataVersion}" WindowSeconds="{Binding WindowSeconds}"
                                      SpeedScale="{Binding SpeedScale}" SpeedUnit="{Binding SpeedUnitLabel}"
-                                     Visibility="{Binding HasData, Converter={StaticResource BoolToVisibility}}" />
+                                     Visibility="{Binding ShowLiveChart, Converter={StaticResource BoolToVisibility}}"
+                                     AutomationProperties.Name="{x:Static res:InsightsStrings.AnalysisChartName}" />
 
                 <!-- Empty state: shown until the first sample of a running race arrives. -->
                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="440"
-                            Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
+                            Visibility="{Binding ShowLiveEmpty, Converter={StaticResource BoolToVisibility}}">
                     <Border Width="72" Height="72" CornerRadius="{StaticResource PillRadius}" HorizontalAlignment="Center"
                             Background="{StaticResource CardRaisedBrush}" BorderBrush="{StaticResource HairlineBrush}"
                             BorderThickness="1">
@@ -72,11 +98,45 @@
                     <TextBlock Text="{x:Static res:InsightsStrings.AnalysisEmptyHint}" Style="{StaticResource MutedLabel}"
                                FontSize="14" TextWrapping="Wrap" TextAlignment="Center" Margin="0,8,0,0" LineHeight="21" />
                 </StackPanel>
+
+                <!-- ===== Lap comparison ===== -->
+                <Grid Visibility="{Binding IsCompareMode, Converter={StaticResource BoolToVisibility}}">
+                    <Grid DataContext="{Binding Comparison}">
+                        <controls:LapCompareChart CurrentTrace="{Binding CurrentTrace}" CurrentCount="{Binding CurrentCount}"
+                                                  BestTrace="{Binding BestTrace}" BestCount="{Binding BestCount}"
+                                                  DataVersion="{Binding DataVersion}" BestVersion="{Binding BestVersion}"
+                                                  SpeedScale="{Binding SpeedScale}" SpeedUnit="{Binding SpeedUnitLabel}"
+                                                  DistanceScale="{Binding DistanceScale}" DistanceUnit="{Binding DistanceUnit}"
+                                                  Visibility="{Binding HasBestLap, Converter={StaticResource BoolToVisibility}}"
+                                                  AutomationProperties.Name="{x:Static res:InsightsStrings.CompareChartName}" />
+
+                        <!-- Empty state: shown until a complete lap, started from the line, has been recorded. -->
+                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="460"
+                                    Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
+                            <Border Width="72" Height="72" CornerRadius="{StaticResource PillRadius}" HorizontalAlignment="Center"
+                                    Background="{StaticResource CardRaisedBrush}" BorderBrush="{StaticResource HairlineBrush}"
+                                    BorderThickness="1">
+                                <Viewbox Width="34" Height="34" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="{Binding Source={x:Static local:PageIcons.Analysis}}"
+                                              Stroke="{StaticResource MutedBrush}" StrokeThickness="1.4"
+                                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                                    </Canvas>
+                                </Viewbox>
+                            </Border>
+                            <TextBlock Text="{x:Static res:InsightsStrings.CompareEmptyTitle}" Style="{StaticResource ValueText}"
+                                       FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" TextAlignment="Center"
+                                       TextWrapping="Wrap" Margin="0,20,0,0" />
+                            <TextBlock Text="{x:Static res:InsightsStrings.CompareEmptyHint}" Style="{StaticResource MutedLabel}"
+                                       FontSize="14" TextWrapping="Wrap" TextAlignment="Center" Margin="0,8,0,0" LineHeight="21" />
+                        </StackPanel>
+                    </Grid>
+                </Grid>
             </Grid>
         </Border>
 
-        <!-- Live readouts of the newest sample. -->
-        <Grid Grid.Row="2">
+        <!-- Readouts: the live numbers of the newest sample, or the lap comparison's summary. -->
+        <Grid Grid.Row="2" Visibility="{Binding IsLiveMode, Converter={StaticResource BoolToVisibility}}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
@@ -129,6 +189,58 @@
                                Foreground="{StaticResource ColdBrush}" />
                 </StackPanel>
             </Border>
+        </Grid>
+
+        <Grid Grid.Row="2" Visibility="{Binding IsCompareMode, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel DataContext="{Binding Comparison}">
+                <!-- Why the lap in progress is not drawn (it was joined midway). A live region: announced when it appears. -->
+                <TextBlock Text="{Binding Note}" Foreground="{StaticResource WarmBrush}" FontSize="13" TextWrapping="Wrap"
+                           Margin="2,0,0,10" Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibility}}"
+                           AutomationProperties.LiveSetting="Polite" />
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0" Style="{StaticResource ReadoutTile}" Margin="0,0,10,0">
+                        <StackPanel>
+                            <TextBlock Text="{x:Static res:InsightsStrings.CompareTileBest}" Style="{StaticResource MutedLabel}" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding BestLapText}" Style="{StaticResource ReadoutValue}" />
+                                <TextBlock Text="{Binding BestLapNote}" Style="{StaticResource MutedLabel}"
+                                           VerticalAlignment="Bottom" Margin="10,0,0,5" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Style="{StaticResource ReadoutTile}" Margin="0,0,10,0">
+                        <StackPanel>
+                            <TextBlock Text="{x:Static res:InsightsStrings.CompareTileCurrent}" Style="{StaticResource MutedLabel}" />
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding CurrentLapText}" Style="{StaticResource ReadoutValue}"
+                                           Foreground="{StaticResource ColdBrush}" />
+                                <TextBlock Text="{Binding CurrentLapNote}" Style="{StaticResource MutedLabel}"
+                                           VerticalAlignment="Bottom" Margin="10,0,0,5" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="2" Style="{StaticResource ReadoutTile}" Margin="0,0,10,0">
+                        <StackPanel>
+                            <TextBlock Text="{x:Static res:InsightsStrings.CompareTileGap}" Style="{StaticResource MutedLabel}" />
+                            <TextBlock Text="{Binding GapText}" Style="{StaticResource GapValue}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="3" Style="{StaticResource ReadoutTile}">
+                        <StackPanel>
+                            <TextBlock Text="{x:Static res:InsightsStrings.CompareTileDistance}" Style="{StaticResource MutedLabel}" />
+                            <TextBlock Text="{Binding DistanceText}" Style="{StaticResource ReadoutValue}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </StackPanel>
         </Grid>
     </Grid>
 </UserControl>

@@ -146,6 +146,9 @@ public partial class App : Application, IAppRestarter
             new NetworkListManagerProfileInfo(loggerFactory.CreateLogger<NetworkListManagerProfileInfo>()));
         var guide = new ConnectionGuideViewModel(_telemetryService, dataOut, senders, TimeProvider.System, _settings);
         var folderOpener = new ExplorerFolderOpener(loggerFactory.CreateLogger<ExplorerFolderOpener>());
+
+        // The Save dialog behind every "Export CSV" button (Laps, Performance, each recording in Sessions).
+        var fileDialog = new WpfFileSaveDialog();
         var settingsPage = new SettingsViewModel(
             _settings,
             dataOut,
@@ -164,7 +167,8 @@ public partial class App : Application, IAppRestarter
             new WpfConfirmationService(),
             folderOpener,
             loggerFactory.CreateLogger<SessionsViewModel>(),
-            carNames);
+            carNames,
+            fileDialog);
 
         // The per-car bests are read once here; a missing or damaged file is not an error (the store logs it).
         var history = new PerformanceHistoryStore(
@@ -172,12 +176,12 @@ public partial class App : Application, IAppRestarter
         StartupGuard.Run(_logger, "load performance history", history.Load);
         _performance = new PerformanceViewModel(
             engines.Acceleration, engines.TopSpeed, engines.CarChanges, history, units, new WpfConfirmationService(), carNames, carRename,
-            engines.Braking);
+            engines.Braking, fileDialog, loggerFactory.CreateLogger<PerformanceViewModel>());
 
-        var lapsPage = new LapsViewModel(engines.Laps);
+        var lapsPage = new LapsViewModel(engines.Laps, fileDialog, loggerFactory.CreateLogger<LapsViewModel>());
 
         // The insights pages read the engines the receive loop feeds; they are only refreshed while their tab is showing.
-        var analysisPage = new AnalysisViewModel(engines.History, units);
+        var analysisPage = new AnalysisViewModel(engines.History, units, engines.LapTraces);
         var mapPage = new MapViewModel(engines.Path, engines.History, units);
         var tuningPage = new TuningViewModel(engines.Dyno, engines.History, engines.Bottoming, units, carNames: carNames);
 

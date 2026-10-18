@@ -6,6 +6,7 @@ using ForzaTelemetry.App.Resources;
 using ForzaTelemetry.App.Services;
 using ForzaTelemetry.Core;
 using ForzaTelemetry.Core.Performance;
+using Microsoft.Extensions.Logging;
 
 namespace ForzaTelemetry.App;
 
@@ -161,6 +162,8 @@ public sealed partial class PerformanceViewModel : ObservableObject
 
     private readonly CarNameStore? _carNames;
     private readonly CarRenameViewModel? _carRename;
+    private readonly CsvExportRunner? _export;
+    private readonly TimeProvider _time;
 
     private AccelerationSnapshot _snapshot = AccelerationSnapshot.Empty;
     private BrakingSnapshot _brakingSnapshot = BrakingSnapshot.Empty;
@@ -185,6 +188,9 @@ public sealed partial class PerformanceViewModel : ObservableObject
     /// <param name="carNames">The player's car nicknames, shown wherever a car is named; optional (cars then show as "Car #1234").</param>
     /// <param name="carRename">The shared rename box the rename buttons open; optional (the buttons then do nothing).</param>
     /// <param name="braking">The engine that measures the braking distance (fed by the receive loop); optional (the braking tile then stays empty).</param>
+    /// <param name="saveDialog">Asks where to save the CSV; optional (the Export button is then disabled).</param>
+    /// <param name="logger">Receives export failures; optional.</param>
+    /// <param name="time">Clock for the suggested file name; defaults to the system clock.</param>
     public PerformanceViewModel(
         AccelerationTimer acceleration,
         TopSpeedTracker topSpeed,
@@ -194,9 +200,14 @@ public sealed partial class PerformanceViewModel : ObservableObject
         IConfirmationService? confirmation = null,
         CarNameStore? carNames = null,
         CarRenameViewModel? carRename = null,
-        BrakingTest? braking = null)
+        BrakingTest? braking = null,
+        IFileSaveDialog? saveDialog = null,
+        ILogger? logger = null,
+        TimeProvider? time = null)
     {
         _braking = braking;
+        _time = time ?? TimeProvider.System;
+        _export = saveDialog is null ? null : new CsvExportRunner(saveDialog, ExportStatus, logger);
         _carNames = carNames;
         _carRename = carRename;
         _acceleration = acceleration;
@@ -443,6 +454,9 @@ public sealed partial class PerformanceViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasHistory))]
     [NotifyCanExecuteChangedFor(nameof(ClearHistoryCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ExportCsvCommand))]
+    [NotifyPropertyChangedFor(nameof(CanExport))]
+    [NotifyPropertyChangedFor(nameof(ExportTooltip))]
     private IReadOnlyList<CarPerformanceRow> _rows = [];
 
     public bool HasHistory => Rows.Count > 0;
@@ -513,6 +527,31 @@ public sealed partial class PerformanceViewModel : ObservableObject
         _brakingSnapshot = BrakingSnapshot.Empty;
         _topSpeedKmh = 0;
         Show();
+    }
+
+    /// <summary>The message next to the Export button (saved, or why not).</summary>
+    public ExportFeedback ExportStatus { get; } = new();
+
+    /// <summary>There is a history to export and somewhere to ask where to put it.</summary>
+    public bool CanExport => HasHistory && _export is not null;
+
+    /// <summary>Explains the Export button; when it is disabled, also says why (a greyed-out button says nothing by itself).</summary>
+    public string ExportTooltip => CanExport ? ExportStrings.ExportPerformanceTooltip : ExportStrings.ExportPerformanceDisabledTooltip;
+
+    /// <summary>
+    /// Saves every car's stored bests as a CSV file the user picks the place of. The export is of the STORED history (all cars, every
+    /// value, in fixed units), not of what the table currently shows, so the sort order and the km/h or mph setting do not change the
+    /// file (see <see cref="PerformanceCsv"/>). The records are copied before the dialog opens: the store is UI-thread-only, and the
+    /// write runs on another thread.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanExport))]
+    private async Task ExportCsvAsync()
+    {
+        var records = _history.Records;
+        var names = records.Select(r => r.Car.CarOrdinal).Distinct().Where(o => _carNames?.Find(o) is not null).ToDictionary(o => o, o => _carNames!.Find(o)); // a snapshot: the store is UI-thread-only
+        await _export!.RunAsync(
+            CsvExportRunner.SuggestedName(ExportStrings.ExportPerformanceFileName, _time.GetLocalNow()),
+            stream => PerformanceCsv.Write(stream, records, names.GetValueOrDefault));
     }
 
     /// <summary>Deletes every car's bests after the user confirmed.</summary>

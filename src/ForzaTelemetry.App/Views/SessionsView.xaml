@@ -266,8 +266,29 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
+
+                <!-- A recording is being converted to CSV: what and how far, and a way out. Only while it runs. -->
+                <Border Grid.Row="1" Margin="0,12,0,0" Padding="16,12" CornerRadius="10" Background="{StaticResource CardRaisedBrush}"
+                        Visibility="{Binding IsExporting, Converter={StaticResource BoolToVisibility}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding ExportText}" Style="{StaticResource ValueText}" FontSize="13" TextTrimming="CharacterEllipsis" />
+                            <ProgressBar Style="{StaticResource ThinProgressBar}" Margin="0,9,0,0" Foreground="{StaticResource ColdBrush}"
+                                         Minimum="0" Maximum="1" Value="{Binding ExportProgress, Mode=OneWay}"
+                                         AutomationProperties.Name="{x:Static res:ExportStrings.ExportProgressName}" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Style="{StaticResource FormButton}" Margin="18,0,0,0" VerticalAlignment="Center"
+                                Command="{Binding CancelExportCommand}" Content="{x:Static res:Strings.CancelButton}"
+                                ToolTip="{x:Static res:ExportStrings.ExportCancelTooltip}" />
+                    </Grid>
+                </Border>
 
                 <Grid Grid.Row="0">
                     <TextBlock Text="{x:Static res:SessionsStrings.SessionsLibraryTitle}" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
@@ -282,13 +303,13 @@
                 </Grid>
 
                 <!-- Column captions. The widths repeat the row template below: keep them identical or the captions drift off their data. -->
-                <Grid Grid.Row="1" Margin="0,14,0,4" Visibility="{Binding HasRows, Converter={StaticResource BoolToVisibility}}">
+                <Grid Grid.Row="2" Margin="0,14,0,4" Visibility="{Binding HasRows, Converter={StaticResource BoolToVisibility}}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="3*" />
                         <ColumnDefinition Width="1*" />
                         <ColumnDefinition Width="1*" />
                         <ColumnDefinition Width="2*" />
-                        <ColumnDefinition Width="212" />
+                        <ColumnDefinition Width="250" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0" Text="{x:Static res:SessionsStrings.SessionsColRecording}" Style="{StaticResource MutedLabel}" FontSize="12" FontWeight="SemiBold" />
                     <TextBlock Grid.Column="1" Text="{x:Static res:SessionsStrings.SessionsColDuration}" Style="{StaticResource MutedLabel}" FontSize="12" FontWeight="SemiBold" />
@@ -296,7 +317,7 @@
                     <TextBlock Grid.Column="3" Text="{x:Static res:SessionsStrings.SessionsColCars}" Style="{StaticResource MutedLabel}" FontSize="12" FontWeight="SemiBold" />
                 </Grid>
 
-                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False"
+                <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False"
                               Margin="0,0,0,8">
                     <Grid>
                         <ItemsControl ItemsSource="{Binding Rows}" IsTabStop="False">
@@ -310,7 +331,7 @@
                                                 <ColumnDefinition Width="1*" />
                                                 <ColumnDefinition Width="1*" />
                                                 <ColumnDefinition Width="2*" />
-                                                <ColumnDefinition Width="212" />
+                                                <ColumnDefinition Width="250" />
                                             </Grid.ColumnDefinitions>
 
                                             <!-- Name cell: the name and its date, or the rename box with its message. -->
@@ -405,6 +426,12 @@
                                                         AutomationProperties.Name="{Binding RenameName}">
                                                     <Path Data="{StaticResource PencilIcon}" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                                                           StrokeThickness="1.3" StrokeLineJoin="Round" Stretch="None" />
+                                                </Button>
+                                                <Button Style="{StaticResource WindowGlyphButton}" Margin="2,0,0,0" Command="{Binding ExportCommand}"
+                                                        ToolTip="{Binding ExportTooltip}" ToolTipService.ShowOnDisabled="True"
+                                                        AutomationProperties.Name="{Binding ExportName}">
+                                                    <Path Data="{StaticResource ExportIcon}" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                                          StrokeThickness="1.3" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Stretch="None" />
                                                 </Button>
                                                 <Button Style="{StaticResource CloseGlyphButton}" Margin="2,0,0,0" Command="{Binding DeleteCommand}"
                                                         IsEnabled="{Binding CanModify}" ToolTip="{Binding DeleteTooltip}" ToolTipService.ShowOnDisabled="True"

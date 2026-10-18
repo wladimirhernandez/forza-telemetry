@@ -1,8 +1,11 @@
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using ForzaTelemetry.App.Resources;
+using ForzaTelemetry.App.Services;
 using ForzaTelemetry.Core;
 using ForzaTelemetry.Core.Laps;
+using Microsoft.Extensions.Logging;
 
 namespace ForzaTelemetry.App;
 
@@ -65,11 +68,42 @@ public sealed partial class LapsViewModel : ObservableObject
     // so reference equality tells "nothing new" without comparing or rebuilding 20 times a second.
     private IReadOnlyList<LapRecord>? _rowsBuiltFrom;
 
+    private readonly CsvExportRunner? _export;
+    private readonly TimeProvider _time;
+
     /// <param name="tracker">The engine that follows laps (fed by the receive loop).</param>
-    public LapsViewModel(LapTracker tracker)
+    /// <param name="saveDialog">Asks where to save the CSV; optional (the Export button is then disabled).</param>
+    /// <param name="logger">Receives export failures; optional.</param>
+    /// <param name="time">Clock for the suggested file name; defaults to the system clock.</param>
+    public LapsViewModel(LapTracker tracker, IFileSaveDialog? saveDialog = null, ILogger? logger = null, TimeProvider? time = null)
     {
         _tracker = tracker;
+        _time = time ?? TimeProvider.System;
+        _export = saveDialog is null ? null : new CsvExportRunner(saveDialog, ExportStatus, logger);
         Refresh(null);
+    }
+
+    /// <summary>The message next to the Export button (saved, or why not).</summary>
+    public ExportFeedback ExportStatus { get; } = new();
+
+    /// <summary>There is something to export and somewhere to ask where to put it.</summary>
+    public bool CanExport => HasLaps && _export is not null;
+
+    /// <summary>Explains the Export button; when it is disabled, also says why (a greyed-out button says nothing by itself).</summary>
+    public string ExportTooltip => CanExport ? ExportStrings.ExportLapsTooltip : ExportStrings.ExportLapsDisabledTooltip;
+
+    /// <summary>
+    /// Saves the session's laps (the list as the game counted them, oldest first) as a CSV file the user picks the place of. The
+    /// laps are read from the tracker's immutable snapshot BEFORE the dialog opens, so the file is what the list showed when the
+    /// button was pressed even if a lap finishes while the dialog is up.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanExport))]
+    private async Task ExportCsvAsync()
+    {
+        var laps = _tracker.Current.Laps;
+        await _export!.RunAsync(
+            CsvExportRunner.SuggestedName(ExportStrings.ExportLapsFileName, _time.GetLocalNow()),
+            stream => LapsCsv.Write(stream, laps));
     }
 
     // [NotifyPropertyChangedFor(HeroName)] on the four values the hero sentence is built from: the screen-reader name is
@@ -131,6 +165,9 @@ public sealed partial class LapsViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasLaps))]
     [NotifyPropertyChangedFor(nameof(EmptyText))]
     [NotifyPropertyChangedFor(nameof(HasEmptyText))]
+    [NotifyPropertyChangedFor(nameof(CanExport))]
+    [NotifyPropertyChangedFor(nameof(ExportTooltip))]
+    [NotifyCanExecuteChangedFor(nameof(ExportCsvCommand))]
     private IReadOnlyList<LapRow> _rows = [];
 
     public bool HasLaps => Rows.Count > 0;
@@ -154,7 +191,11 @@ public sealed partial class LapsViewModel : ObservableObject
     /// A new listening session starts (Start): the previous session's laps leave the screen. The tracker itself is reset by
     /// <see cref="TelemetryEngines.BeginSession"/>, before the receive loop starts.
     /// </summary>
-    public void BeginSession() => Refresh(null);
+    public void BeginSession()
+    {
+        ExportStatus.Clear(); // a message about the previous session's file is not about this one
+        Refresh(null);
+    }
 
     /// <summary>The session ends (Stop): the laps stay readable, the live clock and delta give way to placeholders.</summary>
     public void EndSession() => Refresh(null);

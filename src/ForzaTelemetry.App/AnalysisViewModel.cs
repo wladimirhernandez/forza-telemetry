@@ -3,17 +3,33 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using ForzaTelemetry.App.Resources;
 using ForzaTelemetry.App.Services;
 using ForzaTelemetry.Core.Insights;
+using ForzaTelemetry.Core.Laps;
 
 namespace ForzaTelemetry.App;
 
+/// <summary>What the Analysis page is showing.</summary>
+public enum AnalysisMode
+{
+    /// <summary>The last seconds of driving as stacked time traces, with the current numeric readouts.</summary>
+    Live,
+
+    /// <summary>The lap in progress laid over the best lap, by distance (see <see cref="LapComparisonViewModel"/>).</summary>
+    LapComparison
+}
+
 /// <summary>
-/// The Analysis screen: live traces over a selectable time window plus the current numeric readouts.
+/// The Analysis screen: live traces over a selectable time window plus the current numeric readouts, or the lap comparison.
 /// </summary>
 /// <remarks>
+/// <b>Two modes, one refresh.</b> Only the mode on screen is refreshed (the live copy of thousands of samples, or the lap traces),
+/// so the hidden half costs nothing. Switching back brings the page up to date on the next tick, because both halves read the
+/// engines' current state, not "what changed since last time".
+/// <para>
 /// <b>Cheap refresh.</b> The shell calls <see cref="Refresh"/> only while this page is showing. It copies the ring
 /// buffer into ONE array allocated at construction (<see cref="Samples"/>) and bumps <see cref="DataVersion"/> only when a
 /// new sample actually arrived, so a paused game costs nothing and the 20 Hz tick never allocates here. The chart reads the
 /// same array; it is rewritten in place on the UI thread, which is also the only thread that draws it.
+/// </para>
 /// </remarks>
 public sealed partial class AnalysisViewModel : ObservableObject, IRefreshablePage
 {
@@ -31,11 +47,26 @@ public sealed partial class AnalysisViewModel : ObservableObject, IRefreshablePa
 
     /// <param name="history">The ring buffer fed per packet by the telemetry service.</param>
     /// <param name="units">Speed unit conversion and label.</param>
-    public AnalysisViewModel(TelemetryHistory history, UnitsService units)
+    /// <param name="lapTraces">The per-lap trace recorder behind the lap comparison; optional (the mode selector is then hidden).</param>
+    public AnalysisViewModel(TelemetryHistory history, UnitsService units, LapTraceRecorder? lapTraces = null)
     {
         _history = history;
         _units = units;
         Samples = new TelemetrySample[history.Capacity];
+        if (lapTraces is not null)
+        {
+            Comparison = new LapComparisonViewModel(lapTraces, units);
+            ModeOptions =
+            [
+                new ChoiceOption<AnalysisMode>(AnalysisMode.Live, InsightsStrings.ModeLive),
+                new ChoiceOption<AnalysisMode>(AnalysisMode.LapComparison, InsightsStrings.ModeCompare)
+            ];
+        }
+        else
+        {
+            ModeOptions = [];
+        }
+
         WindowOptions =
         [
             .. WindowChoices.Select(seconds => new ChoiceOption<int>(
@@ -47,6 +78,41 @@ public sealed partial class AnalysisViewModel : ObservableObject, IRefreshablePa
 
     /// <summary>The segmented selector's items (10 / 30 / 60 s).</summary>
     public IReadOnlyList<ChoiceOption<int>> WindowOptions { get; }
+
+    /// <summary>The lap comparison; null when the page was built without a lap trace recorder.</summary>
+    public LapComparisonViewModel? Comparison { get; }
+
+    /// <summary>The "Live traces | Lap comparison" selector's items; empty when there is no comparison.</summary>
+    public IReadOnlyList<ChoiceOption<AnalysisMode>> ModeOptions { get; }
+
+    /// <summary>The mode selector is offered (there is a lap trace recorder behind it).</summary>
+    public bool HasModes => Comparison is not null;
+
+    /// <summary>What the page shows. Always <see cref="AnalysisMode.Live"/> when there is no comparison.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsLiveMode))]
+    [NotifyPropertyChangedFor(nameof(IsCompareMode))]
+    [NotifyPropertyChangedFor(nameof(ShowLiveChart))]
+    [NotifyPropertyChangedFor(nameof(ShowLiveEmpty))]
+    private AnalysisMode _mode = AnalysisMode.Live;
+
+    public bool IsLiveMode => Mode == AnalysisMode.Live;
+
+    public bool IsCompareMode => Mode == AnalysisMode.LapComparison;
+
+    /// <summary>The live traces are drawn: live mode with at least one sample.</summary>
+    public bool ShowLiveChart => IsLiveMode && HasData;
+
+    /// <summary>The live empty state is shown: live mode with nothing to draw yet.</summary>
+    public bool ShowLiveEmpty => IsLiveMode && IsEmpty;
+
+    partial void OnModeChanged(AnalysisMode value)
+    {
+        if (value == AnalysisMode.Live)
+        {
+            _lastCount = 0; // the live copy may be stale (it was not refreshed while the comparison was showing)
+        }
+    }
 
     /// <summary>The samples the chart draws, oldest first; only the first <see cref="SampleCount"/> are valid.</summary>
     public TelemetrySample[] Samples { get; }
@@ -63,6 +129,8 @@ public sealed partial class AnalysisViewModel : ObservableObject, IRefreshablePa
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsEmpty))]
+    [NotifyPropertyChangedFor(nameof(ShowLiveChart))]
+    [NotifyPropertyChangedFor(nameof(ShowLiveEmpty))]
     private bool _hasData;
 
     public bool IsEmpty => !HasData;
@@ -104,11 +172,18 @@ public sealed partial class AnalysisViewModel : ObservableObject, IRefreshablePa
         SampleCount = 0;
         HasData = false;
         DataVersion++; // the chart must redraw as empty even if it is the page on screen right now
+        Comparison?.BeginSession();
     }
 
     /// <summary>Pulls the newest samples and readouts. Called by the shell on the UI thread while this page is showing.</summary>
     public void Refresh()
     {
+        if (IsCompareMode && Comparison is not null)
+        {
+            Comparison.Refresh();
+            return;
+        }
+
         SpeedUnitLabel = _units.SpeedLabel;
         SpeedScale = _units.ConvertSpeed(3.6);
 

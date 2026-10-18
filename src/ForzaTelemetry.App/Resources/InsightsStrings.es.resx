@@ -255,4 +255,61 @@
   <data name="TuningEmptyHint" xml:space="preserve">
     <value>Conduce para ver las ayudas de puesta a punto.</value>
   </data>
+  <data name="AnalysisModeName" xml:space="preserve">
+    <value>Vista de análisis</value>
+  </data>
+  <data name="ModeLive" xml:space="preserve">
+    <value>Trazas en vivo</value>
+  </data>
+  <data name="ModeCompare" xml:space="preserve">
+    <value>Comparación de vueltas</value>
+  </data>
+  <data name="CompareChartName" xml:space="preserve">
+    <value>Vuelta actual comparada con la mejor vuelta, por distancia</value>
+  </data>
+  <data name="CompareEmptyTitle" xml:space="preserve">
+    <value>Aún no hay una mejor vuelta para comparar</value>
+  </data>
+  <data name="CompareEmptyHint" xml:space="preserve">
+    <value>Completa una vuelta entera, empezando desde la línea. Tu vuelta completa más rápida se convierte en la referencia y la vuelta que conduces se superpone sobre ella por distancia.</value>
+  </data>
+  <data name="CompareNotComparable" xml:space="preserve">
+    <value>Te uniste a esta vuelta a medias, así que no se puede comparar por distancia. La siguiente sí.</value>
+  </data>
+  <data name="CompareLegendCurrent" xml:space="preserve">
+    <value>Vuelta actual</value>
+  </data>
+  <data name="CompareLegendBest" xml:space="preserve">
+    <value>Mejor vuelta</value>
+  </data>
+  <data name="CompareLaneDelta" xml:space="preserve">
+    <value>Diferencia con la mejor (s)</value>
+  </data>
+  <data name="CompareSlower" xml:space="preserve">
+    <value>Más lenta</value>
+  </data>
+  <data name="CompareFaster" xml:space="preserve">
+    <value>Más rápida</value>
+  </data>
+  <data name="CompareHeadCurrent" xml:space="preserve">
+    <value>Actual</value>
+  </data>
+  <data name="CompareHeadBest" xml:space="preserve">
+    <value>Mejor</value>
+  </data>
+  <data name="CompareAtFormat" xml:space="preserve">
+    <value>En {0} {1}</value>
+  </data>
+  <data name="CompareTileBest" xml:space="preserve">
+    <value>Mejor vuelta</value>
+  </data>
+  <data name="CompareTileCurrent" xml:space="preserve">
+    <value>Vuelta actual</value>
+  </data>
+  <data name="CompareTileGap" xml:space="preserve">
+    <value>Diferencia con la mejor</value>
+  </data>
+  <data name="CompareTileDistance" xml:space="preserve">
+    <value>Distancia en la vuelta</value>
+  </data>
 </root>

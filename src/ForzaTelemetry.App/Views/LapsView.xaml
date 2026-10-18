@@ -192,7 +192,22 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <TextBlock Grid.Row="0" Text="{x:Static res:Strings.LapsListTitle}" Style="{StaticResource SectionTitle}" />
+                <Grid Grid.Row="0">
+                    <TextBlock Text="{x:Static res:Strings.LapsListTitle}" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <!-- Saved / could not save, in a live region. -->
+                        <TextBlock DataContext="{Binding ExportStatus}" Style="{StaticResource ExportNote}" />
+                        <Button Style="{StaticResource FormButton}" Command="{Binding ExportCsvCommand}"
+                                ToolTip="{Binding ExportTooltip}" ToolTipService.ShowOnDisabled="True">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource ExportIcon}" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                      StrokeThickness="1.3" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      Stretch="None" Margin="0,0,9,0" VerticalAlignment="Center" />
+                                <TextBlock Text="{x:Static res:ExportStrings.ExportButton}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
 
                 <!-- Column headers; the widths are repeated in the row template below and must stay identical. -->
                 <Grid Grid.Row="1" Margin="0,14,0,6" Visibility="{Binding HasLaps, Converter={StaticResource BoolToVisibility}}">
