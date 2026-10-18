@@ -9,8 +9,6 @@
              d:DataContext="{d:DesignInstance local:SettingsViewModel}"
              d:DesignWidth="1300" d:DesignHeight="760">
     <UserControl.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
-
         <!--
           One numbered step of the in-game guide. A ContentControl whose Content is the step text and whose Tag is the number
           shown in the round badge (Tag is a free general-purpose slot, the same trick the status pills use for their dot).
@@ -52,17 +50,6 @@
             <Setter Property="Margin" Value="0,16,0,6" />
         </Style>
 
-        <Style x:Key="SmallNote" TargetType="TextBlock" BasedOn="{StaticResource MutedLabel}">
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="LineHeight" Value="18" />
-        </Style>
-
-        <Style x:Key="FormButton" TargetType="Button" BasedOn="{StaticResource GhostButton}">
-            <Setter Property="Height" Value="{StaticResource ControlHeight}" />
-            <Setter Property="Padding" Value="18,0" />
-            <Setter Property="HorizontalAlignment" Value="Left" />
-        </Style>
     </UserControl.Resources>
 
     <!--

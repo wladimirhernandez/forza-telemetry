@@ -9,8 +9,6 @@
              d:DataContext="{d:DesignInstance local:LapsViewModel}"
              d:DesignWidth="1300" d:DesignHeight="700">
     <UserControl.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
-
         <Style x:Key="CardTitle" TargetType="TextBlock" BasedOn="{StaticResource MutedLabel}">
             <Setter Property="FontSize" Value="13" />
             <Setter Property="VerticalAlignment" Value="Center" />

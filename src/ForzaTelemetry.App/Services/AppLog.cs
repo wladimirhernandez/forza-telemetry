@@ -70,6 +70,9 @@ internal static partial class AppLog
     [LoggerMessage(EventId = 127, Level = LogLevel.Information, Message = "UDP port changed from {OldPort} to {NewPort}; restarting the listener if it is running.")]
     public static partial void PortChanged(ILogger logger, int oldPort, int newPort);
 
+    [LoggerMessage(EventId = 137, Level = LogLevel.Warning, Message = "The settings file could not be read, so this session's changes are not saved (the file is left untouched).")]
+    public static partial void SettingsWriteSuspended(ILogger logger);
+
     [LoggerMessage(EventId = 128, Level = LogLevel.Error, Message = "Restarting the listener after a port change failed.")]
     public static partial void PortRestartFailed(ILogger logger, Exception exception);
 
@@ -147,6 +150,12 @@ internal static partial class AppLog
 
     [LoggerMessage(EventId = 185, Level = LogLevel.Warning, Message = "Could not save the car names to {Path}; the change applies until the app closes.")]
     public static partial void CarNamesSaveFailed(ILogger logger, Exception exception, string path);
+
+    [LoggerMessage(EventId = 186, Level = LogLevel.Warning, Message = "The car names file was written by a newer version (schema {Found}, this build reads {Supported}); fields it does not know are kept and written back.")]
+    public static partial void CarNamesFromNewerVersion(ILogger logger, int found, int supported);
+
+    [LoggerMessage(EventId = 187, Level = LogLevel.Warning, Message = "The car names {Path} could not be read, so changes are not written to it this session (the file is left untouched).")]
+    public static partial void CarNamesWriteSuspended(ILogger logger, string path);
 
     // ---- Sessions: recording and replay (160s) ----
 

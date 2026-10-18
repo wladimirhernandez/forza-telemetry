@@ -79,12 +79,13 @@ public partial class App : Application, IAppRestarter
 
         // Settings first: the language must be applied BEFORE anything reads a localized string (see LanguageService).
         // A missing or corrupt file is not an error here: the store logs it and hands back the defaults. The guard covers
-        // what the store does not (an unusable path, a blocked folder): factory settings, and the app still opens.
+        // what the store does not (an unusable path, a blocked folder): factory settings, and the app still opens. A file that
+        // EXISTS but could not be read is different: the defaults are then a stand-in, so the service never writes them over it.
         // Before anything can change the culture: remember what Windows gave us, so "System" keeps meaning that after Apply.
         LanguageService.CaptureSystemCulture();
 
         var store = new JsonSettingsStore(JsonSettingsStore.DefaultPath, loggerFactory.CreateLogger<JsonSettingsStore>());
-        _settings = new SettingsService(store, StartupGuard.Run(_logger, "load settings", store.Load, AppSettings.Default));
+        _settings = SettingsService.LoadFrom(store, _logger);
 
         // A culture the runtime cannot load (invariant globalization, missing culture data) is logged and skipped: the
         // text stays on the neutral English resources instead of the app refusing to start.

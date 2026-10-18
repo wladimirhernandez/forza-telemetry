@@ -161,4 +161,49 @@ public class DashboardViewModelTests
 
         await vm.StopCommand.ExecuteAsync(null);
     }
+
+    // ---- The car pill's name -------------------------------------------------------------------------------------
+
+    [Fact]
+    public void The_car_name_follows_the_car_and_a_rename_and_survives_menu_packets()
+    {
+        var directory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ForzaTelemetryTests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var names = new CarNameStore(System.IO.Path.Combine(directory, "cars.json"));
+            names.TrySet(11, "Daily GT");
+            var dashboard = new DashboardViewModel(carNames: names);
+            TelemetryPacket Drive(int ordinal) => TestPackets.Sample(carOrdinal: ordinal, performanceIndex: 700);
+
+            dashboard.Apply(Drive(11));
+            Assert.Equal("Daily GT", dashboard.CarName);
+
+            dashboard.Apply(Drive(11)); // the same car on the next tick keeps the name
+            Assert.Equal("Daily GT", dashboard.CarName);
+
+            dashboard.Apply(Drive(22)); // another car, unnamed
+            Assert.Equal(CarDisplayName.Unnamed(22), dashboard.CarName);
+
+            dashboard.Apply(Drive(11)); // and back
+            Assert.Equal("Daily GT", dashboard.CarName);
+
+            names.TrySet(11, "Track toy"); // a rename of the car on screen is picked up at once
+            Assert.Equal("Track toy", dashboard.CarName);
+
+            dashboard.ResetLive(); // pause menu: no car
+            Assert.Equal("", dashboard.CarName);
+            dashboard.Apply(Drive(11));
+            Assert.Equal("Track toy", dashboard.CarName);
+
+            names.TrySet(22, "Rally"); // a rename of a car that is NOT on screen changes nothing here
+            Assert.Equal("Track toy", dashboard.CarName);
+        }
+        finally
+        {
+            if (System.IO.Directory.Exists(directory))
+            {
+                System.IO.Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
 }

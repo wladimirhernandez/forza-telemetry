@@ -14,8 +14,6 @@
       The chart and the empty state share one grid cell; Visibility bound to HasData / IsEmpty decides which one shows.
     -->
     <UserControl.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
-
         <!-- One live readout tile: small muted label above a big thin numeral. -->
         <Style x:Key="ReadoutTile" TargetType="Border" BasedOn="{StaticResource CardStyle}">
             <Setter Property="Padding" Value="18,12" />

@@ -32,8 +32,46 @@ public static class LanguageService
     /// The app survives that for the language choice (see <see cref="ResolveCulture(AppLanguage, ILogger?)"/>), but WPF itself cannot
     /// draw text there, so the startup dialog uses this to explain the cause.
     /// </summary>
+    /// <remarks>
+    /// Three signals, because each misses a case the others catch: the runtimeconfig switch (what a published app carries), the
+    /// environment variable (what a hardened image sets, and which the switch lookup does not report), and a probe of a culture every
+    /// Windows machine has, which fails whenever the runtime has no culture data for ANY reason (a missing ICU/NLS included).
+    /// </remarks>
     public static bool IsInvariantGlobalization =>
-        AppContext.TryGetSwitch("System.Globalization.Invariant", out var invariant) && invariant;
+        DetectInvariantGlobalization(
+            AppContext.TryGetSwitch("System.Globalization.Invariant", out var invariant) ? invariant : null,
+            Environment.GetEnvironmentVariable("DOTNET_SYSTEM_GLOBALIZATION_INVARIANT"),
+            CultureInfo.GetCultureInfo);
+
+    /// <summary>The detection with its three inputs passed in, so a test can supply each one.</summary>
+    /// <param name="switchValue">The runtimeconfig/AppContext switch, or null when it is not set.</param>
+    /// <param name="environmentValue">The raw <c>DOTNET_SYSTEM_GLOBALIZATION_INVARIANT</c> value; "true" (any casing) and "1" mean on.</param>
+    /// <param name="lookup">The culture lookup the probe asks for a culture that always exists when culture data does.</param>
+    internal static bool DetectInvariantGlobalization(bool? switchValue, string? environmentValue, Func<string, CultureInfo> lookup)
+    {
+        if (switchValue is true)
+        {
+            return true;
+        }
+
+        var text = environmentValue?.Trim();
+        if (string.Equals(text, "true", StringComparison.OrdinalIgnoreCase) || text == "1")
+        {
+            return true;
+        }
+
+        try
+        {
+            lookup("en-US");
+            return false;
+        }
+        catch (Exception)
+        {
+            // Any failure of the probe means the same thing for the caller: no usable culture data. (Not only
+            // CultureNotFoundException: this is platform code, see ResolveCulture.)
+            return true;
+        }
+    }
 
     /// <summary>
     /// Remembers the culture Windows gave this process. Idempotent: only the FIRST call records anything, so a later call

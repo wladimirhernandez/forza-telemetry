@@ -97,6 +97,26 @@ public sealed class CarNamesWiringTests : IDisposable
     }
 
     [Fact]
+    public void The_trimmed_length_is_what_counts_and_pasted_text_is_never_cut()
+    {
+        var store = NewStore();
+        var box = new CarRenameViewModel(store);
+        box.Begin(2211);
+
+        // 40 real characters inside lots of padding (a paste with spaces around it): fine, and stored trimmed.
+        box.Text = "   " + new string('x', 40) + "     ";
+        Assert.Null(box.Error);
+        Assert.True(box.SaveCommand.CanExecute(null));
+
+        // A long paste is kept whole in the box (nothing silently dropped) and the player is told it is too long.
+        var pasted = new string('y', 120);
+        box.Text = pasted;
+        Assert.Equal(pasted, box.Text);
+        Assert.Equal(CarNameStore.Describe(CarNameProblem.TooLong), box.Error);
+        Assert.False(box.SaveCommand.CanExecute(null));
+    }
+
+    [Fact]
     public void Save_stores_the_trimmed_name_and_closes()
     {
         var store = NewStore();

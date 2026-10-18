@@ -338,6 +338,34 @@
         </Style>
 
         <!--
+          Shared by every screen that shows a bool as visible/collapsed, declared once here so a view does not carry its own copy.
+          The form-control styles below are the same idea: a ghost button at the standard control height, and the two paragraph
+          roles of the cards (small print and body text). They sit here, after the styles they build on, for the same reason.
+        -->
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+
+        <!-- A secondary action inside a card or dialog. Left-aligned by default (it must not stretch across a vertical panel). -->
+        <Style x:Key="FormButton" TargetType="Button" BasedOn="{StaticResource GhostButton}">
+            <Setter Property="Height" Value="{StaticResource ControlHeight}" />
+            <Setter Property="Padding" Value="18,0" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+        </Style>
+
+        <Style x:Key="SmallNote" TargetType="TextBlock" BasedOn="{StaticResource MutedLabel}">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="LineHeight" Value="18" />
+        </Style>
+
+        <Style x:Key="BodyText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="FontFamily" Value="{StaticResource LabelFont}" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="LineHeight" Value="20" />
+        </Style>
+
+        <!--
           ONE button for Start and Stop. A DataTrigger on the view model's IsRunning swaps the whole Template (green
           primary while stopped, neutral outline while running) and the foreground that goes with it. The label and
           the icon are switched the same way at the use site, so the view model needs no "button text" property.

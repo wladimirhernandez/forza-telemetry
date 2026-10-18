@@ -39,6 +39,10 @@ public sealed partial class DashboardViewModel : ObservableObject
     private double _peakBoostPsi = PeakBoostFloorPsi;
     private int? _currentCarOrdinal;
 
+    // The car the CURRENT name was built for (null while there is no real car). The name is formatted (and its store looked up) only when
+    // this changes, or when a rename event fires, not on every 20 Hz packet.
+    private int? _namedCarOrdinal;
+
     private readonly UnitsService _units;
     private readonly CarNameStore? _carNames;
 
@@ -234,7 +238,7 @@ public sealed partial class DashboardViewModel : ObservableObject
             {
                 if (CarOrdinal > 0)
                 {
-                    CarName = CarDisplayName.For(CarOrdinal, _carNames);
+                    CarName = CarDisplayName.For(CarOrdinal, _carNames); // a rename of the car on screen
                 }
             };
         }
@@ -332,6 +336,7 @@ public sealed partial class DashboardViewModel : ObservableObject
         DrivetrainLabel = "";
         CarName = "";
         CarOrdinal = 0;
+        _namedCarOrdinal = null;
 
         FrontLeft.Reset();
         FrontRight.Reset();
@@ -412,6 +417,11 @@ public sealed partial class DashboardViewModel : ObservableObject
 
         // The pill only shows for a real car, so only a real car can be named; menu packets carry ordinal 0 or stale values.
         CarOrdinal = HasCarInfo ? p.CarOrdinal : 0;
-        CarName = HasCarInfo ? CarDisplayName.For(p.CarOrdinal, _carNames) : "";
+        int? namedFor = HasCarInfo ? p.CarOrdinal : null;
+        if (namedFor != _namedCarOrdinal)
+        {
+            _namedCarOrdinal = namedFor;
+            CarName = namedFor is { } ordinal ? CarDisplayName.For(ordinal, _carNames) : "";
+        }
     }
 }

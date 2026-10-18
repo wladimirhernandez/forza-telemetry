@@ -14,14 +14,6 @@
       CarRenameViewModel.IsOpen). One box serves every "rename" button of the app. Enter saves, Esc cancels (both are key bindings on the
       text box, where the focus is while typing), and the message under the box follows the typing.
     -->
-    <UserControl.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
-
-        <Style x:Key="FormButton" TargetType="Button" BasedOn="{StaticResource GhostButton}">
-            <Setter Property="Height" Value="{StaticResource ControlHeight}" />
-            <Setter Property="Padding" Value="18,0" />
-        </Style>
-    </UserControl.Resources>
 
     <Grid>
         <Grid.Background>
@@ -37,8 +29,10 @@
                 <TextBlock Text="{x:Static res:CarNameStrings.CarRenameHint}" Style="{StaticResource MutedLabel}" FontSize="13"
                            LineHeight="19" TextWrapping="Wrap" Margin="0,8,0,0" />
 
-                <!-- Tag carries "has an error" into the text box template (red border); every keystroke reaches the view model. -->
-                <TextBox x:Name="NameBox" Style="{StaticResource InputTextBox}" MaxLength="40" Margin="0,16,0,0"
+                <!-- Tag carries "has an error" into the text box template (red border); every keystroke reaches the view model. There is
+                     deliberately no MaxLength: it would silently cut pasted text, while the view model counts the TRIMMED name and says
+                     "too long" (Save stays disabled), so the player sees what is wrong and nothing is ever dropped without notice. -->
+                <TextBox x:Name="NameBox" Style="{StaticResource InputTextBox}" Margin="0,16,0,0"
                          Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" Tag="{Binding HasError}"
                          AutomationProperties.Name="{x:Static res:CarNameStrings.CarRenameBoxName}"
                          AutomationProperties.HelpText="{Binding Error}">

@@ -16,26 +16,12 @@
       (right). Every state change comes from the view model, so there is no logic here beyond mapping states to icons.
     -->
     <UserControl.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
-
-        <Style x:Key="SmallNote" TargetType="TextBlock" BasedOn="{StaticResource MutedLabel}">
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="LineHeight" Value="18" />
-        </Style>
-
         <Style x:Key="BodyText" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
             <Setter Property="FontFamily" Value="{StaticResource LabelFont}" />
             <Setter Property="FontSize" Value="14" />
             <Setter Property="TextWrapping" Value="Wrap" />
             <Setter Property="LineHeight" Value="20" />
-        </Style>
-
-        <Style x:Key="FormButton" TargetType="Button" BasedOn="{StaticResource GhostButton}">
-            <Setter Property="Height" Value="{StaticResource ControlHeight}" />
-            <Setter Property="Padding" Value="18,0" />
-            <Setter Property="HorizontalAlignment" Value="Left" />
         </Style>
 
         <!-- One numbered in-game step (the same badge look as the Settings guide). Tag carries the number. -->
@@ -232,7 +218,7 @@
 
                             <Button Style="{StaticResource PrimaryButton}" Height="{StaticResource ControlHeight}" Padding="22,0"
                                     HorizontalAlignment="Left" Margin="0,2,0,0" Command="{Binding StartListeningCommand}"
-                                    Content="{x:Static res:SetupStrings.SetupStartListeningButton}"
+                                    Content="{Binding StartListeningLabel}"
                                     Visibility="{Binding CanStartListening, Converter={StaticResource BoolToVisibility}}" />
 
                             <!-- Public network: the usual reason that "everything is set up and nothing arrives". -->

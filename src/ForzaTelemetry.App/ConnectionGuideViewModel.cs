@@ -29,7 +29,7 @@ public interface IConnectionGuideHost
 /// <para>
 /// <b>When it opens.</b> By itself once, on the first launch (<see cref="OpenIfFirstRun"/>, until the user finishes or dismisses it,
 /// which persists <see cref="AppSettings.HasCompletedSetup"/>), and on request afterwards from the dashboard's waiting state and from
-/// Settings. While it is closed, <see cref="Refresh"/> does nothing, so it costs the tick nothing.
+/// Settings. While it is closed, <see cref="Refresh"/> only keeps the listening clock, so it costs the tick next to nothing.
 /// </para>
 /// </remarks>
 public sealed partial class ConnectionGuideViewModel : ObservableObject
@@ -119,10 +119,14 @@ public sealed partial class ConnectionGuideViewModel : ObservableObject
     [ObservableProperty]
     private bool _showNetworkFix;
 
-    /// <summary>The listener is not running, so the "Start listening" button makes sense.</summary>
+    /// <summary>The listener is not running live (stopped, or a recording is playing), so the "Start listening" button makes sense.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartListeningCommand))]
     private bool _canStartListening = true;
+
+    /// <summary>The label of the start button: says so when it will also stop the recording that is playing.</summary>
+    [ObservableProperty]
+    private string _startListeningLabel = SetupStrings.SetupStartListeningButton;
 
     /// <summary>Called by the shell when it is built; the guide cannot start listening or navigate without it.</summary>
     public void Attach(IConnectionGuideHost host) => _host = host;
@@ -137,10 +141,11 @@ public sealed partial class ConnectionGuideViewModel : ObservableObject
         DataOut.RefreshNetworkCategoryCommand.Execute(null); // the user may have changed the profile since startup
     }
 
-    /// <summary>Opens the guide only when the user never finished or dismissed it (the first launch).</summary>
+    /// <summary>Opens the guide only when the user never finished or dismissed it (the first launch) and the settings were really read.</summary>
     public void OpenIfFirstRun()
     {
-        if (_settings is { Current.HasCompletedSetup: false })
+        // Not when the settings file could not be read: the defaults then say "never set up" for a user who may have finished long ago.
+        if (_settings is { IsPersistenceSuspended: false, Current.HasCompletedSetup: false })
         {
             Open();
         }
@@ -172,15 +177,13 @@ public sealed partial class ConnectionGuideViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Re-reads the live state and updates the checklist. Called on every tick of the shell; does nothing while the guide is closed.
+    /// Re-reads the live state and updates the checklist. Called on every tick of the shell; while the guide is closed it only keeps the listening clock.
     /// </summary>
     public void Refresh()
     {
-        if (!IsOpen)
-        {
-            return;
-        }
-
+        // The "since when" clock follows the SERVICE, not the window: it is tracked on every tick, open or closed (two field writes), so
+        // a guide opened after minutes of listening times that session from its real start, and a session that ended and restarted
+        // while the guide was closed starts counting again from zero instead of inheriting an old start.
         var now = _time.GetUtcNow();
         var live = _service.IsRunning && _service.Mode == TelemetrySourceMode.Live;
         if (live)
@@ -191,6 +194,11 @@ public sealed partial class ConnectionGuideViewModel : ObservableObject
         {
             _listeningSince = null;
             _drivingSeen = false;
+        }
+
+        if (!IsOpen)
+        {
+            return;
         }
 
         var latest = _service.Latest;
@@ -211,7 +219,11 @@ public sealed partial class ConnectionGuideViewModel : ObservableObject
             ListeningFor: live && _listeningSince is { } since ? now - since : TimeSpan.Zero);
 
         Apply(ConnectionChecklist.Evaluate(signals), signals, sender);
-        CanStartListening = !_service.IsRunning;
+
+        // During a replay the button is still the way forward: the shell stops the recording, then starts live listening, through the
+        // same serialized path as the top bar. The label says both, so nobody is surprised that the replay ends.
+        CanStartListening = !_service.IsRunning || _service.IsReplaying;
+        StartListeningLabel = _service.IsReplaying ? SetupStrings.SetupStartListeningReplayButton : SetupStrings.SetupStartListeningButton;
 
         if (IsConnected)
         {

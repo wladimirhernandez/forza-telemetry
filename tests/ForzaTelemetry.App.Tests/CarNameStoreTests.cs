@@ -223,7 +223,7 @@ public sealed class CarNameStoreTests : IDisposable
     public void A_file_without_a_cars_section_is_simply_empty()
     {
         Directory.CreateDirectory(_directory);
-        File.WriteAllText(CarsPath, """{ "schemaVersion": 9, "somethingElse": true }""");
+        File.WriteAllText(CarsPath, """{ "schemaVersion": 1, "somethingElse": true }""");
         var logger = new ListLogger<CarNameStore>();
 
         var store = new CarNameStore(CarsPath, logger);
@@ -231,6 +231,52 @@ public sealed class CarNameStoreTests : IDisposable
 
         Assert.Equal(0, store.Count);
         Assert.DoesNotContain(logger.Entries, e => e.Level >= LogLevel.Warning);
+    }
+
+    [Fact]
+    public void Fields_this_build_does_not_know_survive_a_save_and_the_version_written_is_this_builds()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(CarsPath, """
+            { "schemaVersion": 7, "cars": { "2211": "Daily GT" },
+              "garages": [ { "name": "Home", "slots": 3 } ], "lastBackup": "2027-01-02" }
+            """);
+        var logger = new ListLogger<CarNameStore>();
+        var store = new CarNameStore(CarsPath, logger);
+        store.Load();
+
+        store.TrySet(77, "Track toy");
+
+        using var written = System.Text.Json.JsonDocument.Parse(File.ReadAllText(CarsPath));
+        var root = written.RootElement;
+        Assert.Equal(CarNameStore.SchemaVersion, root.GetProperty("schemaVersion").GetInt32()); // never the newer number
+        Assert.Equal("Daily GT", root.GetProperty("cars").GetProperty("2211").GetString());
+        Assert.Equal("Track toy", root.GetProperty("cars").GetProperty("77").GetString());
+        Assert.Equal("Home", root.GetProperty("garages")[0].GetProperty("name").GetString());
+        Assert.Equal("2027-01-02", root.GetProperty("lastBackup").GetString());
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("newer version"));
+    }
+
+    [Fact]
+    public void A_file_that_cannot_be_read_is_never_written_over()
+    {
+        Directory.CreateDirectory(_directory);
+        const string original = """{ "schemaVersion": 1, "cars": { "2211": "Daily GT" } }""";
+        File.WriteAllText(CarsPath, original);
+        var logger = new ListLogger<CarNameStore>();
+        var store = new CarNameStore(CarsPath, logger);
+
+        using (new FileStream(CarsPath, FileMode.Open, FileAccess.Read, FileShare.None)) // another process holds it
+        {
+            store.Load();
+        }
+
+        var problem = store.TrySet(77, "Track toy");
+
+        Assert.Equal(CarNameProblem.None, problem);
+        Assert.Equal("Track toy", store.Find(77)); // the name still works for this session
+        Assert.Equal(original, File.ReadAllText(CarsPath)); // and the real file is exactly as it was
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("not written"));
     }
 
     [Fact]

@@ -35,8 +35,12 @@ public sealed class JsonSettingsStore : ISettingsStore
     public static string DefaultPath { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ForzaTelemetry", "settings.json");
 
+    /// <inheritdoc />
+    public bool LoadFailedToRead { get; private set; }
+
     public AppSettings Load()
     {
+        LoadFailedToRead = false;
         string json;
         try
         {
@@ -51,6 +55,7 @@ public sealed class JsonSettingsStore : ISettingsStore
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             AppLog.SettingsUnreadable(_logger, ex, _path);
+            LoadFailedToRead = true; // the file exists but was not seen: whatever is saved next must not replace it
             return AppSettings.Default;
         }
 
@@ -84,6 +89,7 @@ public sealed class JsonSettingsStore : ISettingsStore
             {
                 // The copy is best effort, but the log line above promised one: say when it did not happen.
                 AppLog.CorruptCopyFailed(_logger, _path);
+                LoadFailedToRead = true; // no backup of the damaged file exists, so it must not be overwritten either
             }
 
             return AppSettings.Default;

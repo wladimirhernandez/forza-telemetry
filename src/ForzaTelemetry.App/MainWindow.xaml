@@ -34,7 +34,18 @@
         always uses the primary monitor).
     -->
     <Window.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <!--
+          While a modal card (the connection guide, the rename box) is open, what is behind it is inert: a disabled subtree is skipped
+          by Tab and ignores clicks. ONE trigger on the shell's IsModalOpen serves every surface that must go inert (the top bar, the
+          page and the tab strip); the Ctrl+N shortcuts read the same value through NavigateCommand's CanExecute.
+        -->
+        <Style x:Key="InertWhenModal" TargetType="FrameworkElement">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsModalOpen}" Value="True">
+                    <Setter Property="IsEnabled" Value="False" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
         <shell:WindowChrome x:Key="NormalChrome" CaptionHeight="0" GlassFrameThickness="0" CornerRadius="0"
                             UseAeroCaptionButtons="False" ResizeBorderThickness="{StaticResource ChromeMargin}" />
         <shell:WindowChrome x:Key="MaximizedChrome" CaptionHeight="0" GlassFrameThickness="0" CornerRadius="0"
@@ -247,20 +258,8 @@
                  inside one keyboard-navigation scope, and a plain Grid (TabNavigation=Continue) does not form its own scope, so
                  its TabIndex was ignored and focus started on the title-bar glyphs. TabNavigation="Local" makes each bar a
                  tab group, which is what makes its TabIndex count (0 = this bar, 1 = the title bar). -->
-            <Grid Grid.Row="1" Margin="28,4,28,12" KeyboardNavigation.TabIndex="0" KeyboardNavigation.TabNavigation="Local">
-                <Grid.Style>
-                    <Style TargetType="Grid">
-                        <Style.Triggers>
-                            <!-- While the setup guide or the rename box is open the window behind it is inert (a disabled subtree is skipped by Tab and by clicks); same for the rename box. -->
-                            <DataTrigger Binding="{Binding Guide.IsOpen}" Value="True">
-                                <Setter Property="IsEnabled" Value="False" />
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding CarRename.IsOpen}" Value="True">
-                                <Setter Property="IsEnabled" Value="False" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Grid.Style>
+            <Grid Grid.Row="1" Margin="28,4,28,12" KeyboardNavigation.TabIndex="0" KeyboardNavigation.TabNavigation="Local"
+                  Style="{StaticResource InertWhenModal}">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                     <!--
                       Connection pill. The dot color comes from a DataTrigger per ConnectionState: the view model
@@ -399,21 +398,7 @@
               IsTabStop=False: the ContentControl itself is not a keyboard stop, only the controls inside the page are.
             -->
             <ContentControl Grid.Row="2" Content="{Binding CurrentPage}" IsTabStop="False" KeyboardNavigation.TabNavigation="Local"
-                            KeyboardNavigation.TabIndex="2">
-                <ContentControl.Style>
-                    <Style TargetType="ContentControl">
-                        <Style.Triggers>
-                            <!-- While the setup guide or the rename box is open the window behind it is inert (a disabled subtree is skipped by Tab and by clicks); same for the rename box. -->
-                            <DataTrigger Binding="{Binding Guide.IsOpen}" Value="True">
-                                <Setter Property="IsEnabled" Value="False" />
-                            </DataTrigger>
-                            <DataTrigger Binding="{Binding CarRename.IsOpen}" Value="True">
-                                <Setter Property="IsEnabled" Value="False" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </ContentControl.Style>
-            </ContentControl>
+                            KeyboardNavigation.TabIndex="2" Style="{StaticResource InertWhenModal}" />
 
             <!--
               The "Connect your game" guide: a modal card over every row (title bar excluded from the dimming would look odd, so

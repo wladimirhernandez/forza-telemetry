@@ -13,8 +13,6 @@
       compact cards, balance, suspension and tires. The DataContext is a TuningViewModel.
     -->
     <UserControl.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
-
         <!-- A bottoming counter: the numeral turns amber for occasional hits and red for frequent ones. Tag carries the severity (0/1/2). -->
         <Style x:Key="CounterValue" TargetType="TextBlock" BasedOn="{StaticResource NumeralText}">
             <Setter Property="FontSize" Value="26" />

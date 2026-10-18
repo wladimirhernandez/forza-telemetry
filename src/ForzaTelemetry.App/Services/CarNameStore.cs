@@ -36,6 +36,12 @@ public enum CarNameProblem
 /// all is kept next to the original as <c>.corrupt</c> and replaced by an empty list on the next save.
 /// </para>
 /// <para>
+/// <b>Newer files.</b> Same rule as the settings file: a top-level field this build does not know (written by a newer version) is kept
+/// exactly as read and written back next to <c>cars</c>, and the version written is always this build's own, so a downgrade does not
+/// erase what the newer one added. A file that could not even be READ (permissions, a sharing violation) is never written over: the names
+/// still work in memory for the session, but the file stays as it was.
+/// </para>
+/// <para>
 /// Not thread-safe: like the view models, it is used from the UI thread only. A failed save is logged and does not undo the change: the name
 /// still applies until the app closes, exactly like a setting that could not be written.
 /// </para>
@@ -58,6 +64,12 @@ public sealed class CarNameStore
     private readonly string _path;
     private readonly ILogger _logger;
     private Dictionary<int, string> _names = [];
+
+    // Top-level properties of the file this build does not know, kept as read so a save writes them back.
+    private Dictionary<string, JsonElement>? _unknownFields;
+
+    // True when the file exists but could not be read: writing then would replace data this build never saw.
+    private bool _writeSuspended;
 
     /// <param name="path">Full path of the names file.</param>
     /// <param name="logger">Receives load/save outcomes; optional.</param>
@@ -111,6 +123,8 @@ public sealed class CarNameStore
     public void Load()
     {
         _names = [];
+        _unknownFields = null;
+        _writeSuspended = false;
 
         string json;
         try
@@ -125,12 +139,18 @@ public sealed class CarNameStore
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             AppLog.CarNamesUnreadable(_logger, ex, _path);
+            _writeSuspended = true; // the file is there but unreadable: never overwrite what was not seen
             return;
         }
 
         try
         {
-            _names = Parse(json, out var skipped);
+            _names = Parse(json, out var skipped, out _unknownFields, out var fileVersion);
+            if (fileVersion > SchemaVersion)
+            {
+                AppLog.CarNamesFromNewerVersion(_logger, fileVersion, SchemaVersion);
+            }
+
             if (skipped > 0)
             {
                 AppLog.CarNamesEntriesSkipped(_logger, skipped, _path);
@@ -188,6 +208,12 @@ public sealed class CarNameStore
 
     private void Save()
     {
+        if (_writeSuspended)
+        {
+            AppLog.CarNamesWriteSuspended(_logger, _path);
+            return;
+        }
+
         try
         {
             var cars = new JsonObject();
@@ -197,6 +223,15 @@ public sealed class CarNameStore
             }
 
             var root = new JsonObject { ["schemaVersion"] = SchemaVersion, ["cars"] = cars };
+            if (_unknownFields is { } extra)
+            {
+                // After the known fields, so a known name always wins over an unknown one of the same name.
+                foreach (var (name, value) in extra)
+                {
+                    root.TryAdd(name, JsonNode.Parse(value.GetRawText()));
+                }
+            }
+
             AtomicFile.WriteAllText(_path, root.ToJsonString(WriteOptions));
             AppLog.CarNamesSaved(_logger, _names.Count, _path);
         }
@@ -206,13 +241,32 @@ public sealed class CarNameStore
         }
     }
 
-    private static Dictionary<int, string> Parse(string json, out int skipped)
+    private static Dictionary<int, string> Parse(
+        string json, out int skipped, out Dictionary<string, JsonElement>? unknownFields, out int fileVersion)
     {
         skipped = 0;
+        unknownFields = null;
+        fileVersion = SchemaVersion;
         using var document = JsonDocument.Parse(json);
         if (document.RootElement.ValueKind != JsonValueKind.Object)
         {
             throw new JsonException("The car names file does not contain an object.");
+        }
+
+        foreach (var property in document.RootElement.EnumerateObject())
+        {
+            if (property.NameEquals("schemaVersion"))
+            {
+                if (property.Value.ValueKind == JsonValueKind.Number && property.Value.TryGetInt32(out var version) && version > 0)
+                {
+                    fileVersion = version;
+                }
+            }
+            else if (!property.NameEquals("cars"))
+            {
+                // Clone: the element points into the document, which is disposed when this method returns.
+                (unknownFields ??= [])[property.Name] = property.Value.Clone();
+            }
         }
 
         var names = new Dictionary<int, string>();

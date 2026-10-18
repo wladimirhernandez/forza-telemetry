@@ -1,3 +1,5 @@
+using ForzaTelemetry.Core;
+using System.IO;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
@@ -403,5 +405,142 @@ public class ConnectionGuideViewModelTests
         settingsPage.OpenSetupGuideCommand.Execute(null);
 
         Assert.True(rig.Guide.IsOpen);
+    }
+
+    // ---- The listening clock follows the service, not the window -------------------------------------------
+
+    [Fact]
+    public async Task A_guide_opened_after_minutes_of_listening_times_the_session_from_its_real_start()
+    {
+        var rig = new Rig();
+        await rig.Service.StartAsync();
+        rig.Guide.Refresh(); // closed: the shell's tick only keeps the clock
+        rig.Time.Advance(TimeSpan.FromSeconds(45));
+        rig.Guide.Refresh();
+
+        rig.Guide.Open();
+
+        Assert.Equal(CheckState.Warning, rig.Guide.PacketsStep.State);
+        Assert.True(rig.Guide.ShowTroubleshooting);
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture, SetupStrings.SetupPacketsWarning, 45), rig.Guide.PacketsStep.Detail);
+        await rig.Service.StopAsync();
+    }
+
+    [Fact]
+    public async Task A_session_that_ended_while_the_guide_was_closed_does_not_lend_its_start_to_the_next_one()
+    {
+        var rig = new Rig();
+        await rig.Service.StartAsync();
+        rig.Guide.Refresh();
+        rig.Time.Advance(TimeSpan.FromMinutes(5));
+        await rig.Service.StopAsync();
+        rig.Guide.Refresh(); // closed and stopped: the old start is forgotten here
+        await rig.Service.StartAsync();
+        rig.Guide.Refresh();
+        rig.Time.Advance(TimeSpan.FromSeconds(3));
+        rig.Guide.Refresh();
+
+        rig.Guide.Open();
+
+        Assert.False(rig.Guide.ShowTroubleshooting);
+        Assert.Equal(CheckState.Pending, rig.Guide.PacketsStep.State);
+        await rig.Service.StopAsync();
+    }
+
+    // ---- Settings that could not be read ------------------------------------------------------------------
+
+    private sealed class UnreadableStore : ISettingsStore
+    {
+        public int Saves { get; private set; }
+
+        public bool LoadFailedToRead => true;
+
+        public AppSettings Load() => AppSettings.Default;
+
+        public bool TrySave(AppSettings settings)
+        {
+            Saves++;
+            return true;
+        }
+    }
+
+    [Fact]
+    public void The_guide_does_not_open_itself_when_the_settings_file_could_not_be_read_and_nothing_is_saved()
+    {
+        var store = new UnreadableStore();
+        var settings = SettingsService.LoadFrom(store, new ListLogger<ConnectionGuideViewModelTests>());
+        var rig = new Rig(withSettings: false);
+        var guide = new ConnectionGuideViewModel(rig.Service, rig.DataOut, rig.Sender, rig.Time, settings);
+
+        guide.OpenIfFirstRun();
+        Assert.False(guide.IsOpen); // the defaults say "never set up", but they are only a stand-in
+
+        guide.Open();
+        guide.CloseCommand.Execute(null); // the user opened it themselves and closed it: would normally persist "setup seen"
+
+        Assert.Equal(0, store.Saves);
+    }
+
+    // ---- During a replay ------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Start_listening_during_a_replay_stops_it_and_starts_live_listening_and_the_label_says_so()
+    {
+        using var sessions = new SessionsRig(pauseReplayAtStart: true);
+        var path = await sessions.AddRecordingAsync("drive");
+        var dataOut = new DataOutViewModel(5300, null);
+        var guide = new ConnectionGuideViewModel(sessions.Service, dataOut, time: sessions.Clock);
+        var shell = new ShellViewModel(sessions.Service, sessions.Clock, dataOut: dataOut, engines: sessions.Engines, guide: guide);
+        await sessions.Shell.PlayAsync(path, "label");
+        Assert.True(sessions.Service.IsReplaying);
+
+        guide.Open();
+
+        Assert.True(guide.CanStartListening); // the way forward is offered during a replay too
+        Assert.Equal(SetupStrings.SetupStartListeningReplayButton, guide.StartListeningLabel);
+        Assert.True(guide.StartListeningCommand.CanExecute(null));
+
+        await guide.StartListeningCommand.ExecuteAsync(null);
+
+        Assert.True(sessions.Service.IsRunning);
+        Assert.False(sessions.Service.IsReplaying);
+        Assert.Equal(TelemetrySourceMode.Live, sessions.Service.Mode);
+        shell.Refresh();
+        Assert.False(guide.CanStartListening);
+        Assert.Equal(SetupStrings.SetupStartListeningButton, guide.StartListeningLabel);
+        await shell.StopCommand.ExecuteAsync(null);
+    }
+
+    // ---- Modal cards ------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void While_a_modal_card_is_open_the_window_is_inert_and_the_Ctrl_N_shortcuts_cannot_navigate()
+    {
+        var rig = new Rig();
+        var rename = new CarRenameViewModel(new CarNameStore(Path.Combine(Path.GetTempPath(), "ForzaTelemetryTests", Guid.NewGuid().ToString("N"), "cars.json")));
+        var shell = new ShellViewModel(rig.Service, TimeProvider.System, dataOut: rig.DataOut, guide: rig.Guide, carRename: rename);
+        var modalChanges = 0;
+        var canExecuteChanges = 0;
+        shell.PropertyChanged += (_, e) => modalChanges += e.PropertyName == nameof(ShellViewModel.IsModalOpen) ? 1 : 0;
+        shell.NavigateCommand.CanExecuteChanged += (_, _) => canExecuteChanges++;
+        Assert.False(shell.IsModalOpen);
+        Assert.True(shell.NavigateCommand.CanExecute(PageId.Laps));
+
+        rig.Guide.Open();
+        Assert.True(shell.IsModalOpen);
+        Assert.False(shell.NavigateCommand.CanExecute(PageId.Laps));
+
+        rig.Guide.CloseCommand.Execute(null);
+        Assert.False(shell.IsModalOpen);
+        Assert.True(shell.NavigateCommand.CanExecute(PageId.Laps));
+
+        rename.Begin(2211); // the other card goes through the very same switch
+        Assert.True(shell.IsModalOpen);
+        Assert.False(shell.NavigateCommand.CanExecute(PageId.Laps));
+        rename.CancelCommand.Execute(null);
+        Assert.False(shell.IsModalOpen);
+
+        Assert.Equal(4, modalChanges);
+        Assert.Equal(4, canExecuteChanges);
     }
 }

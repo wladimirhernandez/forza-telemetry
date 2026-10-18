@@ -93,11 +93,14 @@ public static class SetupStrings
     /// <summary>"Ready to receive data from the game."</summary>
     public static string SetupListeningOk => ResourceManager.GetString("SetupListeningOk", Culture)!;
 
-    /// <summary>"A recording is playing, not the game. Stop the replay to listen."</summary>
+    /// <summary>"A recording is playing, not the game. Start listening to stop the replay and wait for the game."</summary>
     public static string SetupListeningReplay => ResourceManager.GetString("SetupListeningReplay", Culture)!;
 
     /// <summary>"Start listening"</summary>
     public static string SetupStartListeningButton => ResourceManager.GetString("SetupStartListeningButton", Culture)!;
+
+    /// <summary>"Stop replay and start listening"</summary>
+    public static string SetupStartListeningReplayButton => ResourceManager.GetString("SetupStartListeningReplayButton", Culture)!;
 
     /// <summary>"Windows treats this network as Private, so incoming game data is allowed."</summary>
     public static string SetupNetworkPrivate => ResourceManager.GetString("SetupNetworkPrivate", Culture)!;

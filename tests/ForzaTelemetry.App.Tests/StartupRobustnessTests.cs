@@ -1,3 +1,4 @@
+using System.IO;
 using System.Globalization;
 using ForzaTelemetry.App.Resources;
 using ForzaTelemetry.App.Services;
@@ -131,4 +132,132 @@ public class StartupRobustnessTests
 
     /// <summary>Category type for the static LanguageService logger (a static class cannot be a type argument).</summary>
     private sealed class LanguageServiceMarker;
+
+    // ---- Invariant-globalization detection -------------------------------------------------------------------
+
+    private static CultureInfo AnyCulture(string name) => CultureInfo.InvariantCulture;
+
+    [Theory]
+    [InlineData(true, null, true)]
+    [InlineData(null, "true", true)]
+    [InlineData(null, "TRUE", true)]
+    [InlineData(null, " 1 ", true)]
+    [InlineData(false, "true", true)] // the environment variable counts even when the switch is explicitly off
+    [InlineData(null, "false", false)]
+    [InlineData(null, "0", false)]
+    [InlineData(null, "", false)]
+    [InlineData(null, null, false)]
+    [InlineData(false, null, false)]
+    public void The_switch_and_the_environment_variable_both_mean_no_culture_data(bool? switchValue, string? environment, bool expected) =>
+        Assert.Equal(expected, LanguageService.DetectInvariantGlobalization(switchValue, environment, AnyCulture));
+
+    [Fact]
+    public void A_failing_culture_probe_means_no_culture_data_even_with_no_switch_or_variable()
+    {
+        Assert.True(LanguageService.DetectInvariantGlobalization(null, null, NoCultures));
+        Assert.True(LanguageService.DetectInvariantGlobalization(
+            null, null, _ => throw new InvalidOperationException("platform failure")));
+    }
+
+    // ---- Settings that exist but cannot be read ----------------------------------------------------------------
+
+    private sealed class RecordingStore(bool failedToRead, bool throwOnLoad = false) : ISettingsStore
+    {
+        public int Saves { get; private set; }
+
+        public bool LoadFailedToRead => failedToRead;
+
+        public AppSettings Load() => throwOnLoad ? throw new UnauthorizedAccessException("blocked") : AppSettings.Default;
+
+        public bool TrySave(AppSettings settings)
+        {
+            Saves++;
+            return true;
+        }
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void A_file_that_could_not_be_read_means_defaults_for_the_session_and_nothing_written(bool failedToRead, bool throws)
+    {
+        var logger = new ListLogger<StartupRobustnessTests>();
+        var store = new RecordingStore(failedToRead, throws);
+
+        var settings = SettingsService.LoadFrom(store, logger);
+        settings.Update(s => s with { UdpPort = 5301 });
+
+        Assert.True(settings.IsPersistenceSuspended);
+        Assert.Equal(5301, settings.Current.UdpPort); // the change applies for this run
+        Assert.Equal(0, store.Saves); // and the user's real file is never replaced by it
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Warning);
+    }
+
+    [Fact]
+    public void Settings_that_loaded_normally_are_saved_as_always()
+    {
+        var store = new RecordingStore(failedToRead: false);
+
+        var settings = SettingsService.LoadFrom(store, new ListLogger<StartupRobustnessTests>());
+        settings.Update(s => s with { UdpPort = 5301 });
+
+        Assert.False(settings.IsPersistenceSuspended);
+        Assert.Equal(1, store.Saves);
+    }
+
+    [Fact]
+    public void A_locked_settings_file_survives_the_session_byte_for_byte()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "ForzaTelemetryTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "settings.json");
+            const string original = """{ "schemaVersion": 1, "udpPort": 5400, "hasCompletedSetup": true }""";
+            File.WriteAllText(path, original);
+            var store = new JsonSettingsStore(path);
+            SettingsService settings;
+            using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None)) // another process holds the file
+            {
+                settings = SettingsService.LoadFrom(store, new ListLogger<StartupRobustnessTests>());
+            }
+
+            Assert.True(store.LoadFailedToRead);
+            Assert.True(settings.IsPersistenceSuspended);
+            Assert.Equal(AppSettings.Default.UdpPort, settings.Current.UdpPort); // a stand-in, not what the file says
+
+            settings.Update(s => s with { SpeedUnit = SpeedUnit.Mph });
+
+            Assert.Equal(original, File.ReadAllText(path));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void A_missing_settings_file_is_a_normal_first_run_that_can_be_saved()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "ForzaTelemetryTests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var path = Path.Combine(directory, "settings.json");
+            var store = new JsonSettingsStore(path);
+
+            var settings = SettingsService.LoadFrom(store, new ListLogger<StartupRobustnessTests>());
+            settings.Update(s => s with { SpeedUnit = SpeedUnit.Mph });
+
+            Assert.False(store.LoadFailedToRead);
+            Assert.False(settings.IsPersistenceSuspended);
+            Assert.True(File.Exists(path));
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
 }

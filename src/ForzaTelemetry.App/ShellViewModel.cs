@@ -178,6 +178,8 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost, IC
         Dashboard.Guide = guide;
         CarRename = carRename;
         Dashboard.CarRename = carRename;
+        ObserveModal(guide);
+        ObserveModal(carRename);
         Tabs = BuildTabs(Dashboard, performancePage, lapsPage, sessionsPage, analysisPage, mapPage, tuningPage, settingsPage);
         _selectedTab = Tabs[0];
 
@@ -255,8 +257,33 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost, IC
     /// </summary>
     public object CurrentPage => SelectedTab.Page;
 
-    /// <summary>Switches to the given screen (the Ctrl+1..8 key bindings pass the screen's <see cref="PageId"/>).</summary>
-    [RelayCommand]
+    /// <summary>
+    /// A modal card (the connection guide or the rename box) is on screen. The window disables everything behind the card from this
+    /// one value, and <see cref="NavigateCommand"/> reads it too, so the Ctrl+1..8 shortcuts (window-level key bindings, which still
+    /// fire while the focus is inside the card) cannot switch screens underneath it.
+    /// </summary>
+    public bool IsModalOpen => (Guide?.IsOpen ?? false) || (CarRename?.IsOpen ?? false);
+
+    // Both modals expose the same "IsOpen" notification; the shell turns it into IsModalOpen and re-checks the shortcuts.
+    private void ObserveModal(System.ComponentModel.INotifyPropertyChanged? modal)
+    {
+        if (modal is null)
+        {
+            return;
+        }
+
+        modal.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == "IsOpen")
+            {
+                OnPropertyChanged(nameof(IsModalOpen));
+                NavigateCommand.NotifyCanExecuteChanged();
+            }
+        };
+    }
+
+    /// <summary>Switches to the given screen (the Ctrl+1..8 key bindings pass the screen's <see cref="PageId"/>); not while a modal card is open.</summary>
+    [RelayCommand(CanExecute = nameof(CanNavigate))]
     private void Navigate(PageId page)
     {
         var target = Tabs.FirstOrDefault(tab => tab.Id == page);
@@ -265,6 +292,8 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost, IC
             SelectedTab = target;
         }
     }
+
+    private bool CanNavigate(PageId page) => !IsModalOpen;
 
     private static List<NavigationItem> BuildTabs(
         DashboardViewModel dashboard,
@@ -720,7 +749,23 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost, IC
     // ---- Connection guide (IConnectionGuideHost) ------------------------------------------------------
 
     /// <inheritdoc />
-    public Task StartListeningAsync() => StartCommand.CanExecute(null) ? StartCommand.ExecuteAsync(null) : Task.CompletedTask;
+    /// <remarks>
+    /// Through the same lock as every other command. A replay in progress is stopped first (the guide offers the button during one:
+    /// the user wants the game now), then live listening starts as a brand-new session. When live listening already runs this is a no-op.
+    /// </remarks>
+    public Task StartListeningAsync() =>
+        RunExclusiveAsync(async () =>
+        {
+            if (_telemetryService.IsReplaying)
+            {
+                await StopCoreAsync();
+            }
+
+            if (!_telemetryService.IsRunning)
+            {
+                await StartCoreAsync();
+            }
+        });
 
     /// <inheritdoc />
     public void ShowDashboard() => Navigate(PageId.Dashboard);

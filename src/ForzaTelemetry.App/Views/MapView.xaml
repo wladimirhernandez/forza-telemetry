@@ -13,7 +13,6 @@
       of three session statistics. The DataContext is a MapViewModel.
     -->
     <UserControl.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
         <Style x:Key="StatTile" TargetType="Border" BasedOn="{StaticResource CardStyle}">
             <Setter Property="Padding" Value="18,12" />
         </Style>

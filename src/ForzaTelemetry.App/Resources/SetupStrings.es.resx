@@ -85,7 +85,10 @@
     <value>Lista para recibir datos del juego.</value>
   </data>
   <data name="SetupListeningReplay" xml:space="preserve">
-    <value>Se está reproduciendo una grabación, no el juego. Detén la reproducción para escuchar.</value>
+    <value>Se está reproduciendo una grabación, no el juego. Empieza a escuchar para detener la reproducción y esperar al juego.</value>
+  </data>
+  <data name="SetupStartListeningReplayButton" xml:space="preserve">
+    <value>Detener la reproducción y empezar a escuchar</value>
   </data>
   <data name="SetupStartListeningButton" xml:space="preserve">
     <value>Empezar a escuchar</value>
