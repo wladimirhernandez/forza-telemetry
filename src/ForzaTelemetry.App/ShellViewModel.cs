@@ -37,7 +37,7 @@ namespace ForzaTelemetry.App;
 /// <see cref="IRefreshablePage"/> and the shell calls it only while <see cref="CurrentPage"/> is that screen.
 /// </para>
 /// </remarks>
-public sealed partial class ShellViewModel : ObservableObject
+public sealed partial class ShellViewModel : ObservableObject, ISessionsHost
 {
     /// <summary>How stale the latest packet must be before the status line switches to "No data for Ns".</summary>
     private static readonly TimeSpan NoDataThreshold = TimeSpan.FromSeconds(2);
@@ -47,6 +47,9 @@ public sealed partial class ShellViewModel : ObservableObject
     private readonly ILogger? _logger;
     private readonly SettingsService? _settings;
     private readonly TelemetryEngines? _engines;
+
+    // What the top bar says it is replaying ("2026-10-18 01:23"), set by PlayAsync. Only meaningful while replaying.
+    private string _replayLabel = "";
 
     // The port the LAST Start tried to bind (read from the settings at that moment, not when an error is shown). A port
     // change while the listener is running or has failed updates the settings at once, so the settings port can differ
@@ -86,6 +89,13 @@ public sealed partial class ShellViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     private bool _isRunning;
 
+    /// <summary>
+    /// A recording is playing instead of the game. The top bar switches its Start/Stop toggle to "Stop replay" and its status pill
+    /// to the replay colour from this; <see cref="IsRunning"/> stays true (a source is running), so nothing else has to know.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isReplaying;
+
     /// <param name="telemetryService">The already-constructed telemetry service this view model reads from in <see cref="Refresh"/>.</param>
     /// <param name="timeProvider">
     /// Injected instead of reading <see cref="DateTimeOffset.UtcNow"/> directly, so a test can pass a
@@ -110,6 +120,7 @@ public sealed partial class ShellViewModel : ObservableObject
     /// <param name="analysisPage">The Analysis screen's view model; when omitted that tab shows the placeholder.</param>
     /// <param name="mapPage">The Map screen's view model; when omitted that tab shows the placeholder.</param>
     /// <param name="tuningPage">The Tuning screen's view model; when omitted that tab shows the placeholder.</param>
+    /// <param name="sessionsPage">The Sessions screen's view model; when omitted that tab shows the placeholder.</param>
     /// <param name="engines">
     /// The per-packet engines the receive loop feeds. The shell resets them at the start of every fresh session, BEFORE the loop
     /// starts (see <see cref="StartCoreAsync"/>); when omitted (tests of other things) there is nothing to reset.
@@ -129,7 +140,8 @@ public sealed partial class ShellViewModel : ObservableObject
         AnalysisViewModel? analysisPage = null,
         MapViewModel? mapPage = null,
         TuningViewModel? tuningPage = null,
-        TelemetryEngines? engines = null)
+        TelemetryEngines? engines = null,
+        SessionsViewModel? sessionsPage = null)
     {
         _telemetryService = telemetryService;
         _engines = engines;
@@ -145,7 +157,9 @@ public sealed partial class ShellViewModel : ObservableObject
         Analysis = analysisPage;
         Map = mapPage;
         Tuning = tuningPage;
-        Tabs = BuildTabs(Dashboard, performancePage, lapsPage, analysisPage, mapPage, tuningPage, settingsPage);
+        Sessions = sessionsPage;
+        sessionsPage?.Attach(this); // the page starts and stops replays through this shell's serialized commands
+        Tabs = BuildTabs(Dashboard, performancePage, lapsPage, sessionsPage, analysisPage, mapPage, tuningPage, settingsPage);
         _selectedTab = Tabs[0];
 
         if (settings is not null)
@@ -191,6 +205,9 @@ public sealed partial class ShellViewModel : ObservableObject
     /// <summary>The Tuning screen's values; null when the shell was built without one (tests).</summary>
     public TuningViewModel? Tuning { get; }
 
+    /// <summary>The Sessions screen's values (record, library, player); null when the shell was built without one (tests).</summary>
+    public SessionsViewModel? Sessions { get; }
+
     /// <summary>This PC's address and the port the game must send to (top bar pill; later also the Settings guide).</summary>
     public DataOutViewModel DataOut { get; }
 
@@ -228,6 +245,7 @@ public sealed partial class ShellViewModel : ObservableObject
         DashboardViewModel dashboard,
         PerformanceViewModel? performancePage,
         LapsViewModel? lapsPage,
+        SessionsViewModel? sessionsPage,
         AnalysisViewModel? analysisPage,
         MapViewModel? mapPage,
         TuningViewModel? tuningPage,
@@ -244,7 +262,9 @@ public sealed partial class ShellViewModel : ObservableObject
             lapsPage is not null
                 ? (PageId.Laps, Strings.TabLaps, lapsPage)
                 : Placeholder(PageId.Laps, Strings.TabLaps, Strings.LapsPlaceholder, PageIcons.Laps),
-            Placeholder(PageId.Sessions, Strings.TabSessions, Strings.SessionsPlaceholder, PageIcons.Sessions),
+            sessionsPage is not null
+                ? (PageId.Sessions, Strings.TabSessions, sessionsPage)
+                : Placeholder(PageId.Sessions, Strings.TabSessions, Strings.SessionsPlaceholder, PageIcons.Sessions),
             analysisPage is not null
                 ? (PageId.Analysis, Strings.TabAnalysis, analysisPage)
                 : Placeholder(PageId.Analysis, Strings.TabAnalysis, Strings.AnalysisPlaceholder, PageIcons.Analysis),
@@ -284,17 +304,20 @@ public sealed partial class ShellViewModel : ObservableObject
             // not leave the last live-looking numbers on screen either (a frozen "29 packets/s" next to an error,
             // a shift light still blinking), so show the idle dashboard.
             IsRunning = false;
+            IsReplaying = false;
             Dashboard.ResetLive();
             Performance?.Refresh(null); // no driving data: the state line says so (the measured numbers stay readable)
             Laps?.Refresh(null);
             PacketsPerSecond = 0; // the loop is dead: nothing is arriving, whatever the last sample said
             ConnectionState = ConnectionState.Error;
             Status = DescribeFault(fault);
+            Sessions?.Refresh(); // a recording whose listener just died ends here; a failed replay is reported on the page
             RefreshVisiblePage(); // what the engines still hold (the session before the fault) stays readable
             return;
         }
 
         IsRunning = _telemetryService.IsRunning;
+        IsReplaying = _telemetryService.IsReplaying;
         UpdatePacketsPerSecond();
 
         var latest = _telemetryService.Latest;
@@ -317,12 +340,15 @@ public sealed partial class ShellViewModel : ObservableObject
         // what is worth saving, which must not depend on which screen the user happens to be looking at. (A snapshot read
         // and a few property writes each.) After the stream has gone silent the last packet is no longer "live" (the game
         // was closed, the console went to sleep): they get null, so a frozen delta or an armed timer does not pose as current.
-        var driving = silenceSoFar > NoDataThreshold ? null : latest;
+        // A replay is the exception to the silence rule: it has no "game went quiet", only "paused" or "finished", and in both the
+        // last packet is exactly what the screens should keep showing.
+        var driving = !IsReplaying && silenceSoFar > NoDataThreshold ? null : latest;
         Performance?.Refresh(driving);
         Laps?.Refresh(driving);
 
-        ConnectionState = DetermineState(IsRunning, latest, silenceSoFar);
+        ConnectionState = DetermineState(IsRunning, IsReplaying, latest, silenceSoFar);
         Status = DescribeStatus(ConnectionState, silenceSoFar);
+        Sessions?.Refresh();
         RefreshVisiblePage();
     }
 
@@ -380,11 +406,16 @@ public sealed partial class ShellViewModel : ObservableObject
         _lastRefreshAt = now;
     }
 
-    private static ConnectionState DetermineState(bool isRunning, TelemetryPacket? latest, TimeSpan silenceSoFar)
+    private static ConnectionState DetermineState(bool isRunning, bool isReplaying, TelemetryPacket? latest, TimeSpan silenceSoFar)
     {
         if (!isRunning)
         {
             return ConnectionState.Stopped;
+        }
+
+        if (isReplaying)
+        {
+            return ConnectionState.Replaying;
         }
 
         if (latest is null)
@@ -400,11 +431,15 @@ public sealed partial class ShellViewModel : ObservableObject
         ConnectionState.Listening => string.Format(CultureInfo.CurrentCulture, Strings.StatusListening, _attemptedPort ?? DataOut.Port),
         ConnectionState.NoData => string.Format(CultureInfo.CurrentCulture, Strings.StatusNoData, silenceSoFar.TotalSeconds),
         ConnectionState.Receiving => Strings.StatusReceiving,
+        ConnectionState.Replaying => string.Format(CultureInfo.CurrentCulture, Strings.StatusReplaying, _replayLabel),
         _ => Strings.StatusStopped
     };
 
     private string DescribeFault(Exception fault) => fault switch
     {
+        // A recording that cannot be played (missing, damaged, from a newer version) is not a network problem: say what it is.
+        _ when _telemetryService.Mode == TelemetrySourceMode.Replay =>
+            string.Format(CultureInfo.CurrentCulture, Strings.ErrorReplayFailed, fault.Message),
         SocketException { SocketErrorCode: SocketError.AddressAlreadyInUse } =>
             string.Format(CultureInfo.CurrentCulture, Strings.ErrorPortInUse, _attemptedPort ?? DataOut.Port),
         SocketException socketEx =>
@@ -517,12 +552,14 @@ public sealed partial class ShellViewModel : ObservableObject
                 // continuesSession: moving the port of a RUNNING listener is the SAME listening session on another port. The laps,
                 // the bests and the charts are what the user is looking at; wiping them because a setting changed would be a
                 // data loss.
-                if (_telemetryService.IsRunning)
+                // Only LIVE listening has a port. A replay (or the fault of one) must not be turned into live listening by a
+                // setting changing: the new port simply applies the next time the user starts listening.
+                if (_telemetryService.IsRunning && _telemetryService.Mode == TelemetrySourceMode.Live)
                 {
                     await StopCoreAsync();
                     await StartCoreAsync(continuesSession: true);
                 }
-                else if (_telemetryService.Fault is not null)
+                else if (_telemetryService.Fault is not null && _telemetryService.Mode == TelemetrySourceMode.Live)
                 {
                     // Nothing to stop: a failed start left no listener behind. And nothing to continue either: that failed Start
                     // already began a session (it reset the screens and the engines), so this retry is the first real start of it.
@@ -615,6 +652,12 @@ public sealed partial class ShellViewModel : ObservableObject
 
     private async Task StopCoreAsync()
     {
+        // A recording lives on the listener's datagrams: finish it (everything queued onto disk) BEFORE the listener goes away.
+        if (Sessions is not null)
+        {
+            await Sessions.StopRecordingAsync();
+        }
+
         await _telemetryService.StopAsync();
 
         // A stopped dashboard must look idle: no frozen RPM, no shift light blinking at a redline that is long gone.
@@ -624,6 +667,39 @@ public sealed partial class ShellViewModel : ObservableObject
         // bests are written out and the state line stops claiming the timer is armed.
         Performance?.EndSession();
         Laps?.EndSession();
+        Refresh();
+    }
+
+    // ---- Replay (ISessionsHost) -----------------------------------------------------------------------
+    //
+    // The Sessions page asks; the shell does, through the same lock as Start and Stop, so a replay can never interleave with a
+    // listener start, a stop or a port move. Like those commands, a call that arrives while another is in flight is dropped
+    // (the buttons are disabled meanwhile; pressing again after it finished works).
+
+    /// <inheritdoc />
+    public Task PlayAsync(string path, string label) => RunExclusiveAsync(() => StartReplayCoreAsync(path, label));
+
+    /// <inheritdoc />
+    public Task StopReplayAsync() =>
+        RunExclusiveAsync(() => _telemetryService.IsReplaying ? StopCoreAsync() : Task.CompletedTask);
+
+    private async Task StartReplayCoreAsync(string path, string label)
+    {
+        // Live listening (or another replay) ends first, cleanly: its recording is finished, its session saved, its UDP port or
+        // file released. The two are mutually exclusive, and this is where that is enforced for the user's actions.
+        if (_telemetryService.IsRunning)
+        {
+            await StopCoreAsync();
+        }
+
+        _replayLabel = label;
+
+        // A replay is a fresh session, exactly like a successful live Start: engines and screens reset BEFORE the loop starts
+        // (see BeginFreshSession), so what the tabs show is the recording and nothing else.
+        BeginFreshSession();
+        await _telemetryService.StartReplayAsync(path);
+
+        ResetSessionState();
         Refresh();
     }
 }

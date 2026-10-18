@@ -118,4 +118,39 @@ internal static partial class AppLog
 
     [LoggerMessage(EventId = 155, Level = LogLevel.Warning, Message = "Could not save the performance history to {Path}; it will be retried on the next change.")]
     public static partial void PerformanceHistorySaveFailed(ILogger logger, Exception exception, string path);
+
+    // ---- Sessions: recording and replay (160s) ----
+
+    [LoggerMessage(EventId = 160, Level = LogLevel.Information, Message = "Recording started: {Path}.")]
+    public static partial void RecordingStarted(ILogger logger, string path);
+
+    [LoggerMessage(EventId = 161, Level = LogLevel.Information, Message = "Recording stopped: {Path} ({Packets} packets, {Bytes} payload bytes, {Dropped} dropped).")]
+    public static partial void RecordingStopped(ILogger logger, string path, long packets, long bytes, long dropped);
+
+    [LoggerMessage(EventId = 162, Level = LogLevel.Error, Message = "Could not start a recording at {Path}.")]
+    public static partial void RecordingStartFailed(ILogger logger, Exception exception, string path);
+
+    [LoggerMessage(EventId = 163, Level = LogLevel.Error, Message = "The recording at {Path} failed while writing; what was captured before the failure is kept.")]
+    public static partial void RecordingWriteFailed(ILogger logger, Exception exception, string path);
+
+    [LoggerMessage(EventId = 164, Level = LogLevel.Warning, Message = "Could not list the recordings folder {Folder}.")]
+    public static partial void LibraryUnreadable(ILogger logger, Exception exception, string folder);
+
+    [LoggerMessage(EventId = 165, Level = LogLevel.Warning, Message = "{Path} is not a readable recording; it is listed as unreadable.")]
+    public static partial void RecordingUnreadable(ILogger logger, Exception exception, string path);
+
+    [LoggerMessage(EventId = 166, Level = LogLevel.Information, Message = "Recording renamed: {OldPath} -> {NewPath}.")]
+    public static partial void RecordingRenamed(ILogger logger, string oldPath, string newPath);
+
+    [LoggerMessage(EventId = 167, Level = LogLevel.Warning, Message = "Could not rename the recording {Path}.")]
+    public static partial void RecordingRenameFailed(ILogger logger, Exception exception, string path);
+
+    [LoggerMessage(EventId = 168, Level = LogLevel.Information, Message = "Recording deleted: {Path}.")]
+    public static partial void RecordingDeleted(ILogger logger, string path);
+
+    [LoggerMessage(EventId = 169, Level = LogLevel.Warning, Message = "Could not delete the recording {Path}.")]
+    public static partial void RecordingDeleteFailed(ILogger logger, Exception exception, string path);
+
+    [LoggerMessage(EventId = 170, Level = LogLevel.Information, Message = "Replay started: {Path}.")]
+    public static partial void ReplayStarted(ILogger logger, string path);
 }

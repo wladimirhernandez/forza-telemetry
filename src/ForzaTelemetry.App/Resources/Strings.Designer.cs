@@ -1479,5 +1479,23 @@ namespace ForzaTelemetry.App.Resources {
             }
         }
 
+        public static string StatusReplaying {
+            get {
+                return ResourceManager.GetString("StatusReplaying", resourceCulture)!;
+            }
+        }
+        
+        public static string StopReplayButton {
+            get {
+                return ResourceManager.GetString("StopReplayButton", resourceCulture)!;
+            }
+        }
+        
+        public static string ErrorReplayFailed {
+            get {
+                return ResourceManager.GetString("ErrorReplayFailed", resourceCulture)!;
+            }
+        }
+
     }
 }

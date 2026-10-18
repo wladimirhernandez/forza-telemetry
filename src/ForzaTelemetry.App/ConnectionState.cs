@@ -19,6 +19,9 @@ public enum ConnectionState
     /// <summary>Was receiving, but the stream went silent past the threshold.</summary>
     NoData,
 
+    /// <summary>A recording is being played back instead of the game (the replay colour in the top bar).</summary>
+    Replaying,
+
     /// <summary>The service faulted (for example the port is already in use).</summary>
     Error
 }

@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="SessionsRecordTitle" xml:space="preserve">
+    <value>Record</value>
+  </data>
+  <data name="SessionsRecordHint" xml:space="preserve">
+    <value>Saves every telemetry packet to a file, so you can replay the session later, even without the game running.</value>
+  </data>
+  <data name="SessionsRecordButton" xml:space="preserve">
+    <value>Record</value>
+  </data>
+  <data name="SessionsStopRecordingButton" xml:space="preserve">
+    <value>Stop recording</value>
+  </data>
+  <data name="SessionsRecordTooltip" xml:space="preserve">
+    <value>Save the incoming telemetry to a file</value>
+  </data>
+  <data name="SessionsStopRecordingTooltip" xml:space="preserve">
+    <value>Stop and save the recording</value>
+  </data>
+  <data name="SessionsRecordNeedsLiveTooltip" xml:space="preserve">
+    <value>Start listening first: there is nothing to record yet.</value>
+  </data>
+  <data name="SessionsRecordDuringReplayTooltip" xml:space="preserve">
+    <value>Stop the replay to record a new session.</value>
+  </data>
+  <data name="SessionsRecordBusyTooltip" xml:space="preserve">
+    <value>Wait a moment: the previous action is still finishing.</value>
+  </data>
+  <data name="SessionsStatDuration" xml:space="preserve">
+    <value>Duration</value>
+  </data>
+  <data name="SessionsStatSize" xml:space="preserve">
+    <value>Size</value>
+  </data>
+  <data name="SessionsStatPackets" xml:space="preserve">
+    <value>Packets</value>
+  </data>
+  <data name="SessionsRecordingPill" xml:space="preserve">
+    <value>Recording {0}</value>
+  </data>
+  <data name="SessionsDroppedWarning" xml:space="preserve">
+    <value>{0} packets could not be saved: the disk is not keeping up.</value>
+  </data>
+  <data name="SessionsRecordWriteError" xml:space="preserve">
+    <value>The recording stopped writing: {0}</value>
+  </data>
+  <data name="SessionsRecordStartFailed" xml:space="preserve">
+    <value>Could not start the recording: {0}</value>
+  </data>
+  <data name="SessionsSavedNotice" xml:space="preserve">
+    <value>Saved as {0}</value>
+  </data>
+  <data name="SessionsRecordingEndedNotice" xml:space="preserve">
+    <value>Recording saved as {0}. Listening stopped, so recording ended with it.</value>
+  </data>
+  <data name="SessionsLibraryTitle" xml:space="preserve">
+    <value>Recordings</value>
+  </data>
+  <data name="SessionsOpenFolder" xml:space="preserve">
+    <value>Open folder</value>
+  </data>
+  <data name="SessionsOpenFolderTooltip" xml:space="preserve">
+    <value>Show the recordings folder in Explorer</value>
+  </data>
+  <data name="SessionsLoading" xml:space="preserve">
+    <value>Loading recordings...</value>
+  </data>
+  <data name="SessionsEmpty" xml:space="preserve">
+    <value>Record a session to replay it later — even without the game running.</value>
+  </data>
+  <data name="SessionsColRecording" xml:space="preserve">
+    <value>Recording</value>
+  </data>
+  <data name="SessionsColDuration" xml:space="preserve">
+    <value>Duration</value>
+  </data>
+  <data name="SessionsColSize" xml:space="preserve">
+    <value>Size</value>
+  </data>
+  <data name="SessionsColCars" xml:space="preserve">
+    <value>Cars</value>
+  </data>
+  <data name="SessionsTruncated" xml:space="preserve">
+    <value>Incomplete</value>
+  </data>
+  <data name="SessionsTruncatedTooltip" xml:space="preserve">
+    <value>The app closed while this was being recorded. Everything saved before that still plays.</value>
+  </data>
+  <data name="SessionsUnreadable" xml:space="preserve">
+    <value>Unreadable</value>
+  </data>
+  <data name="SessionsUnreadableTooltip" xml:space="preserve">
+    <value>This file is not a recording this version can read.</value>
+  </data>
+  <data name="SessionsNoCars" xml:space="preserve">
+    <value>No race</value>
+  </data>
+  <data name="SessionsCarsMoreFormat" xml:space="preserve">
+    <value>{0} +{1} more</value>
+  </data>
+  <data name="SessionsPlay" xml:space="preserve">
+    <value>Play</value>
+  </data>
+  <data name="SessionsPlayNamed" xml:space="preserve">
+    <value>Play {0}</value>
+  </data>
+  <data name="SessionsRename" xml:space="preserve">
+    <value>Rename</value>
+  </data>
+  <data name="SessionsRenameNamed" xml:space="preserve">
+    <value>Rename {0}</value>
+  </data>
+  <data name="SessionsDelete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="SessionsDeleteNamed" xml:space="preserve">
+    <value>Delete {0}</value>
+  </data>
+  <data name="SessionsInUseTooltip" xml:space="preserve">
+    <value>It is playing now: stop the replay first.</value>
+  </data>
+  <data name="SessionsRowName" xml:space="preserve">
+    <value>{0}, {1}, {2}, {3}</value>
+  </data>
+  <data name="SessionsNameBoxName" xml:space="preserve">
+    <value>New name for {0}</value>
+  </data>
+  <data name="SessionsRenameHint" xml:space="preserve">
+    <value>Enter to save, Esc to cancel</value>
+  </data>
+  <data name="SessionsNameEmpty" xml:space="preserve">
+    <value>Type a name.</value>
+  </data>
+  <data name="SessionsNameInvalid" xml:space="preserve">
+    <value>A name cannot contain \ / : * ? " &lt; &gt; |</value>
+  </data>
+  <data name="SessionsNameReserved" xml:space="preserve">
+    <value>Windows reserves that name.</value>
+  </data>
+  <data name="SessionsNameTrailing" xml:space="preserve">
+    <value>A name cannot start with a space or end with a space or a dot.</value>
+  </data>
+  <data name="SessionsNameTooLong" xml:space="preserve">
+    <value>That name is too long (100 characters at most).</value>
+  </data>
+  <data name="SessionsNameExists" xml:space="preserve">
+    <value>A recording with that name already exists.</value>
+  </data>
+  <data name="SessionsRenameFailed" xml:space="preserve">
+    <value>Could not rename the file. It may be in use.</value>
+  </data>
+  <data name="SessionsDeleteConfirmTitle" xml:space="preserve">
+    <value>Delete this recording?</value>
+  </data>
+  <data name="SessionsDeleteConfirmMessage" xml:space="preserve">
+    <value>"{0}" will be deleted permanently. This cannot be undone.</value>
+  </data>
+  <data name="SessionsDeleteConfirmButton" xml:space="preserve">
+    <value>Delete recording</value>
+  </data>
+  <data name="SessionsDeleteFailed" xml:space="preserve">
+    <value>Could not delete {0}. It may be in use.</value>
+  </data>
+  <data name="SessionsPlayerTitle" xml:space="preserve">
+    <value>Replay</value>
+  </data>
+  <data name="SessionsPlayerHint" xml:space="preserve">
+    <value>Every tab is showing this recording instead of live data.</value>
+  </data>
+  <data name="SessionsPause" xml:space="preserve">
+    <value>Pause</value>
+  </data>
+  <data name="SessionsResume" xml:space="preserve">
+    <value>Resume</value>
+  </data>
+  <data name="SessionsReplayAgain" xml:space="preserve">
+    <value>Replay from the start</value>
+  </data>
+  <data name="SessionsRestart" xml:space="preserve">
+    <value>Restart</value>
+  </data>
+  <data name="SessionsRestartTooltip" xml:space="preserve">
+    <value>Back to the start of the recording</value>
+  </data>
+  <data name="SessionsStopReplay" xml:space="preserve">
+    <value>Stop replay</value>
+  </data>
+  <data name="SessionsStopReplayTooltip" xml:space="preserve">
+    <value>Leave replay mode (press Start to listen to the game again)</value>
+  </data>
+  <data name="SessionsSpeedLabel" xml:space="preserve">
+    <value>Speed</value>
+  </data>
+  <data name="SessionsSpeedHalf" xml:space="preserve">
+    <value>0.5×</value>
+  </data>
+  <data name="SessionsSpeedNormal" xml:space="preserve">
+    <value>1×</value>
+  </data>
+  <data name="SessionsSpeedDouble" xml:space="preserve">
+    <value>2×</value>
+  </data>
+  <data name="SessionsSpeedQuadruple" xml:space="preserve">
+    <value>4×</value>
+  </data>
+  <data name="SessionsSpeedName" xml:space="preserve">
+    <value>Playback speed</value>
+  </data>
+  <data name="SessionsFinished" xml:space="preserve">
+    <value>Finished</value>
+  </data>
+  <data name="SessionsPaused" xml:space="preserve">
+    <value>Paused</value>
+  </data>
+  <data name="SessionsPlaying" xml:space="preserve">
+    <value>Playing</value>
+  </data>
+  <data name="SessionsProgressName" xml:space="preserve">
+    <value>Playback position</value>
+  </data>
+  <data name="SessionsPositionFormat" xml:space="preserve">
+    <value>{0} / {1}</value>
+  </data>
+  <data name="SessionsPlaybackFailed" xml:space="preserve">
+    <value>Could not play {0}: {1}</value>
+  </data>
+</root>

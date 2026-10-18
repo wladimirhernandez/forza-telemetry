@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Threading;
 using ForzaTelemetry.App.Services;
 using ForzaTelemetry.Core;
+using ForzaTelemetry.Core.Recording;
 using ForzaTelemetry.Udp;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -22,6 +23,7 @@ public partial class App : Application, IAppRestarter
     private ILogger<App> _logger = NullLogger<App>.Instance;
 
     private TelemetryService? _telemetryService;
+    private SessionRecorder? _recorder;
     private SettingsService? _settings;
     private PerformanceViewModel? _performance;
     private DispatcherTimerTicker? _ticker;
@@ -91,8 +93,14 @@ public partial class App : Application, IAppRestarter
         // calls them from the receive loop; the view models below only read their snapshots. They are built together, with
         // the one ordered list the service is given, so none can be forgotten and the car-change detector runs first.
         var engines = new TelemetryEngines();
+
+        // The recorder is long-lived (it outlives every listener the factory builds) and is handed to each new listener as a RAW
+        // datagram observer: it sees every datagram before parsing, copies it and queues it for a background writer, so
+        // recording never slows the receive loop. It only records while a recording has been started.
+        _recorder = new SessionRecorder();
+        var recorder = _recorder;
         _telemetryService = new TelemetryService(
-            () => new UdpTelemetryListener(settings.Current.UdpPort, logger: listenerLogger),
+            () => new UdpTelemetryListener(settings.Current.UdpPort, logger: listenerLogger, datagramObservers: [recorder]),
             loggerFactory.CreateLogger<TelemetryService>(),
             observers: engines.Observers);
         _ticker = new DispatcherTimerTicker();
@@ -111,12 +119,23 @@ public partial class App : Application, IAppRestarter
             clipboard,
             loggerFactory.CreateLogger<DataOutViewModel>(),
             new NetworkListManagerProfileInfo(loggerFactory.CreateLogger<NetworkListManagerProfileInfo>()));
+        var folderOpener = new ExplorerFolderOpener(loggerFactory.CreateLogger<ExplorerFolderOpener>());
         var settingsPage = new SettingsViewModel(
             _settings,
             dataOut,
             _logging.LogDirectory ?? AppLogging.DefaultLogDirectory,
-            new ExplorerFolderOpener(loggerFactory.CreateLogger<ExplorerFolderOpener>()),
+            folderOpener,
             this);
+
+        // The recordings folder, created on demand (%APPDATA%/ForzaTelemetry/recordings), and the page that records into it and
+        // replays from it. The page asks the shell (below) to start and stop replays; the shell attaches itself to it.
+        var sessionsPage = new SessionsViewModel(
+            _telemetryService,
+            recorder,
+            new RecordingLibrary(RecordingLibrary.DefaultFolder, TimeProvider.System, loggerFactory.CreateLogger<RecordingLibrary>()),
+            new WpfConfirmationService(),
+            folderOpener,
+            loggerFactory.CreateLogger<SessionsViewModel>());
 
         // The per-car bests are read once here; a missing or damaged file is not an error (the store logs it).
         var history = new PerformanceHistoryStore(
@@ -146,7 +165,8 @@ public partial class App : Application, IAppRestarter
             analysisPage: analysisPage,
             mapPage: mapPage,
             tuningPage: tuningPage,
-            engines: engines);
+            engines: engines,
+            sessionsPage: sessionsPage);
 
         // The ticker runs on the UI thread and calls Refresh, which pulls the latest packet into the bound properties.
         _refresh = viewModel.Refresh;
@@ -192,6 +212,18 @@ public partial class App : Application, IAppRestarter
         catch (Exception ex)
         {
             // Nothing to show while exiting, but the file keeps the evidence.
+            AppLog.ShutdownStopFailed(_logger, ex);
+        }
+
+        // A recording still running at exit (the shell's Stop was not the way out) must be finished, or its queued tail is lost
+        // and the file is left truncated. The listener is stopped above, so nothing feeds the recorder any more. The recorder is
+        // disposed directly (not through the view model): its async code never needs the UI thread, so blocking here is safe.
+        try
+        {
+            _recorder?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
             AppLog.ShutdownStopFailed(_logger, ex);
         }
 

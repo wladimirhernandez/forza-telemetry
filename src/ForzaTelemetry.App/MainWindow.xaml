@@ -68,6 +68,9 @@
         <DataTemplate DataType="{x:Type local:TuningViewModel}">
             <views:TuningView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type local:SessionsViewModel}">
+            <views:SessionsView />
+        </DataTemplate>
     </Window.Resources>
     <!--
       Ctrl+1..8 jump straight to a tab. KeyBindings live on the Window so they work wherever the focus is; each one runs
@@ -258,10 +261,18 @@
                                     <DataTrigger Binding="{Binding ConnectionState}" Value="Error">
                                         <Setter Property="Tag" Value="{StaticResource BrakeBrush}" />
                                     </DataTrigger>
+                                    <!-- Replay mode wears the Cold accent instead of the live green, so a glance says "not the game". -->
+                                    <DataTrigger Binding="{Binding ConnectionState}" Value="Replaying">
+                                        <Setter Property="Tag" Value="{StaticResource ColdBrush}" />
+                                    </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </ContentControl.Style>
                     </ContentControl>
+                    <!-- Recording indicator: visible on every tab, because a recording runs whichever screen is open. -->
+                    <ContentControl Style="{StaticResource StatusPill}" Margin="10,0,0,0" Tag="{StaticResource BrakeBrush}"
+                                    Content="{Binding Sessions.PillText}"
+                                    Visibility="{Binding Sessions.IsRecording, Converter={StaticResource BoolToVisibility}}" />
                     <ContentControl Style="{StaticResource StatusPill}" Margin="10,0,0,0" Tag="{x:Null}"
                                     Content="{Binding PacketsPerSecond}"
                                     ContentStringFormat="{x:Static res:Strings.PacketsPerSecondPill}" />
@@ -329,6 +340,10 @@
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsRunning}" Value="True">
                                                 <Setter Property="Text" Value="{x:Static res:Strings.StopButton}" />
+                                            </DataTrigger>
+                                            <!-- After IsRunning (a replay is also "running"), so while replaying this one wins. -->
+                                            <DataTrigger Binding="{Binding IsReplaying}" Value="True">
+                                                <Setter Property="Text" Value="{x:Static res:Strings.StopReplayButton}" />
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>

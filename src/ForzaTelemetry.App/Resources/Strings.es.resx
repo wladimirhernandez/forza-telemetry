@@ -487,4 +487,13 @@
   <data name="LapsNoLapInProgress" xml:space="preserve">
     <value>Ninguna vuelta en curso</value>
   </data>
+  <data name="StatusReplaying" xml:space="preserve">
+    <value>Reproduciendo {0}</value>
+  </data>
+  <data name="StopReplayButton" xml:space="preserve">
+    <value>Detener reproducción</value>
+  </data>
+  <data name="ErrorReplayFailed" xml:space="preserve">
+    <value>No se pudo reproducir la grabación: {0}</value>
+  </data>
 </root>

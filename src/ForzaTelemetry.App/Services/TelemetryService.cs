@@ -1,9 +1,20 @@
 using System.Net.Sockets;
 using ForzaTelemetry.Core;
+using ForzaTelemetry.Core.Recording;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ForzaTelemetry.App.Services;
+
+/// <summary>Where the packets of the current (or last) session come from.</summary>
+public enum TelemetrySourceMode
+{
+    /// <summary>The game, over UDP.</summary>
+    Live,
+
+    /// <summary>A recording played back from a file.</summary>
+    Replay
+}
 
 /// <summary>
 /// Owns one telemetry connection (started/stopped on demand) and keeps only the LATEST received
@@ -55,6 +66,13 @@ namespace ForzaTelemetry.App.Services;
 /// An observer that throws is logged and skipped for that packet: one faulty engine must never stop the receive loop, the
 /// other engines, or the dashboard.
 /// </para>
+/// <para>
+/// <b>Live and replay share this one loop.</b> A replayed recording is just another <see cref="ITelemetrySource"/>
+/// (<see cref="ReplayTelemetrySource"/>), so <see cref="StartReplayAsync"/> goes through the same serialized start path as a live
+/// Start: the observers, the engines and every screen are driven by it exactly like by live data, and cannot tell the difference.
+/// The two are mutually exclusive by construction (there is one source at a time): starting either one first stops whatever was
+/// running, releasing its UDP port or its file, before the new source is built.
+/// </para>
 /// </remarks>
 public sealed class TelemetryService : IAsyncDisposable
 {
@@ -62,6 +80,7 @@ public sealed class TelemetryService : IAsyncDisposable
     private const int ObserverLogEvery = 600;
 
     private readonly Func<ITelemetrySource> _sourceFactory;
+    private readonly Func<string, ReplayTelemetrySource> _replayFactory;
     private readonly ILogger<TelemetryService> _logger;
 
     // Fixed at construction, so the receive loop can iterate it without a lock. Failure counters are only touched by the loop.
@@ -78,6 +97,9 @@ public sealed class TelemetryService : IAsyncDisposable
     private ITelemetrySource? _source;
     private CancellationTokenSource? _cts;
     private Task? _loopTask;
+    private ReplayTelemetrySource? _replay;
+    private string? _replayPath;
+    private int _mode; // a TelemetrySourceMode; an int so Volatile can publish it
 
     private TelemetryPacket? _latest;
     private long _receivedCount;
@@ -87,12 +109,18 @@ public sealed class TelemetryService : IAsyncDisposable
     /// <param name="sourceFactory">Builds a fresh telemetry source for every Start (see the class remarks).</param>
     /// <param name="logger">Where lifecycle events and faults are recorded; optional (defaults to discarding them), like the UDP listener's.</param>
     /// <param name="observers">Engines that must see every packet (see the class remarks); called in the given order.</param>
+    /// <param name="replayFactory">
+    /// Builds the replay source for a recording path (fresh for every replay: a replay source is not reusable once stopped).
+    /// Defaults to a real-time replay on the system clock; a test passes one driven by a fake clock.
+    /// </param>
     public TelemetryService(
         Func<ITelemetrySource> sourceFactory,
         ILogger<TelemetryService>? logger = null,
-        IEnumerable<IPacketObserver>? observers = null)
+        IEnumerable<IPacketObserver>? observers = null,
+        Func<string, ReplayTelemetrySource>? replayFactory = null)
     {
         _sourceFactory = sourceFactory;
+        _replayFactory = replayFactory ?? (path => new ReplayTelemetrySource(path));
         _logger = logger ?? NullLogger<TelemetryService>.Instance;
         _observers = observers?.ToArray() ?? [];
         _observerFailures = new int[_observers.Length];
@@ -114,6 +142,23 @@ public sealed class TelemetryService : IAsyncDisposable
     /// </summary>
     public Exception? Fault => Volatile.Read(ref _fault);
 
+    /// <summary>
+    /// Where the current session's packets come from. While the service is stopped this is the mode of the LAST start attempt
+    /// (so a fault can still be told apart as "the recording failed" versus "the port is busy").
+    /// </summary>
+    public TelemetrySourceMode Mode => (TelemetrySourceMode)Volatile.Read(ref _mode);
+
+    /// <summary>True while a recording is being played back (the loop is running and its source is a replay).</summary>
+    public bool IsReplaying => IsRunning && Mode == TelemetrySourceMode.Replay && Replay is not null;
+
+    /// <summary>
+    /// The playback controls (pause, speed, restart, position) of the replay in progress; null when nothing is being replayed.
+    /// </summary>
+    public ReplayTelemetrySource? Replay => Volatile.Read(ref _replay);
+
+    /// <summary>The file being replayed; null when nothing is.</summary>
+    public string? ReplayPath => Volatile.Read(ref _replayPath);
+
     // Note: this service deliberately does NOT track "time since last packet" itself — that would
     // need its own clock, and ShellViewModel already needs an injected TimeProvider for
     // PacketsPerSecond. Keeping only ReceivedCount here lets ShellViewModel derive "how long since a
@@ -130,7 +175,7 @@ public sealed class TelemetryService : IAsyncDisposable
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
-            await StartCoreAsync().ConfigureAwait(false);
+            await StartCoreAsync(TelemetrySourceMode.Live, _sourceFactory).ConfigureAwait(false);
         }
         finally
         {
@@ -138,9 +183,33 @@ public sealed class TelemetryService : IAsyncDisposable
         }
     }
 
-    private async Task StartCoreAsync()
+    /// <summary>
+    /// Plays the recording at <paramref name="path"/> through the same loop, observers and screens as live data. Whatever was
+    /// running (live listening or another replay) is stopped first, so the two never overlap; replaying the same file again
+    /// restarts it as a fresh session. A file that is missing or not a recording surfaces as <see cref="Fault"/> (the open
+    /// happens on the first read), exactly like a live source that fails mid-stream.
+    /// </summary>
+    public async Task StartReplayAsync(string path)
     {
-        if (IsRunning)
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        AppLog.ReplayStarted(_logger, path);
+
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await StartCoreAsync(TelemetrySourceMode.Replay, () => _replayFactory(path), path).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task StartCoreAsync(TelemetrySourceMode mode, Func<ITelemetrySource> build, string? replayPath = null)
+    {
+        // Already listening live and asked to listen live: nothing to do. Every other combination (replay over live, live over
+        // replay, replay over replay) must replace the running source, so it falls through to the stop below.
+        if (IsRunning && mode == TelemetrySourceMode.Live && Mode == TelemetrySourceMode.Live)
         {
             return;
         }
@@ -152,6 +221,7 @@ public sealed class TelemetryService : IAsyncDisposable
         await StopCoreAsync().ConfigureAwait(false);
 
         Volatile.Write(ref _fault, null);
+        Volatile.Write(ref _mode, (int)mode);
 
         // Latest is also cleared on Stop; repeated here as a belt for a loop that faulted (no Stop ran).
         Volatile.Write(ref _latest, null);
@@ -165,7 +235,7 @@ public sealed class TelemetryService : IAsyncDisposable
             // StartAsync, is what "no exceptions escape to the UI thread unobserved" means for this
             // failure path: a bad Start becomes a Fault the view model can turn into a friendly
             // status message, not a crash of whatever awaited StartAsync.
-            source = _sourceFactory();
+            source = build();
         }
         catch (Exception ex)
         {
@@ -175,6 +245,8 @@ public sealed class TelemetryService : IAsyncDisposable
         }
 
         _source = source;
+        Volatile.Write(ref _replay, source as ReplayTelemetrySource);
+        Volatile.Write(ref _replayPath, replayPath);
         var cts = new CancellationTokenSource();
         _cts = cts;
         Volatile.Write(ref _isRunning, true);
@@ -284,6 +356,8 @@ public sealed class TelemetryService : IAsyncDisposable
         _cts = null;
         _loopTask = null;
         _source = null;
+        Volatile.Write(ref _replay, null);
+        Volatile.Write(ref _replayPath, null);
 
         if (cts is null)
         {

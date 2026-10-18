@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="SessionsRecordTitle" xml:space="preserve">
+    <value>Grabar</value>
+  </data>
+  <data name="SessionsRecordHint" xml:space="preserve">
+    <value>Guarda cada paquete de telemetría en un archivo para que puedas reproducir la sesión más tarde, incluso sin el juego abierto.</value>
+  </data>
+  <data name="SessionsRecordButton" xml:space="preserve">
+    <value>Grabar</value>
+  </data>
+  <data name="SessionsStopRecordingButton" xml:space="preserve">
+    <value>Detener grabación</value>
+  </data>
+  <data name="SessionsRecordTooltip" xml:space="preserve">
+    <value>Guardar la telemetría entrante en un archivo</value>
+  </data>
+  <data name="SessionsStopRecordingTooltip" xml:space="preserve">
+    <value>Detener y guardar la grabación</value>
+  </data>
+  <data name="SessionsRecordNeedsLiveTooltip" xml:space="preserve">
+    <value>Empieza a escuchar primero: todavía no hay nada que grabar.</value>
+  </data>
+  <data name="SessionsRecordDuringReplayTooltip" xml:space="preserve">
+    <value>Detén la reproducción para grabar una sesión nueva.</value>
+  </data>
+  <data name="SessionsRecordBusyTooltip" xml:space="preserve">
+    <value>Espera un momento: la acción anterior aún está terminando.</value>
+  </data>
+  <data name="SessionsStatDuration" xml:space="preserve">
+    <value>Duración</value>
+  </data>
+  <data name="SessionsStatSize" xml:space="preserve">
+    <value>Tamaño</value>
+  </data>
+  <data name="SessionsStatPackets" xml:space="preserve">
+    <value>Paquetes</value>
+  </data>
+  <data name="SessionsRecordingPill" xml:space="preserve">
+    <value>Grabando {0}</value>
+  </data>
+  <data name="SessionsDroppedWarning" xml:space="preserve">
+    <value>No se pudieron guardar {0} paquetes: el disco no da abasto.</value>
+  </data>
+  <data name="SessionsRecordWriteError" xml:space="preserve">
+    <value>La grabación dejó de escribir: {0}</value>
+  </data>
+  <data name="SessionsRecordStartFailed" xml:space="preserve">
+    <value>No se pudo iniciar la grabación: {0}</value>
+  </data>
+  <data name="SessionsSavedNotice" xml:space="preserve">
+    <value>Guardada como {0}</value>
+  </data>
+  <data name="SessionsRecordingEndedNotice" xml:space="preserve">
+    <value>Grabación guardada como {0}. Se detuvo la escucha, así que la grabación terminó con ella.</value>
+  </data>
+  <data name="SessionsLibraryTitle" xml:space="preserve">
+    <value>Grabaciones</value>
+  </data>
+  <data name="SessionsOpenFolder" xml:space="preserve">
+    <value>Abrir carpeta</value>
+  </data>
+  <data name="SessionsOpenFolderTooltip" xml:space="preserve">
+    <value>Mostrar la carpeta de grabaciones en el Explorador</value>
+  </data>
+  <data name="SessionsLoading" xml:space="preserve">
+    <value>Cargando grabaciones...</value>
+  </data>
+  <data name="SessionsEmpty" xml:space="preserve">
+    <value>Graba una sesión para reproducirla más tarde, incluso sin el juego abierto.</value>
+  </data>
+  <data name="SessionsColRecording" xml:space="preserve">
+    <value>Grabación</value>
+  </data>
+  <data name="SessionsColDuration" xml:space="preserve">
+    <value>Duración</value>
+  </data>
+  <data name="SessionsColSize" xml:space="preserve">
+    <value>Tamaño</value>
+  </data>
+  <data name="SessionsColCars" xml:space="preserve">
+    <value>Coches</value>
+  </data>
+  <data name="SessionsTruncated" xml:space="preserve">
+    <value>Incompleta</value>
+  </data>
+  <data name="SessionsTruncatedTooltip" xml:space="preserve">
+    <value>La aplicación se cerró mientras se grababa. Todo lo guardado antes sigue pudiéndose reproducir.</value>
+  </data>
+  <data name="SessionsUnreadable" xml:space="preserve">
+    <value>Ilegible</value>
+  </data>
+  <data name="SessionsUnreadableTooltip" xml:space="preserve">
+    <value>Este archivo no es una grabación que esta versión pueda leer.</value>
+  </data>
+  <data name="SessionsNoCars" xml:space="preserve">
+    <value>Sin carrera</value>
+  </data>
+  <data name="SessionsCarsMoreFormat" xml:space="preserve">
+    <value>{0} y {1} más</value>
+  </data>
+  <data name="SessionsPlay" xml:space="preserve">
+    <value>Reproducir</value>
+  </data>
+  <data name="SessionsPlayNamed" xml:space="preserve">
+    <value>Reproducir {0}</value>
+  </data>
+  <data name="SessionsRename" xml:space="preserve">
+    <value>Renombrar</value>
+  </data>
+  <data name="SessionsRenameNamed" xml:space="preserve">
+    <value>Renombrar {0}</value>
+  </data>
+  <data name="SessionsDelete" xml:space="preserve">
+    <value>Eliminar</value>
+  </data>
+  <data name="SessionsDeleteNamed" xml:space="preserve">
+    <value>Eliminar {0}</value>
+  </data>
+  <data name="SessionsInUseTooltip" xml:space="preserve">
+    <value>Se está reproduciendo: detén la reproducción primero.</value>
+  </data>
+  <data name="SessionsRowName" xml:space="preserve">
+    <value>{0}, {1}, {2}, {3}</value>
+  </data>
+  <data name="SessionsNameBoxName" xml:space="preserve">
+    <value>Nuevo nombre para {0}</value>
+  </data>
+  <data name="SessionsRenameHint" xml:space="preserve">
+    <value>Intro para guardar, Esc para cancelar</value>
+  </data>
+  <data name="SessionsNameEmpty" xml:space="preserve">
+    <value>Escribe un nombre.</value>
+  </data>
+  <data name="SessionsNameInvalid" xml:space="preserve">
+    <value>Un nombre no puede contener \ / : * ? " &lt; &gt; |</value>
+  </data>
+  <data name="SessionsNameReserved" xml:space="preserve">
+    <value>Windows reserva ese nombre.</value>
+  </data>
+  <data name="SessionsNameTrailing" xml:space="preserve">
+    <value>Un nombre no puede empezar con un espacio ni terminar con un espacio o un punto.</value>
+  </data>
+  <data name="SessionsNameTooLong" xml:space="preserve">
+    <value>Ese nombre es demasiado largo (máximo 100 caracteres).</value>
+  </data>
+  <data name="SessionsNameExists" xml:space="preserve">
+    <value>Ya existe una grabación con ese nombre.</value>
+  </data>
+  <data name="SessionsRenameFailed" xml:space="preserve">
+    <value>No se pudo renombrar el archivo. Puede estar en uso.</value>
+  </data>
+  <data name="SessionsDeleteConfirmTitle" xml:space="preserve">
+    <value>¿Eliminar esta grabación?</value>
+  </data>
+  <data name="SessionsDeleteConfirmMessage" xml:space="preserve">
+    <value>"{0}" se eliminará de forma permanente. No se puede deshacer.</value>
+  </data>
+  <data name="SessionsDeleteConfirmButton" xml:space="preserve">
+    <value>Eliminar grabación</value>
+  </data>
+  <data name="SessionsDeleteFailed" xml:space="preserve">
+    <value>No se pudo eliminar {0}. Puede estar en uso.</value>
+  </data>
+  <data name="SessionsPlayerTitle" xml:space="preserve">
+    <value>Reproducción</value>
+  </data>
+  <data name="SessionsPlayerHint" xml:space="preserve">
+    <value>Todas las pestañas muestran esta grabación en lugar de datos en vivo.</value>
+  </data>
+  <data name="SessionsPause" xml:space="preserve">
+    <value>Pausar</value>
+  </data>
+  <data name="SessionsResume" xml:space="preserve">
+    <value>Reanudar</value>
+  </data>
+  <data name="SessionsReplayAgain" xml:space="preserve">
+    <value>Reproducir desde el inicio</value>
+  </data>
+  <data name="SessionsRestart" xml:space="preserve">
+    <value>Reiniciar</value>
+  </data>
+  <data name="SessionsRestartTooltip" xml:space="preserve">
+    <value>Volver al inicio de la grabación</value>
+  </data>
+  <data name="SessionsStopReplay" xml:space="preserve">
+    <value>Detener reproducción</value>
+  </data>
+  <data name="SessionsStopReplayTooltip" xml:space="preserve">
+    <value>Salir del modo reproducción (pulsa Iniciar para volver a escuchar el juego)</value>
+  </data>
+  <data name="SessionsSpeedLabel" xml:space="preserve">
+    <value>Velocidad</value>
+  </data>
+  <data name="SessionsSpeedHalf" xml:space="preserve">
+    <value>0,5×</value>
+  </data>
+  <data name="SessionsSpeedNormal" xml:space="preserve">
+    <value>1×</value>
+  </data>
+  <data name="SessionsSpeedDouble" xml:space="preserve">
+    <value>2×</value>
+  </data>
+  <data name="SessionsSpeedQuadruple" xml:space="preserve">
+    <value>4×</value>
+  </data>
+  <data name="SessionsSpeedName" xml:space="preserve">
+    <value>Velocidad de reproducción</value>
+  </data>
+  <data name="SessionsFinished" xml:space="preserve">
+    <value>Terminada</value>
+  </data>
+  <data name="SessionsPaused" xml:space="preserve">
+    <value>En pausa</value>
+  </data>
+  <data name="SessionsPlaying" xml:space="preserve">
+    <value>Reproduciendo</value>
+  </data>
+  <data name="SessionsProgressName" xml:space="preserve">
+    <value>Posición de reproducción</value>
+  </data>
+  <data name="SessionsPositionFormat" xml:space="preserve">
+    <value>{0} / {1}</value>
+  </data>
+  <data name="SessionsPlaybackFailed" xml:space="preserve">
+    <value>No se pudo reproducir {0}: {1}</value>
+  </data>
+</root>

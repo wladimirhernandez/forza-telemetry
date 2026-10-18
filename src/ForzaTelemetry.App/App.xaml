@@ -30,6 +30,9 @@
         <!-- Primary button states: a lighter green on hover, a darker one when pressed. -->
         <Color x:Key="ThrottleHoverColor">#5CE79A</Color>
         <Color x:Key="ThrottlePressedColor">#2FB86B</Color>
+        <!-- Danger button states (Record / Stop recording): the Brake red, lighter on hover and darker when pressed. -->
+        <Color x:Key="BrakeHoverColor">#FF6B6D</Color>
+        <Color x:Key="BrakePressedColor">#E03A3C</Color>
         <!-- Glyph on a red (Brake) hover fill, e.g. the close button. -->
         <Color x:Key="OnAlertColor">#FFFFFF</Color>
 
@@ -82,6 +85,13 @@
         <Geometry x:Key="CopyIcon">M 4,0.5 H 11.5 V 8 H 4 Z M 2,3.5 H 0.5 V 11.5 H 8 V 10</Geometry>
         <Geometry x:Key="PlayIcon">M 1,0 L 11,6 L 1,12 Z</Geometry>
         <Geometry x:Key="StopIcon">M 1,1 H 11 V 11 H 1 Z</Geometry>
+        <Geometry x:Key="PauseIcon">M 1,0 H 4.2 V 12 H 1 Z M 7.8,0 H 11 V 12 H 7.8 Z</Geometry>
+        <Geometry x:Key="RecordIcon">M 0,6 A 6,6 0 1 0 12,6 A 6,6 0 1 0 0,6 Z</Geometry>
+        <!-- Outline glyphs (stroke, ~12 x 12 box) for the recordings list. -->
+        <Geometry x:Key="RestartIcon">M 1.2,6 A 4.8,4.8 0 1 1 2.6,9.4 M 1.2,1.6 V 6 H 5.6</Geometry>
+        <Geometry x:Key="PencilIcon">M 1,11 L 1.6,8.4 L 8.6,1.4 L 10.6,3.4 L 3.6,10.4 Z M 7.2,2.8 L 9.2,4.8</Geometry>
+        <Geometry x:Key="TrashIcon">M 1,3 H 11 M 4.2,3 V 1 H 7.8 V 3 M 2.4,3 L 3.1,11 H 8.9 L 9.6,3 M 5,5.4 V 8.6 M 7,5.4 V 8.6</Geometry>
+        <Geometry x:Key="FolderIcon">M 0.8,2.4 H 4.6 L 5.8,3.8 H 11.2 V 10.4 H 0.8 Z</Geometry>
 
         <!-- Card surface: a dark rounded panel with a hairline border. -->
         <Style x:Key="CardStyle" TargetType="Border">
@@ -258,6 +268,43 @@
             </Border>
         </ControlTemplate>
 
+        <!-- Filled red action (the same states as the green primary, with the Brake family): Stop recording. -->
+        <ControlTemplate x:Key="DangerButtonTemplate" TargetType="Button">
+            <Border x:Name="Face" CornerRadius="{StaticResource ButtonRadius}" Padding="{TemplateBinding Padding}">
+                <Border.Background>
+                    <SolidColorBrush Color="{StaticResource BrakeColor}" />
+                </Border.Background>
+                <VisualStateManager.VisualStateGroups>
+                    <VisualStateGroup x:Name="CommonStates">
+                        <VisualStateGroup.Transitions>
+                            <VisualTransition GeneratedDuration="0:0:0.12" />
+                        </VisualStateGroup.Transitions>
+                        <VisualState x:Name="Normal" />
+                        <VisualState x:Name="MouseOver">
+                            <Storyboard>
+                                <ColorAnimation Storyboard.TargetName="Face" Storyboard.TargetProperty="Background.Color"
+                                                To="{StaticResource BrakeHoverColor}" Duration="0" />
+                            </Storyboard>
+                        </VisualState>
+                        <VisualState x:Name="Pressed">
+                            <Storyboard>
+                                <ColorAnimation Storyboard.TargetName="Face" Storyboard.TargetProperty="Background.Color"
+                                                To="{StaticResource BrakePressedColor}" Duration="0" />
+                            </Storyboard>
+                        </VisualState>
+                        <VisualState x:Name="Disabled">
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="Face" Storyboard.TargetProperty="Opacity"
+                                                 To="0.4" Duration="0" />
+                            </Storyboard>
+                        </VisualState>
+                    </VisualStateGroup>
+                </VisualStateManager.VisualStateGroups>
+                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  TextElement.Foreground="{TemplateBinding Foreground}" />
+            </Border>
+        </ControlTemplate>
+
         <Style x:Key="PrimaryButton" TargetType="Button">
             <Setter Property="Foreground" Value="{StaticResource CanvasBrush}" />
             <Setter Property="FontFamily" Value="{StaticResource LabelFont}" />
@@ -307,6 +354,10 @@
                     <Setter Property="AutomationProperties.Name" Value="{x:Static res:Strings.StopButton}" />
                     <Setter Property="Template" Value="{StaticResource GhostButtonTemplate}" />
                     <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                </DataTrigger>
+                <!-- Declared after IsRunning (a replay is also "running"), so while replaying this one wins. -->
+                <DataTrigger Binding="{Binding IsReplaying}" Value="True">
+                    <Setter Property="AutomationProperties.Name" Value="{x:Static res:Strings.StopReplayButton}" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
@@ -478,6 +529,11 @@
                 <Trigger Property="IsKeyboardFocused" Value="True">
                     <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
                 </Trigger>
+                <!-- A glyph button that cannot be used (a command that cannot run) must look it, not just ignore clicks. -->
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.35" />
+                    <Setter Property="Cursor" Value="Arrow" />
+                </Trigger>
             </Style.Triggers>
         </Style>
 
@@ -597,11 +653,18 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
-                        <Border x:Name="Box" Background="{StaticResource CardRaisedBrush}" BorderBrush="{StaticResource HairlineBrush}"
-                                BorderThickness="1" CornerRadius="{StaticResource ButtonRadius}" Padding="{TemplateBinding Padding}">
-                            <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center"
-                                          HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden" />
-                        </Border>
+                        <Grid>
+                            <Border x:Name="Box" Background="{StaticResource CardRaisedBrush}" BorderBrush="{StaticResource HairlineBrush}"
+                                    BorderThickness="1" CornerRadius="{StaticResource ButtonRadius}" Padding="{TemplateBinding Padding}">
+                                <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center"
+                                              HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden" />
+                            </Border>
+                            <!-- The error outline is its own layer ON TOP of the box instead of a BorderBrush trigger: a focused box
+                                 (the state a box is always in while the user is typing an invalid value) kept its white focus border,
+                                 so the red never showed exactly when it mattered. A layer cannot lose that race. -->
+                            <Border x:Name="ErrorRing" BorderBrush="{StaticResource BrakeBrush}" BorderThickness="1"
+                                    CornerRadius="{StaticResource ButtonRadius}" Visibility="Collapsed" IsHitTestVisible="False" />
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource MutedBrush}" />
@@ -609,10 +672,13 @@
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource TextBrush}" />
                             </Trigger>
-                            <!-- Last, so a validation error stays red even while the box is hovered or focused. -->
-                            <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" Value="True">
-                                <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource BrakeBrush}" />
-                            </DataTrigger>
+                            <Trigger Property="Tag">
+                                <Trigger.Value>
+                                    <!-- A real Boolean: Tag is typed object, so the string "True" would never equal a bool that is True. -->
+                                    <system:Boolean xmlns:system="clr-namespace:System;assembly=System.Runtime">True</system:Boolean>
+                                </Trigger.Value>
+                                <Setter TargetName="ErrorRing" Property="Visibility" Value="Visible" />
+                            </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="Box" Property="Opacity" Value="0.5" />
                             </Trigger>
