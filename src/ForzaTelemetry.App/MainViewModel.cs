@@ -126,6 +126,14 @@ public sealed partial class MainViewModel : ObservableObject
         _lastPacketArrivalAt = _lastRefreshAt;
     }
 
+    public TireViewModel FrontLeft { get; } = new();
+
+    public TireViewModel FrontRight { get; } = new();
+
+    public TireViewModel RearLeft { get; } = new();
+
+    public TireViewModel RearRight { get; } = new();
+
     /// <summary>Current and maximum RPM as one readout, for example <c>7 439 / 9 000</c>.</summary>
     public string RpmReadout => string.Create(SpacedNumbers, $"{Rpm:N0} / {MaxRpm:N0}");
 
@@ -163,11 +171,20 @@ public sealed partial class MainViewModel : ObservableObject
 
             SpeedKmh = latest.SpeedKmh;
             GearLabel = GearFormatter.Format(latest.Gear);
+            UpdateTires(latest);
         }
 
         var silenceSoFar = _timeProvider.GetUtcNow() - _lastPacketArrivalAt;
         ConnectionState = DetermineState(IsRunning, latest, silenceSoFar);
         Status = DescribeStatus(ConnectionState, silenceSoFar);
+    }
+
+    private void UpdateTires(TelemetryPacket p)
+    {
+        FrontLeft.Update(p.TireTempFrontLeft, p.TireCombinedSlipFrontLeft, p.NormalizedSuspensionTravelFrontLeft);
+        FrontRight.Update(p.TireTempFrontRight, p.TireCombinedSlipFrontRight, p.NormalizedSuspensionTravelFrontRight);
+        RearLeft.Update(p.TireTempRearLeft, p.TireCombinedSlipRearLeft, p.NormalizedSuspensionTravelRearLeft);
+        RearRight.Update(p.TireTempRearRight, p.TireCombinedSlipRearRight, p.NormalizedSuspensionTravelRearRight);
     }
 
     private void UpdatePacketsPerSecond()

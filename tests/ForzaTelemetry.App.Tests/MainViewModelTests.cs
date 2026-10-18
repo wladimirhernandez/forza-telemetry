@@ -32,6 +32,33 @@ public class MainViewModelTests
     }
 
     [Fact]
+    public async Task Refresh_maps_the_packet_to_the_four_tires()
+    {
+        var fake = new FakeTelemetrySource();
+        var service = new TelemetryService(() => fake);
+        var vm = new MainViewModel(service, TimeProvider.System);
+
+        await vm.StartCommand.ExecuteAsync(null);
+        fake.Publish(TestPackets.Sample(
+            tempFrontLeft: 32f, tempFrontRight: 140f, tempRearLeft: 210f, tempRearRight: 240f,
+            slipFrontLeft: 0.7f, suspensionFrontLeft: 0.3f, suspensionRearRight: 0.9f));
+        Assert.True(await Wait.UntilAsync(() => service.ReceivedCount == 1));
+
+        vm.Refresh();
+
+        Assert.Equal(TireTempBand.Cold, vm.FrontLeft.Band);
+        Assert.Equal(TireTempBand.Ideal, vm.FrontRight.Band);
+        Assert.Equal(TireTempBand.Warm, vm.RearLeft.Band);
+        Assert.Equal(TireTempBand.Hot, vm.RearRight.Band);
+        Assert.Equal(0.7f, vm.FrontLeft.Slip);
+        Assert.Equal(0.3f, vm.FrontLeft.Suspension);
+        Assert.Equal(0.9f, vm.RearRight.Suspension);
+        Assert.Equal(0, vm.FrontLeft.TemperatureC, precision: 3);
+
+        await vm.StopCommand.ExecuteAsync(null);
+    }
+
+    [Fact]
     public async Task Stop_then_Start_again_still_updates_the_dashboard()
     {
         var firstSource = new FakeTelemetrySource();

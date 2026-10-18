@@ -15,7 +15,14 @@ internal static class TestPackets
         float currentEngineRpm = 4_500f,
         float engineMaxRpm = 7_000f,
         float speedMetersPerSecond = 30f,
-        byte gear = 3) => new()
+        byte gear = 3,
+        float tempFrontLeft = 0,
+        float tempFrontRight = 0,
+        float tempRearLeft = 0,
+        float tempRearRight = 0,
+        float slipFrontLeft = 0,
+        float suspensionFrontLeft = 0,
+        float suspensionRearRight = 0) => new()
     {
         IsRaceOn = true,
         TimestampMS = 0,
@@ -37,10 +44,10 @@ internal static class TestPackets
         Pitch = 0,
         Roll = 0,
 
-        NormalizedSuspensionTravelFrontLeft = 0,
+        NormalizedSuspensionTravelFrontLeft = suspensionFrontLeft,
         NormalizedSuspensionTravelFrontRight = 0,
         NormalizedSuspensionTravelRearLeft = 0,
-        NormalizedSuspensionTravelRearRight = 0,
+        NormalizedSuspensionTravelRearRight = suspensionRearRight,
         TireSlipRatioFrontLeft = 0,
         TireSlipRatioFrontRight = 0,
         TireSlipRatioRearLeft = 0,
@@ -65,7 +72,7 @@ internal static class TestPackets
         TireSlipAngleFrontRight = 0,
         TireSlipAngleRearLeft = 0,
         TireSlipAngleRearRight = 0,
-        TireCombinedSlipFrontLeft = 0,
+        TireCombinedSlipFrontLeft = slipFrontLeft,
         TireCombinedSlipFrontRight = 0,
         TireCombinedSlipRearLeft = 0,
         TireCombinedSlipRearRight = 0,
@@ -91,10 +98,10 @@ internal static class TestPackets
         Power = 0,
         Torque = 0,
 
-        TireTempFrontLeft = 0,
-        TireTempFrontRight = 0,
-        TireTempRearLeft = 0,
-        TireTempRearRight = 0,
+        TireTempFrontLeft = tempFrontLeft,
+        TireTempFrontRight = tempFrontRight,
+        TireTempRearLeft = tempRearLeft,
+        TireTempRearRight = tempRearRight,
 
         Boost = 0,
         Fuel = 1,

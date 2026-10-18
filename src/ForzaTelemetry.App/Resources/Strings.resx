@@ -36,12 +36,6 @@
   <data name="CarInfoPill" xml:space="preserve">
     <value>Car info</value>
   </data>
-  <data name="HeroPlaceholderTitle" xml:space="preserve">
-    <value>Car view coming next</value>
-  </data>
-  <data name="HeroPlaceholderBody" xml:space="preserve">
-    <value>The top-down car with live tire data will appear here.</value>
-  </data>
   <data name="GearSpeedTitle" xml:space="preserve">
     <value>Gear and speed</value>
   </data>
@@ -68,5 +62,29 @@
   </data>
   <data name="StatusLabel" xml:space="preserve">
     <value>Status</value>
+  </data>
+  <data name="TireFrontLeft" xml:space="preserve">
+    <value>Front left</value>
+  </data>
+  <data name="TireFrontRight" xml:space="preserve">
+    <value>Front right</value>
+  </data>
+  <data name="TireRearLeft" xml:space="preserve">
+    <value>Rear left</value>
+  </data>
+  <data name="TireRearRight" xml:space="preserve">
+    <value>Rear right</value>
+  </data>
+  <data name="TireSlipLabel" xml:space="preserve">
+    <value>Slip</value>
+  </data>
+  <data name="TireSuspensionLabel" xml:space="preserve">
+    <value>Suspension</value>
+  </data>
+  <data name="TemperatureUnit" xml:space="preserve">
+    <value>°C</value>
+  </data>
+  <data name="HeroTitle" xml:space="preserve">
+    <value>Tire view</value>
   </data>
 </root>

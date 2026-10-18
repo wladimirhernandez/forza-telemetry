@@ -36,12 +36,6 @@
   <data name="CarInfoPill" xml:space="preserve">
     <value>Datos del coche</value>
   </data>
-  <data name="HeroPlaceholderTitle" xml:space="preserve">
-    <value>La vista del coche llega pronto</value>
-  </data>
-  <data name="HeroPlaceholderBody" xml:space="preserve">
-    <value>Aquí aparecerá el coche visto desde arriba con los datos de los neumáticos en vivo.</value>
-  </data>
   <data name="GearSpeedTitle" xml:space="preserve">
     <value>Marcha y velocidad</value>
   </data>
@@ -68,5 +62,29 @@
   </data>
   <data name="StatusLabel" xml:space="preserve">
     <value>Estado</value>
+  </data>
+  <data name="TireFrontLeft" xml:space="preserve">
+    <value>Delantera izq.</value>
+  </data>
+  <data name="TireFrontRight" xml:space="preserve">
+    <value>Delantera der.</value>
+  </data>
+  <data name="TireRearLeft" xml:space="preserve">
+    <value>Trasera izq.</value>
+  </data>
+  <data name="TireRearRight" xml:space="preserve">
+    <value>Trasera der.</value>
+  </data>
+  <data name="TireSlipLabel" xml:space="preserve">
+    <value>Desliz.</value>
+  </data>
+  <data name="TireSuspensionLabel" xml:space="preserve">
+    <value>Suspensión</value>
+  </data>
+  <data name="TemperatureUnit" xml:space="preserve">
+    <value>°C</value>
+  </data>
+  <data name="HeroTitle" xml:space="preserve">
+    <value>Vista de neumáticos</value>
   </data>
 </root>

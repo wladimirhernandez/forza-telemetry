@@ -130,24 +130,6 @@ namespace ForzaTelemetry.App.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Car view coming next.
-        /// </summary>
-        public static string HeroPlaceholderTitle {
-            get {
-                return ResourceManager.GetString("HeroPlaceholderTitle", resourceCulture)!;
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to The top-down car with live tire data will appear here..
-        /// </summary>
-        public static string HeroPlaceholderBody {
-            get {
-                return ResourceManager.GetString("HeroPlaceholderBody", resourceCulture)!;
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Gear and speed.
         /// </summary>
         public static string GearSpeedTitle {
@@ -225,6 +207,77 @@ namespace ForzaTelemetry.App.Resources {
         public static string StatusLabel {
             get {
                 return ResourceManager.GetString("StatusLabel", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Front left.
+        /// </summary>
+        public static string TireFrontLeft {
+            get {
+                return ResourceManager.GetString("TireFrontLeft", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Front right.
+        /// </summary>
+        public static string TireFrontRight {
+            get {
+                return ResourceManager.GetString("TireFrontRight", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Rear left.
+        /// </summary>
+        public static string TireRearLeft {
+            get {
+                return ResourceManager.GetString("TireRearLeft", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Rear right.
+        /// </summary>
+        public static string TireRearRight {
+            get {
+                return ResourceManager.GetString("TireRearRight", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Slip.
+        /// </summary>
+        public static string TireSlipLabel {
+            get {
+                return ResourceManager.GetString("TireSlipLabel", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Suspension.
+        /// </summary>
+        public static string TireSuspensionLabel {
+            get {
+                return ResourceManager.GetString("TireSuspensionLabel", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to °C.
+        /// </summary>
+        public static string TemperatureUnit {
+            get {
+                return ResourceManager.GetString("TemperatureUnit", resourceCulture)!;
+            }
+        }
+        /// <summary>
+        ///   Looks up a localized string similar to Tire view.
+        /// </summary>
+        public static string HeroTitle {
+            get {
+                return ResourceManager.GetString("HeroTitle", resourceCulture)!;
             }
         }
     }

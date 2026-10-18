@@ -127,14 +127,107 @@
                 </StackPanel>
             </Grid>
 
-            <!-- Hero area: reserves the largest region for the car view; a quiet placeholder until then. -->
-            <Border Grid.Row="2" Style="{StaticResource CardStyle}" Margin="28,18,28,18">
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <TextBlock Text="{x:Static res:Strings.HeroPlaceholderTitle}" Style="{StaticResource ValueText}"
-                               HorizontalAlignment="Center" />
-                    <TextBlock Text="{x:Static res:Strings.HeroPlaceholderBody}" Style="{StaticResource MutedLabel}"
-                               HorizontalAlignment="Center" Margin="0,8,0,0" />
-                </StackPanel>
+            <!--
+              Hero: the car, four tire callouts and their leader lines live on ONE fixed-size design canvas
+              (920 x 440) inside a Viewbox. The Viewbox scales the whole drawing uniformly, so the leader lines
+              stay glued to the wheels at any window size. Tradeoff: text scales with the window (it is never
+              reflowed) and the aspect ratio is fixed, leaving empty margins when the hero area is much wider
+              or taller than 920:440. The alternative (computing line endpoints from callout/wheel positions at
+              runtime in code-behind) stays crisp but is far more code and easy to desync.
+            -->
+            <Border Grid.Row="2" Style="{StaticResource CardStyle}" Margin="28,18,28,18" Padding="12"
+                    AutomationProperties.Name="{x:Static res:Strings.HeroTitle}">
+                <Viewbox Stretch="Uniform">
+                    <Canvas Width="920" Height="440">
+                        <!-- Leader lines first, so the cards and wheels draw over their ends. -->
+                        <Line X1="220" Y1="88" X2="378" Y2="110" Style="{StaticResource LeaderLine}" />
+                        <Line X1="220" Y1="352" X2="378" Y2="325" Style="{StaticResource LeaderLine}" />
+                        <Line X1="700" Y1="88" X2="542" Y2="110" Style="{StaticResource LeaderLine}" />
+                        <Line X1="700" Y1="352" X2="542" Y2="325" Style="{StaticResource LeaderLine}" />
+
+                        <!-- The car: drawn around its own centre (0,0), then moved to the middle of the canvas. -->
+                        <Canvas Canvas.Left="460" Canvas.Top="220">
+                            <!-- Wheels first: the body covers their inner half, so they read as tires peeking out. -->
+                            <Rectangle Canvas.Left="-90" Canvas.Top="-141" Width="28" Height="62" RadiusX="8" RadiusY="8"
+                                       DataContext="{Binding FrontLeft}" Style="{StaticResource TireBandShape}" />
+                            <Rectangle Canvas.Left="62" Canvas.Top="-141" Width="28" Height="62" RadiusX="8" RadiusY="8"
+                                       DataContext="{Binding FrontRight}" Style="{StaticResource TireBandShape}" />
+                            <Rectangle Canvas.Left="-90" Canvas.Top="74" Width="28" Height="62" RadiusX="8" RadiusY="8"
+                                       DataContext="{Binding RearLeft}" Style="{StaticResource TireBandShape}" />
+                            <Rectangle Canvas.Left="62" Canvas.Top="74" Width="28" Height="62" RadiusX="8" RadiusY="8"
+                                       DataContext="{Binding RearRight}" Style="{StaticResource TireBandShape}" />
+
+                            <!-- Body -->
+                            <Path StrokeThickness="1.5" StrokeLineJoin="Round"
+                                  Stroke="{StaticResource MutedBrush}"
+                                  Data="M 0,-190 C 38,-190 60,-176 66,-148 C 70,-128 72,-110 72,-96 L 70,-40
+                                        C 68,-10 70,40 72,90 C 74,130 70,160 58,176 C 46,188 24,190 0,190
+                                        C -24,190 -46,188 -58,176 C -70,160 -74,130 -72,90 C -70,40 -68,-10 -70,-40
+                                        L -72,-96 C -72,-110 -70,-128 -66,-148 C -60,-176 -38,-190 0,-190 Z">
+                                <Path.Fill>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <GradientStop Offset="0" Color="{StaticResource HairlineColor}" />
+                                        <GradientStop Offset="0.5" Color="{StaticResource CardRaisedColor}" />
+                                        <GradientStop Offset="1" Color="{StaticResource HairlineColor}" />
+                                    </LinearGradientBrush>
+                                </Path.Fill>
+                            </Path>
+
+                            <!-- Hood and rear deck creases -->
+                            <Path Stroke="{StaticResource MutedBrush}" StrokeThickness="1" Opacity="0.45"
+                                  Data="M -34,-160 C -20,-150 -18,-110 -26,-76 M 34,-160 C 20,-150 18,-110 26,-76
+                                        M -30,132 C -22,120 -20,90 -26,72 M 30,132 C 22,120 20,90 26,72" />
+                            <!-- Center highlight line along the car -->
+                            <Path Stroke="{StaticResource TextBrush}" StrokeThickness="1" Opacity="0.14"
+                                  Data="M 0,-182 L 0,-76 M 0,76 L 0,176" />
+
+                            <!-- Windshield, roof and rear glass -->
+                            <Path Fill="{StaticResource CanvasBrush}"
+                                  Data="M -50,-72 C -30,-84 30,-84 50,-72 L 44,-34 C 20,-40 -20,-40 -44,-34 Z" />
+                            <Path Fill="{StaticResource CardBrush}" Stroke="{StaticResource HairlineBrush}" StrokeThickness="1"
+                                  Data="M -44,-34 C -20,-40 20,-40 44,-34 L 44,32 C 20,38 -20,38 -44,32 Z" />
+                            <Path Fill="{StaticResource CanvasBrush}"
+                                  Data="M -44,38 C -20,44 20,44 44,38 L 50,72 C 30,82 -30,82 -50,72 Z" />
+                            <!-- Glass glint -->
+                            <Path Stroke="{StaticResource TextBrush}" StrokeThickness="1.2" Opacity="0.22"
+                                  Data="M -32,-70 L -22,-48" />
+
+                            <!-- Side mirrors -->
+                            <Ellipse Canvas.Left="-84" Canvas.Top="-66" Width="14" Height="9" Fill="{StaticResource HairlineBrush}"
+                                     Stroke="{StaticResource MutedBrush}" StrokeThickness="1" />
+                            <Ellipse Canvas.Left="70" Canvas.Top="-66" Width="14" Height="9" Fill="{StaticResource HairlineBrush}"
+                                     Stroke="{StaticResource MutedBrush}" StrokeThickness="1" />
+
+                            <!-- Headlights and tail light bar -->
+                            <Path Stroke="{StaticResource TextBrush}" StrokeThickness="2.5" StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round" Opacity="0.75"
+                                  Data="M -56,-160 L -38,-174 M 56,-160 L 38,-174" />
+                            <Path Stroke="{StaticResource BrakeBrush}" StrokeThickness="3" StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round" Opacity="0.8"
+                                  Data="M -48,182 C -20,188 20,188 48,182" />
+                        </Canvas>
+
+                        <!-- Dots on the wheels: where each leader line attaches. -->
+                        <Ellipse Canvas.Left="374" Canvas.Top="106" Width="8" Height="8" Stroke="{StaticResource CardBrush}"
+                                 StrokeThickness="1.5" DataContext="{Binding FrontLeft}" Style="{StaticResource TireBandShape}" />
+                        <Ellipse Canvas.Left="374" Canvas.Top="321" Width="8" Height="8" Stroke="{StaticResource CardBrush}"
+                                 StrokeThickness="1.5" DataContext="{Binding RearLeft}" Style="{StaticResource TireBandShape}" />
+                        <Ellipse Canvas.Left="538" Canvas.Top="106" Width="8" Height="8" Stroke="{StaticResource CardBrush}"
+                                 StrokeThickness="1.5" DataContext="{Binding FrontRight}" Style="{StaticResource TireBandShape}" />
+                        <Ellipse Canvas.Left="538" Canvas.Top="321" Width="8" Height="8" Stroke="{StaticResource CardBrush}"
+                                 StrokeThickness="1.5" DataContext="{Binding RearRight}" Style="{StaticResource TireBandShape}" />
+
+                        <!-- Callout cards: 190 x 104 each, left column x=30, right column x=700. -->
+                        <ContentControl Canvas.Left="30" Canvas.Top="36" Style="{StaticResource TireCallout}"
+                                        DataContext="{Binding FrontLeft}" Tag="{x:Static res:Strings.TireFrontLeft}" />
+                        <ContentControl Canvas.Left="30" Canvas.Top="300" Style="{StaticResource TireCallout}"
+                                        DataContext="{Binding RearLeft}" Tag="{x:Static res:Strings.TireRearLeft}" />
+                        <ContentControl Canvas.Left="700" Canvas.Top="36" Style="{StaticResource TireCallout}"
+                                        DataContext="{Binding FrontRight}" Tag="{x:Static res:Strings.TireFrontRight}" />
+                        <ContentControl Canvas.Left="700" Canvas.Top="300" Style="{StaticResource TireCallout}"
+                                        DataContext="{Binding RearRight}" Tag="{x:Static res:Strings.TireRearRight}" />
+                    </Canvas>
+                </Viewbox>
             </Border>
 
             <!-- Bottom row: three equal cards. -->
