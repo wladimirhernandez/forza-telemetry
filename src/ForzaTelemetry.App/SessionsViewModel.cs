@@ -55,7 +55,6 @@ public sealed partial class RecordingRowViewModel : ObservableObject
         StartedText = SessionFormat.Started(item.StartedAt);
         DurationText = item.IsReadable ? SessionFormat.Duration(item.Duration) : "-";
         SizeText = SessionFormat.Size(item.SizeBytes);
-        CarsText = item.IsReadable ? SessionFormat.Cars(item.CarOrdinals) : "-";
     }
 
     /// <summary>The underlying recording.</summary>
@@ -76,8 +75,15 @@ public sealed partial class RecordingRowViewModel : ObservableObject
     /// <summary>File size.</summary>
     public string SizeText { get; }
 
-    /// <summary>Cars seen, for example <c>Car #1234</c>.</summary>
-    public string CarsText { get; }
+    /// <summary>Cars seen, for example <c>Car #1234</c> (or the player's nickname). Computed, so a rename shows without rebuilding the list.</summary>
+    public string CarsText => Item.IsReadable ? SessionFormat.Cars(Item.CarOrdinals, _owner.CarNames) : "-";
+
+    /// <summary>A car was renamed: the cars text, and the sentence that quotes it, are read again.</summary>
+    internal void OnCarNamesChanged()
+    {
+        OnPropertyChanged(nameof(CarsText));
+        OnPropertyChanged(nameof(Summary));
+    }
 
     /// <summary>The app closed while this was being recorded.</summary>
     public bool IsTruncated => Item.IsReadable && Item.IsTruncated;
@@ -204,20 +210,37 @@ public sealed partial class SessionsViewModel : ObservableObject
 
     private Task _libraryRefresh = Task.CompletedTask;
 
+    /// <summary>The player's car nicknames; null when the page was built without them.</summary>
+    internal CarNameStore? CarNames { get; }
+
     /// <param name="service">The telemetry service (live or replay), read in <see cref="Refresh"/>.</param>
     /// <param name="recorder">The recorder the listener feeds with raw datagrams.</param>
     /// <param name="library">The recordings folder.</param>
     /// <param name="confirmation">Asks before a recording is deleted; optional (deleting then needs no confirmation, for tests).</param>
     /// <param name="folderOpener">Opens the recordings folder in Explorer; optional.</param>
     /// <param name="logger">Receives recording failures; optional.</param>
+    /// <param name="carNames">The player's car nicknames, shown in the Cars column; optional (cars then show as "Car #1234").</param>
     public SessionsViewModel(
         TelemetryService service,
         SessionRecorder recorder,
         RecordingLibrary library,
         IConfirmationService? confirmation = null,
         IFolderOpener? folderOpener = null,
-        ILogger? logger = null)
+        ILogger? logger = null,
+        CarNameStore? carNames = null)
     {
+        CarNames = carNames;
+        if (carNames is not null)
+        {
+            carNames.Changed += (_, _) =>
+            {
+                foreach (var row in Rows)
+                {
+                    row.OnCarNamesChanged();
+                }
+            };
+        }
+
         _service = service;
         _recorder = recorder;
         _library = library;

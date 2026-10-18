@@ -128,6 +128,26 @@ internal static partial class AppLog
     [LoggerMessage(EventId = 155, Level = LogLevel.Warning, Message = "Could not save the performance history to {Path}; it will be retried on the next change.")]
     public static partial void PerformanceHistorySaveFailed(ILogger logger, Exception exception, string path);
 
+    // ---- Car names (180s) ----
+
+    [LoggerMessage(EventId = 180, Level = LogLevel.Information, Message = "Car names loaded: {Cars} name(s) from {Path}.")]
+    public static partial void CarNamesLoaded(ILogger logger, int cars, string path);
+
+    [LoggerMessage(EventId = 181, Level = LogLevel.Warning, Message = "Could not read the car names {Path}; starting with none.")]
+    public static partial void CarNamesUnreadable(ILogger logger, Exception exception, string path);
+
+    [LoggerMessage(EventId = 182, Level = LogLevel.Warning, Message = "The car names file {Path} is corrupt; starting with none (a copy is kept next to it as .corrupt).")]
+    public static partial void CarNamesCorrupt(ILogger logger, Exception exception, string path);
+
+    [LoggerMessage(EventId = 183, Level = LogLevel.Warning, Message = "Skipped {Count} unreadable entries of the car names {Path}.")]
+    public static partial void CarNamesEntriesSkipped(ILogger logger, int count, string path);
+
+    [LoggerMessage(EventId = 184, Level = LogLevel.Information, Message = "Car names saved: {Cars} name(s) to {Path}.")]
+    public static partial void CarNamesSaved(ILogger logger, int cars, string path);
+
+    [LoggerMessage(EventId = 185, Level = LogLevel.Warning, Message = "Could not save the car names to {Path}; the change applies until the app closes.")]
+    public static partial void CarNamesSaveFailed(ILogger logger, Exception exception, string path);
+
     // ---- Sessions: recording and replay (160s) ----
 
     [LoggerMessage(EventId = 160, Level = LogLevel.Information, Message = "Recording started: {Path}.")]

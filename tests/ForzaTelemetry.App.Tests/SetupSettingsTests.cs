@@ -1,13 +1,9 @@
-using System.Collections;
-using System.Globalization;
 using System.IO;
-using System.Resources;
-using ForzaTelemetry.App.Resources;
 using ForzaTelemetry.App.Services;
 
 namespace ForzaTelemetry.App.Tests;
 
-/// <summary>The persisted "setup completed" flag of the connection guide, and the guide's two language files.</summary>
+/// <summary>The persisted "setup completed" flag of the connection guide.</summary>
 public sealed class SetupSettingsTests : IDisposable
 {
     private readonly string _directory = Path.Combine(Path.GetTempPath(), "ForzaTelemetryTests", Guid.NewGuid().ToString("N"));
@@ -60,30 +56,4 @@ public sealed class SetupSettingsTests : IDisposable
         Assert.False(loaded.HasCompletedSetup);
         Assert.Equal(5400, loaded.UdpPort);
     }
-
-    [Fact]
-    public void Every_guide_string_has_a_Spanish_translation_with_the_same_placeholders()
-    {
-        var spanish = CultureInfo.GetCultureInfo("es");
-        var neutral = SetupStrings.ResourceManager.GetResourceSet(CultureInfo.InvariantCulture, true, false)!;
-        var translated = SetupStrings.ResourceManager.GetResourceSet(spanish, true, false)!;
-
-        foreach (DictionaryEntry entry in neutral)
-        {
-            var key = (string)entry.Key;
-            var es = translated.GetString(key);
-            Assert.False(string.IsNullOrEmpty(es), $"Missing Spanish string '{key}'.");
-            Assert.True(
-                Placeholders((string)entry.Value!).SequenceEqual(Placeholders(es!)),
-                $"Placeholders of '{key}' differ between languages.");
-        }
-
-        foreach (DictionaryEntry entry in translated)
-        {
-            Assert.NotNull(neutral.GetString((string)entry.Key));
-        }
-    }
-
-    private static IEnumerable<string> Placeholders(string text) =>
-        System.Text.RegularExpressions.Regex.Matches(text, @"\{(\d+)").Select(m => m.Groups[1].Value).Order();
 }

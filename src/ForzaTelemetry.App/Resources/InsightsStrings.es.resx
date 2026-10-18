@@ -165,9 +165,6 @@
   <data name="DynoChartName" xml:space="preserve">
     <value>Curva de potencia y par</value>
   </data>
-  <data name="CarFormat" xml:space="preserve">
-    <value>Coche {0}</value>
-  </data>
   <data name="PiFormat" xml:space="preserve">
     <value>PI {0}</value>
   </data>

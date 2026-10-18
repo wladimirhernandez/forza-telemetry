@@ -127,6 +127,12 @@ public partial class App : Application, IAppRestarter
         // follows the settings; the dashboard and tires read it; the Data Out object is shared by the top bar and the
         // Settings guide, so both always show the same address and port.
         var units = new UnitsService(_settings);
+
+        // The player's car nicknames: read once here (a missing or damaged file is not an error), shared by every screen that shows a
+        // car, with one rename box for all the places that offer to change a name.
+        var carNames = new CarNameStore(CarNameStore.DefaultPath, loggerFactory.CreateLogger<CarNameStore>());
+        StartupGuard.Run(_logger, "load car names", carNames.Load);
+        var carRename = new CarRenameViewModel(carNames);
         var clipboard = new WpfClipboardService();
 
         // The data-out object reads the adapters once (and logs what it read, now and on every later Start), so this
@@ -155,28 +161,29 @@ public partial class App : Application, IAppRestarter
             new RecordingLibrary(RecordingLibrary.DefaultFolder, TimeProvider.System, loggerFactory.CreateLogger<RecordingLibrary>()),
             new WpfConfirmationService(),
             folderOpener,
-            loggerFactory.CreateLogger<SessionsViewModel>());
+            loggerFactory.CreateLogger<SessionsViewModel>(),
+            carNames);
 
         // The per-car bests are read once here; a missing or damaged file is not an error (the store logs it).
         var history = new PerformanceHistoryStore(
             PerformanceHistoryStore.DefaultPath, TimeProvider.System, loggerFactory.CreateLogger<PerformanceHistoryStore>());
         StartupGuard.Run(_logger, "load performance history", history.Load);
         _performance = new PerformanceViewModel(
-            engines.Acceleration, engines.TopSpeed, engines.CarChanges, history, units, new WpfConfirmationService());
+            engines.Acceleration, engines.TopSpeed, engines.CarChanges, history, units, new WpfConfirmationService(), carNames, carRename);
 
         var lapsPage = new LapsViewModel(engines.Laps);
 
         // The insights pages read the engines the receive loop feeds; they are only refreshed while their tab is showing.
         var analysisPage = new AnalysisViewModel(engines.History, units);
         var mapPage = new MapViewModel(engines.Path, engines.History, units);
-        var tuningPage = new TuningViewModel(engines.Dyno, engines.History, engines.Bottoming, units);
+        var tuningPage = new TuningViewModel(engines.Dyno, engines.History, engines.Bottoming, units, carNames: carNames);
 
         var viewModel = new ShellViewModel(
             _telemetryService,
             TimeProvider.System,
             logger: loggerFactory.CreateLogger<ShellViewModel>(),
             clipboard: clipboard,
-            dashboard: new DashboardViewModel(units),
+            dashboard: new DashboardViewModel(units, carNames),
             dataOut: dataOut,
             settings: _settings,
             settingsPage: settingsPage,
@@ -187,7 +194,8 @@ public partial class App : Application, IAppRestarter
             tuningPage: tuningPage,
             engines: engines,
             sessionsPage: sessionsPage,
-            guide: guide);
+            guide: guide,
+            carRename: carRename);
 
         // The ticker runs on the UI thread and calls Refresh, which pulls the latest packet into the bound properties.
         _refresh = viewModel.Refresh;

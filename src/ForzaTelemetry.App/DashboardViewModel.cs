@@ -40,6 +40,7 @@ public sealed partial class DashboardViewModel : ObservableObject
     private int? _currentCarOrdinal;
 
     private readonly UnitsService _units;
+    private readonly CarNameStore? _carNames;
 
     // Telemetry numbers read best with a space as thousands separator ("7 439"), regardless of the user's culture.
     private static readonly NumberFormatInfo SpacedNumbers = new() { NumberGroupSeparator = " ", NumberDecimalDigits = 0 };
@@ -203,10 +204,41 @@ public sealed partial class DashboardViewModel : ObservableObject
     [ObservableProperty]
     private string _drivetrainLabel = "";
 
+    /// <summary>What the car is called: the player's nickname, or "Car #1234". Empty until a packet carries a real car.</summary>
+    [ObservableProperty]
+    private string _carName = "";
+
+    /// <summary>The game's id of the car on screen (0 when none); what the rename box names.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RenameCarCommand))]
+    private int _carOrdinal;
+
+    /// <summary>The shared rename box the pill's edit button opens; set by the shell (null in tests and in the designer).</summary>
+    public CarRenameViewModel? CarRename { get; set; }
+
+    /// <summary>Opens the rename box for the car on screen.</summary>
+    [CommunityToolkit.Mvvm.Input.RelayCommand(CanExecute = nameof(CanRenameCar))]
+    private void RenameCar() => CarRename?.Begin(CarOrdinal);
+
+    private bool CanRenameCar() => CarOrdinal > 0;
+
     /// <param name="units">Converts and labels speed and tire temperature; optional (metric) for tests and the designer.</param>
-    public DashboardViewModel(UnitsService? units = null)
+    /// <param name="carNames">The player's car nicknames, shown in the car pill; optional (the pill then shows "Car #1234").</param>
+    public DashboardViewModel(UnitsService? units = null, CarNameStore? carNames = null)
     {
         _units = units ?? new UnitsService();
+        _carNames = carNames;
+        if (carNames is not null)
+        {
+            carNames.Changed += (_, _) =>
+            {
+                if (CarOrdinal > 0)
+                {
+                    CarName = CarDisplayName.For(CarOrdinal, _carNames);
+                }
+            };
+        }
+
         FrontLeft = new TireViewModel(_units);
         FrontRight = new TireViewModel(_units);
         RearLeft = new TireViewModel(_units);
@@ -298,6 +330,8 @@ public sealed partial class DashboardViewModel : ObservableObject
         CarClassLabel = "";
         CarPerformanceIndex = 0;
         DrivetrainLabel = "";
+        CarName = "";
+        CarOrdinal = 0;
 
         FrontLeft.Reset();
         FrontRight.Reset();
@@ -375,5 +409,9 @@ public sealed partial class DashboardViewModel : ObservableObject
         CarClassLabel = CarInfoFormatter.ClassLabel(p.CarClass);
         CarPerformanceIndex = p.CarPerformanceIndex;
         DrivetrainLabel = CarInfoFormatter.DrivetrainLabel(p.DrivetrainType);
+
+        // The pill only shows for a real car, so only a real car can be named; menu packets carry ordinal 0 or stale values.
+        CarOrdinal = HasCarInfo ? p.CarOrdinal : 0;
+        CarName = HasCarInfo ? CarDisplayName.For(p.CarOrdinal, _carNames) : "";
     }
 }

@@ -165,9 +165,6 @@
   <data name="DynoChartName" xml:space="preserve">
     <value>Power and torque curve</value>
   </data>
-  <data name="CarFormat" xml:space="preserve">
-    <value>Car {0}</value>
-  </data>
   <data name="PiFormat" xml:space="preserve">
     <value>PI {0}</value>
   </data>

@@ -160,6 +160,15 @@
                     <StackPanel Orientation="Horizontal">
                         <ContentControl Style="{StaticResource StatusPill}" Tag="{x:Null}" Content="{Binding CarText}"
                                         AutomationProperties.Name="{Binding CarSummary}" />
+                        <Button Style="{StaticResource WindowGlyphButton}" Width="28" Height="28" Margin="6,0,0,0" VerticalAlignment="Center"
+                                Command="{Binding RenameCurrentCarCommand}"
+                                ToolTip="{x:Static res:CarNameStrings.CarRenameTooltip}"
+                                AutomationProperties.Name="{x:Static res:CarNameStrings.CarRenameTooltip}"
+                                Visibility="{Binding HasCar, Converter={StaticResource BoolToVisibility}}">
+                            <Path Data="{StaticResource PencilIcon}"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  StrokeThickness="1.2" StrokeLineJoin="Round" />
+                        </Button>
                         <ContentControl Style="{StaticResource StatusPill}" Margin="10,0,0,0" Tag="{x:Null}"
                                         Visibility="{Binding HasCar, Converter={StaticResource BoolToVisibility}}">
                             <StackPanel Orientation="Horizontal">
@@ -390,7 +399,22 @@
                                                     </Ellipse.Style>
                                                 </Ellipse>
                                                 <StackPanel>
-                                                    <TextBlock Text="{Binding CarLabel}" Style="{StaticResource ValueText}" FontSize="15" FontWeight="SemiBold" />
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding CarLabel}" Style="{StaticResource ValueText}" FontSize="15"
+                                                                   FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="260"
+                                                                   VerticalAlignment="Center" />
+                                                        <!-- "Rename": opens the shared rename box for this car. The command lives on the page, not on the row. -->
+                                                        <Button Style="{StaticResource WindowGlyphButton}" Width="24" Height="24" Margin="6,0,0,0"
+                                                                VerticalAlignment="Center"
+                                                                Command="{Binding DataContext.RenameCarCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                CommandParameter="{Binding CarOrdinal}"
+                                                                ToolTip="{x:Static res:CarNameStrings.CarRenameTooltip}"
+                                                                AutomationProperties.Name="{Binding RenameName}">
+                                                            <Path Data="{StaticResource PencilIcon}"
+                                                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                                                  StrokeThickness="1.2" StrokeLineJoin="Round" />
+                                                        </Button>
+                                                    </StackPanel>
                                                     <!-- Class and index as one muted line; the drivetrain is its own small tag, not text joined on. -->
                                                     <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
                                                         <TextBlock Style="{StaticResource MutedLabel}" FontSize="12" VerticalAlignment="Center">

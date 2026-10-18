@@ -251,8 +251,11 @@
                 <Grid.Style>
                     <Style TargetType="Grid">
                         <Style.Triggers>
-                            <!-- While the setup guide is open the window behind it is inert (a disabled subtree is skipped by Tab and by clicks). -->
+                            <!-- While the setup guide or the rename box is open the window behind it is inert (a disabled subtree is skipped by Tab and by clicks); same for the rename box. -->
                             <DataTrigger Binding="{Binding Guide.IsOpen}" Value="True">
+                                <Setter Property="IsEnabled" Value="False" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding CarRename.IsOpen}" Value="True">
                                 <Setter Property="IsEnabled" Value="False" />
                             </DataTrigger>
                         </Style.Triggers>
@@ -300,10 +303,22 @@
                     <ContentControl Style="{StaticResource StatusPill}" Margin="10,0,0,0" Tag="{x:Null}"
                                     Visibility="{Binding Dashboard.HasCarInfo, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel Orientation="Horizontal">
+                            <!-- The car's name (nickname or "Car #1234"), trimmed when long, with the full name as a tooltip. -->
+                            <TextBlock Text="{Binding Dashboard.CarName}" ToolTip="{Binding Dashboard.CarName}" FontWeight="SemiBold"
+                                       MaxWidth="190" TextTrimming="CharacterEllipsis" Margin="0,0,10,0" />
                             <TextBlock Text="{Binding Dashboard.CarClassLabel}" FontWeight="SemiBold" />
                             <TextBlock Text="{Binding Dashboard.CarPerformanceIndex, StringFormat={x:Static res:Strings.CarPerformanceIndexFormat}}"
                                        Foreground="{StaticResource MutedBrush}" Margin="10,0,0,0" />
                             <TextBlock Text="{Binding Dashboard.DrivetrainLabel}" Foreground="{StaticResource MutedBrush}" Margin="10,0,0,0" />
+                            <!-- Rename: the pill's edit affordance. TabIndex 2, after the Start/Stop (0) and copy-IP (1) stops of this bar. -->
+                            <Button Style="{StaticResource WindowGlyphButton}" Width="24" Height="24" Margin="8,0,-8,0" VerticalAlignment="Center"
+                                    KeyboardNavigation.TabIndex="2" Command="{Binding Dashboard.RenameCarCommand}"
+                                    ToolTip="{x:Static res:CarNameStrings.CarRenameTooltip}"
+                                    AutomationProperties.Name="{x:Static res:CarNameStrings.CarRenameTooltip}">
+                                <Path Data="{StaticResource PencilIcon}"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                      StrokeThickness="1.2" StrokeLineJoin="Round" />
+                            </Button>
                         </StackPanel>
                     </ContentControl>
                 </StackPanel>
@@ -388,8 +403,11 @@
                 <ContentControl.Style>
                     <Style TargetType="ContentControl">
                         <Style.Triggers>
-                            <!-- While the setup guide is open the window behind it is inert (a disabled subtree is skipped by Tab and by clicks). -->
+                            <!-- While the setup guide or the rename box is open the window behind it is inert (a disabled subtree is skipped by Tab and by clicks); same for the rename box. -->
                             <DataTrigger Binding="{Binding Guide.IsOpen}" Value="True">
+                                <Setter Property="IsEnabled" Value="False" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding CarRename.IsOpen}" Value="True">
                                 <Setter Property="IsEnabled" Value="False" />
                             </DataTrigger>
                         </Style.Triggers>
@@ -404,6 +422,11 @@
             <views:ConnectionGuideView Grid.Row="0" Grid.RowSpan="3" DataContext="{Binding Guide}"
                                        Visibility="{Binding IsOpen, Converter={StaticResource BoolToVisibility}}"
                                        KeyboardNavigation.TabIndex="3" />
+
+            <!-- The "Name car #1234" box: the same kind of card, on top of everything (it can be opened from the guide's page too). -->
+            <views:CarRenameView Grid.Row="0" Grid.RowSpan="3" DataContext="{Binding CarRename}"
+                                 Visibility="{Binding IsOpen, Converter={StaticResource BoolToVisibility}}"
+                                 KeyboardNavigation.TabIndex="4" />
         </Grid>
     </Border>
 </Window>

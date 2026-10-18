@@ -43,6 +43,7 @@ public sealed partial class TuningViewModel : ObservableObject, IRefreshablePage
     private readonly SuspensionBottomingCounter _bottoming;
     private readonly UnitsService _units;
     private readonly TimeProvider _time;
+    private readonly CarNameStore? _carNames;
     private readonly float[] _temps = new float[4];
     private readonly float[] _shownTemps = new float[4];
     private TemperatureUnit _shownTempUnit = (TemperatureUnit)(-1);
@@ -66,8 +67,16 @@ public sealed partial class TuningViewModel : ObservableObject, IRefreshablePage
     /// <param name="timeProvider">Clock for the balance hold and the dyno poll; defaults to the system clock.</param>
     public TuningViewModel(
         DynoCapture dyno, TelemetryHistory history, SuspensionBottomingCounter bottoming, UnitsService units,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        CarNameStore? carNames = null)
     {
+        _carNames = carNames;
+        if (carNames is not null)
+        {
+            // A rename while the page is showing: the header must not keep the old name until the next car change.
+            carNames.Changed += (_, _) => _shownCar = -1;
+        }
+
         _time = timeProvider ?? TimeProvider.System;
         _dyno = dyno;
         _history = history;
@@ -266,9 +275,7 @@ public sealed partial class TuningViewModel : ObservableObject, IRefreshablePage
             _shownCar = car;
             _shownPi = pi;
             HasCar = car != 0;
-            CarText = car == 0
-                ? InsightsStrings.NoCarYet
-                : string.Format(CultureInfo.CurrentCulture, InsightsStrings.CarFormat, car);
+            CarText = car == 0 ? InsightsStrings.NoCarYet : CarDisplayName.For(car, _carNames);
             PiText = car == 0 ? string.Empty : string.Format(CultureInfo.CurrentCulture, InsightsStrings.PiFormat, pi);
         }
 

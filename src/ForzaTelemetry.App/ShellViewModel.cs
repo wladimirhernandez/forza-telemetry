@@ -132,6 +132,7 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost, IC
     /// The "Connect your game" guide. The shell attaches itself to it (so it can start listening and open the dashboard), refreshes
     /// it on every tick while it is open and hands it to the dashboard's "How to connect" link; when omitted nothing of that exists.
     /// </param>
+    /// <param name="carRename">The shared "name this car" box; the shell hands it to the dashboard's car pill and shows it over the window.</param>
     /// <param name="engines">
     /// The per-packet engines the receive loop feeds. The shell resets them at the start of every fresh session, BEFORE the loop
     /// starts (see <see cref="StartCoreAsync"/>); when omitted (tests of other things) there is nothing to reset.
@@ -153,7 +154,8 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost, IC
         TuningViewModel? tuningPage = null,
         TelemetryEngines? engines = null,
         SessionsViewModel? sessionsPage = null,
-        ConnectionGuideViewModel? guide = null)
+        ConnectionGuideViewModel? guide = null,
+        CarRenameViewModel? carRename = null)
     {
         _telemetryService = telemetryService;
         _engines = engines;
@@ -174,6 +176,8 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost, IC
         Guide = guide;
         guide?.Attach(this); // the guide starts listening and goes to the dashboard through this shell
         Dashboard.Guide = guide;
+        CarRename = carRename;
+        Dashboard.CarRename = carRename;
         Tabs = BuildTabs(Dashboard, performancePage, lapsPage, sessionsPage, analysisPage, mapPage, tuningPage, settingsPage);
         _selectedTab = Tabs[0];
 
@@ -225,6 +229,9 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost, IC
 
     /// <summary>This PC's address and the port the game must send to (top bar pill; later also the Settings guide).</summary>
     public DataOutViewModel DataOut { get; }
+
+    /// <summary>The "Name car #1234" box shown as a card over the window while it is open; null when the shell was built without one (tests).</summary>
+    public CarRenameViewModel? CarRename { get; }
 
     /// <summary>The "Connect your game" guide shown as a card over the window while it is open; null when the shell was built without one (tests).</summary>
     public ConnectionGuideViewModel? Guide { get; }

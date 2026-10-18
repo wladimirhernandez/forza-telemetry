@@ -174,9 +174,6 @@ public static class InsightsStrings
     /// <summary>"Power and torque curve"</summary>
     public static string DynoChartName => ResourceManager.GetString("DynoChartName", Culture)!;
 
-    /// <summary>"Car {0}"</summary>
-    public static string CarFormat => ResourceManager.GetString("CarFormat", Culture)!;
-
     /// <summary>"PI {0}"</summary>
     public static string PiFormat => ResourceManager.GetString("PiFormat", Culture)!;
 

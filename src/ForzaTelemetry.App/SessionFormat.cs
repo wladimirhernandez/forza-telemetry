@@ -1,5 +1,6 @@
 using System.Globalization;
 using ForzaTelemetry.App.Resources;
+using ForzaTelemetry.App.Services;
 
 namespace ForzaTelemetry.App;
 
@@ -55,18 +56,18 @@ public static class SessionFormat
     }
 
     /// <summary>
-    /// The cars of a recording, as the cars are named elsewhere (<c>Car #1234</c>): the first one, then how many more. The
+    /// The cars of a recording, as the cars are named elsewhere (the player's nickname, or <c>Car #1234</c>): the first one, then how many more. The
     /// recording does not store the performance index, so only the ordinal can be shown. A recording with no race in it
     /// (only menus) says so instead of showing an empty cell.
     /// </summary>
-    public static string Cars(IReadOnlyList<int> ordinals)
+    public static string Cars(IReadOnlyList<int> ordinals, CarNameStore? names = null)
     {
         if (ordinals.Count == 0)
         {
             return SessionsStrings.SessionsNoCars;
         }
 
-        var first = string.Format(CultureInfo.CurrentCulture, Strings.PerfCarOrdinalFormat, ordinals[0]);
+        var first = CarDisplayName.For(ordinals[0], names);
         return ordinals.Count == 1
             ? first
             : string.Format(CultureInfo.CurrentCulture, SessionsStrings.SessionsCarsMoreFormat, first, ordinals.Count - 1);

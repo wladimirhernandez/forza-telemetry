@@ -59,8 +59,12 @@ public sealed record CarPerformanceRow(
     string QuarterMileTrapText,
     string TopSpeedText,
     string UpdatedText,
-    bool IsCurrentCar)
+    bool IsCurrentCar,
+    int CarOrdinal = 0)
 {
+    /// <summary>What a screen reader announces for the row's rename button: "Rename Daily GT".</summary>
+    public string RenameName => string.Format(System.Globalization.CultureInfo.CurrentCulture, CarNameStrings.CarRenameRowName, CarLabel);
+
     /// <summary>The whole row as one sentence for screen readers (a row of five numbers means little read cell by cell).</summary>
     public string Summary =>
         $"{CarLabel}, {ClassLabel} {PerformanceIndexText}, {DrivetrainLabel}. 0-100: {ZeroTo100Text}. 0-200: {ZeroTo200Text}. "
@@ -118,6 +122,9 @@ public sealed partial class PerformanceViewModel : ObservableObject
     // The last top speed folded into the history for the current car.
     private double _mergedTopSpeedKmh;
 
+    private readonly CarNameStore? _carNames;
+    private readonly CarRenameViewModel? _carRename;
+
     private AccelerationSnapshot _snapshot = AccelerationSnapshot.Empty;
     private double _topSpeedKmh;
     private bool _live;
@@ -130,14 +137,20 @@ public sealed partial class PerformanceViewModel : ObservableObject
     /// <param name="history">The per-car bests.</param>
     /// <param name="units">Converts and labels the speeds; optional (metric) for tests and the designer.</param>
     /// <param name="confirmation">Asks before the history is cleared; optional (clearing then needs no confirmation, for tests).</param>
+    /// <param name="carNames">The player's car nicknames, shown wherever a car is named; optional (cars then show as "Car #1234").</param>
+    /// <param name="carRename">The shared rename box the rename buttons open; optional (the buttons then do nothing).</param>
     public PerformanceViewModel(
         AccelerationTimer acceleration,
         TopSpeedTracker topSpeed,
         CarChangeDetector carChanges,
         PerformanceHistoryStore history,
         UnitsService? units = null,
-        IConfirmationService? confirmation = null)
+        IConfirmationService? confirmation = null,
+        CarNameStore? carNames = null,
+        CarRenameViewModel? carRename = null)
     {
+        _carNames = carNames;
+        _carRename = carRename;
         _acceleration = acceleration;
         _topSpeed = topSpeed;
         _carChanges = carChanges;
@@ -146,6 +159,11 @@ public sealed partial class PerformanceViewModel : ObservableObject
         _confirmation = confirmation ?? new AlwaysConfirm();
 
         _history.Changed += (_, _) => RebuildRows();
+        if (carNames is not null)
+        {
+            carNames.Changed += (_, _) => OnCarNamesChanged();
+        }
+
         _units.PropertyChanged += OnUnitsChanged;
 
         RebuildRows();
@@ -495,12 +513,10 @@ public sealed partial class PerformanceViewModel : ObservableObject
 
         if (key is { } car)
         {
-            CarText = CarLabel(car);
             CarClassLabel = CarInfoFormatter.ClassLabel(_carClass);
             CarPerformanceIndex = car.PerformanceIndex;
             DrivetrainLabel = CarInfoFormatter.DrivetrainLabel(_drivetrain);
-            CarSummary = string.Format(
-                CultureInfo.CurrentCulture, "{0}, {1} {2}, {3}", CarText, CarClassLabel, CarPerformanceIndex, DrivetrainLabel);
+            ShowCarName(car);
         }
         else
         {
@@ -514,8 +530,40 @@ public sealed partial class PerformanceViewModel : ObservableObject
         RebuildRows(); // the current car's row is highlighted
     }
 
-    private static string CarLabel(CarKey car) =>
-        string.Format(CultureInfo.CurrentCulture, Strings.PerfCarOrdinalFormat, car.CarOrdinal);
+    /// <summary>The first pill and the sentence a screen reader gets: the car's name (nickname or "Car #1234"), then its class, index and drivetrain.</summary>
+    private void ShowCarName(CarKey car)
+    {
+        CarText = CarLabel(car);
+        CarSummary = string.Format(
+            CultureInfo.CurrentCulture, "{0}, {1} {2}, {3}", CarText, CarClassLabel, CarPerformanceIndex, DrivetrainLabel);
+    }
+
+    private string CarLabel(CarKey car) => CarDisplayName.For(car.CarOrdinal, _carNames);
+
+    /// <summary>A car was renamed: the current car's pill and every table row quote the new name.</summary>
+    private void OnCarNamesChanged()
+    {
+        if (_car is { } car)
+        {
+            ShowCarName(car);
+        }
+
+        RebuildRows();
+    }
+
+    /// <summary>Opens the rename box for the car being driven (the pencil next to the current-car pill).</summary>
+    [RelayCommand]
+    private void RenameCurrentCar()
+    {
+        if (_car is { } car)
+        {
+            _carRename?.Begin(car.CarOrdinal);
+        }
+    }
+
+    /// <summary>Opens the rename box for one car of the table ("Rename" on its row).</summary>
+    [RelayCommand]
+    private void RenameCar(int carOrdinal) => _carRename?.Begin(carOrdinal);
 
     // ---- Runs and saving --------------------------------------------------------------------------------
 
@@ -750,6 +798,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
             record.UpdatedAt == DateTimeOffset.UnixEpoch
                 ? NoValue
                 : record.UpdatedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture),
-            record.Car == _car);
+            record.Car == _car,
+            record.Car.CarOrdinal);
     }
 }
