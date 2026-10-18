@@ -1,0 +1,54 @@
+name: Release
+
+# Runs when a version tag such as v1.0.0 is pushed. Builds the installer and attaches it to a GitHub Release.
+on:
+  push:
+    tags: ['v*.*.*'] # v1.0.0, v1.1.0-rc.1, ... (build.ps1 validates the exact version format)
+
+permissions:
+  contents: write # needed to create the release and upload assets
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      # Fail early if the owner-facing placeholders were never filled in.
+      - name: Release guard (no placeholders)
+        shell: pwsh
+        run: |
+          $files = 'LICENSE', 'installer/ForzaTelemetry.iss'
+          $bad = Select-String -Path $files -Pattern '<COPYRIGHT HOLDER>', '<OWNER>', '<REPO>' -SimpleMatch
+          if ($bad) {
+            $bad | ForEach-Object { Write-Host "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }
+            throw 'Placeholders remain. Fill them in before releasing.'
+          }
+
+      # The tag goes through an environment variable, never interpolated into the script text (injection risk).
+      - name: Build installer
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          $version = $env:TAG.TrimStart('v')
+          ./installer/build.ps1 -Version $version
+
+      # TODO (future): code-sign the installer here, for example with SignPath Foundation (free for open source):
+      # submit dist/*.exe to SignPath, wait for the signed artifact, then compute the SHA-256 on the signed file.
+      # Until then the installer is unsigned and Windows SmartScreen may warn on first run.
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2.2.2
+        with:
+          files: |
+            dist/ForzaTelemetry-Setup-*.exe
+            dist/ForzaTelemetry-Setup-*.exe.sha256
+          generate_release_notes: true
