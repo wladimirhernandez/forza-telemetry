@@ -95,6 +95,12 @@
         <!-- An arrow dropping into a tray: "save this out as a file" (the Export CSV buttons). -->
         <Geometry x:Key="ExportIcon">M 6,0.8 V 7.6 M 3,4.8 L 6,7.8 L 9,4.8 M 1,10.8 H 11</Geometry>
 
+        <!-- A window with a small window docked in its corner: "picture in picture", the compact always-on-top view. -->
+        <Geometry x:Key="MiniModeIcon">M 0.8,1.8 H 11.2 V 10.2 H 0.8 Z M 5.6,5.8 H 9.4 V 8.4 H 5.6 Z</Geometry>
+
+        <!-- A push pin, head up: "keep this window on top". The head is closed so the button can fill it when the pin is on. -->
+        <Geometry x:Key="PinIcon">M 4.2,0.8 H 7.8 L 7.4,4.6 L 9.2,6.6 H 2.8 L 4.6,4.6 Z M 6,6.6 V 11.2</Geometry>
+
         <!-- Card surface: a dark rounded panel with a hairline border. -->
         <Style x:Key="CardStyle" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource CardBrush}" />

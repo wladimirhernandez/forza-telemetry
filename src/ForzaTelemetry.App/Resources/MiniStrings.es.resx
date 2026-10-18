@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="MiniModeTooltip" xml:space="preserve">
+    <value>Modo mini (Ctrl+M)</value>
+  </data>
+  <data name="MiniWindowTitle" xml:space="preserve">
+    <value>Modo mini de Forza Telemetry</value>
+  </data>
+  <data name="MiniPinTooltip" xml:space="preserve">
+    <value>Mantener sobre las demás ventanas</value>
+  </data>
+  <data name="MiniPinName" xml:space="preserve">
+    <value>Siempre visible</value>
+  </data>
+  <data name="MiniOpacityName" xml:space="preserve">
+    <value>Opacidad</value>
+  </data>
+  <data name="MiniOpacityFormat" xml:space="preserve">
+    <value>Opacidad {0}%</value>
+  </data>
+  <data name="MiniCloseTooltip" xml:space="preserve">
+    <value>Cerrar el modo mini (Esc)</value>
+  </data>
+  <data name="MiniHideMainTitle" xml:space="preserve">
+    <value>Modo mini</value>
+  </data>
+  <data name="MiniHideMainLabel" xml:space="preserve">
+    <value>Ocultar la ventana principal mientras el modo mini está abierto</value>
+  </data>
+  <data name="MiniHideMainHint" xml:space="preserve">
+    <value>La ventana principal se minimiza al abrir el modo mini y vuelve cuando lo cierras. Pulsa Ctrl+M en cualquier parte de la app para abrirlo.</value>
+  </data>
+</root>

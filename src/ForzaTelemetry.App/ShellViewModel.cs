@@ -178,6 +178,7 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost, IC
         Dashboard.Guide = guide;
         CarRename = carRename;
         Dashboard.CarRename = carRename;
+        Mini = new MiniModeViewModel(Dashboard, lapsPage, settings); // the same view models, shown in a second window: no second data path
         ObserveModal(guide);
         ObserveModal(carRename);
         Tabs = BuildTabs(Dashboard, performancePage, lapsPage, sessionsPage, analysisPage, mapPage, tuningPage, settingsPage);
@@ -228,6 +229,9 @@ public sealed partial class ShellViewModel : ObservableObject, ISessionsHost, IC
 
     /// <summary>The Sessions screen's values (record, library, player); null when the shell was built without one (tests).</summary>
     public SessionsViewModel? Sessions { get; }
+
+    /// <summary>The compact always-on-top window's state; it shows <see cref="Dashboard"/> and <see cref="Laps"/>, so it adds no per-tick work while closed.</summary>
+    public MiniModeViewModel Mini { get; }
 
     /// <summary>This PC's address and the port the game must send to (top bar pill; later also the Settings guide).</summary>
     public DataOutViewModel DataOut { get; }

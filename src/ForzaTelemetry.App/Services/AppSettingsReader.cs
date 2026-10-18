@@ -86,6 +86,28 @@ internal static class AppSettingsReader
                     settings = accepted ? settings with { HasCompletedSetup = value.GetBoolean() } : settings;
                     break;
 
+                case "hidemainwindowinminimode":
+                    accepted = value.ValueKind is JsonValueKind.True or JsonValueKind.False;
+                    settings = accepted ? settings with { HideMainWindowInMiniMode = value.GetBoolean() } : settings;
+                    break;
+
+                case "minialwaysontop":
+                    accepted = value.ValueKind is JsonValueKind.True or JsonValueKind.False;
+                    settings = accepted ? settings with { MiniAlwaysOnTop = value.GetBoolean() } : settings;
+                    break;
+
+                case "miniopacity":
+                    accepted = value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var opacity) && AppSettings.IsValidMiniOpacity(opacity);
+                    settings = accepted ? settings with { MiniOpacity = value.GetDouble() } : settings;
+                    break;
+
+                case "miniplacements":
+                    // Entry by entry: one damaged position must not cost the positions of the other monitor arrangements.
+                    // A non-array is rejected as a whole; an array with a bad entry keeps the good ones and still reports the field.
+                    accepted = TryReadPlacements(value, out var placements);
+                    settings = placements is null ? settings : settings with { MiniPlacements = placements };
+                    break;
+
                 default:
                     // Clone: the element points into the document, which is disposed when this method returns.
                     (unknown ??= [])[name] = value.Clone();
@@ -99,6 +121,69 @@ internal static class AppSettingsReader
         }
 
         return new SettingsReadResult(settings with { ExtensionData = unknown }, fileVersion, rejected);
+    }
+
+    /// <summary>
+    /// Reads the list of remembered mini-window positions. Returns false when the value is not an array or when any entry was unusable;
+    /// <paramref name="placements"/> then holds whatever could be kept (null when nothing could).
+    /// </summary>
+    private static bool TryReadPlacements(JsonElement value, out IReadOnlyList<MiniWindowPlacement>? placements)
+    {
+        placements = null;
+        if (value.ValueKind != JsonValueKind.Array)
+        {
+            return false;
+        }
+
+        var kept = new List<MiniWindowPlacement>();
+        var allUsable = true;
+        foreach (var entry in value.EnumerateArray())
+        {
+            if (TryReadPlacement(entry, out var placement))
+            {
+                kept.Add(placement);
+            }
+            else
+            {
+                allUsable = false;
+            }
+        }
+
+        placements = kept;
+        return allUsable;
+    }
+
+    private static bool TryReadPlacement(JsonElement entry, out MiniWindowPlacement placement)
+    {
+        placement = null!;
+        if (entry.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        string? setup = null;
+        double left = double.NaN, top = double.NaN, width = double.NaN, height = double.NaN;
+        foreach (var property in entry.EnumerateObject())
+        {
+            var number = property.Value.ValueKind == JsonValueKind.Number && property.Value.TryGetDouble(out var parsed) ? parsed : double.NaN;
+            switch (property.Name.ToLowerInvariant())
+            {
+                case "setup": setup = property.Value.ValueKind == JsonValueKind.String ? property.Value.GetString() : null; break;
+                case "left": left = number; break;
+                case "top": top = number; break;
+                case "width": width = number; break;
+                case "height": height = number; break;
+            }
+        }
+
+        var candidate = new MiniWindowPlacement(setup ?? "", left, top, width, height);
+        if (!candidate.IsUsable)
+        {
+            return false;
+        }
+
+        placement = candidate;
+        return true;
     }
 
     /// <summary>A JSON number that is a whole number fitting an int. (<see cref="JsonElement.TryGetInt32"/> alone THROWS for a non-number, so the kind is checked first.)</summary>

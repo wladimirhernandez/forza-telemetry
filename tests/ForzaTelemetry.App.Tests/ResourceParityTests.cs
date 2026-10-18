@@ -11,7 +11,7 @@ namespace ForzaTelemetry.App.Tests;
 /// </summary>
 public class ResourceParityTests
 {
-    public static TheoryData<string> Sets => new() { nameof(SetupStrings), nameof(CarNameStrings), nameof(InsightsStrings), nameof(ExportStrings) };
+    public static TheoryData<string> Sets => new() { nameof(SetupStrings), nameof(CarNameStrings), nameof(InsightsStrings), nameof(ExportStrings), nameof(MiniStrings) };
 
     private static ResourceManager ManagerOf(string name) => name switch
     {
@@ -19,6 +19,7 @@ public class ResourceParityTests
         nameof(CarNameStrings) => CarNameStrings.ResourceManager,
         nameof(InsightsStrings) => InsightsStrings.ResourceManager,
         nameof(ExportStrings) => ExportStrings.ResourceManager,
+        nameof(MiniStrings) => MiniStrings.ResourceManager,
         _ => throw new ArgumentOutOfRangeException(nameof(name))
     };
 

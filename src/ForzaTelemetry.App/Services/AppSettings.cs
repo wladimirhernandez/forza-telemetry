@@ -27,6 +27,28 @@ public enum AppLanguage
 }
 
 /// <summary>
+/// Where the mini-mode window sat the last time it was closed, for ONE arrangement of monitors.
+/// </summary>
+/// <param name="Setup">
+/// The monitor arrangement this position belongs to (see <see cref="MiniModeGeometry.SetupKey"/>). A laptop that is sometimes docked has two
+/// layouts; remembering one position per layout puts the window back where it was on THIS desk instead of wherever the other layout left it.
+/// </param>
+/// <param name="Left">Left edge in physical pixels, in virtual-screen coordinates (negative on a monitor left of the primary one).</param>
+/// <param name="Top">Top edge in physical pixels.</param>
+/// <param name="Width">Width in physical pixels, shadow margin included.</param>
+/// <param name="Height">Height in physical pixels, shadow margin included.</param>
+public sealed record MiniWindowPlacement(string Setup, double Left, double Top, double Width, double Height)
+{
+    /// <summary>True when every number is a real, positive-size rectangle and the layout is named: a hand-edited or damaged entry is dropped, not trusted.</summary>
+    [JsonIgnore]
+    public bool IsUsable =>
+        !string.IsNullOrWhiteSpace(Setup)
+        && double.IsFinite(Left) && double.IsFinite(Top)
+        && double.IsFinite(Width) && double.IsFinite(Height)
+        && Width > 0 && Height > 0;
+}
+
+/// <summary>
 /// Everything the user can change in Settings, as one immutable value that is saved to JSON.
 /// </summary>
 /// <param name="SchemaVersion">
@@ -72,7 +94,11 @@ public sealed record AppSettings(
     TemperatureUnit TemperatureUnit = TemperatureUnit.Celsius,
     AppLanguage Language = AppLanguage.System,
     bool StartListeningOnLaunch = false,
-    bool HasCompletedSetup = false)
+    bool HasCompletedSetup = false,
+    bool HideMainWindowInMiniMode = true,
+    bool MiniAlwaysOnTop = true,
+    double MiniOpacity = AppSettings.MaxMiniOpacity,
+    IReadOnlyList<MiniWindowPlacement>? MiniPlacements = null)
 {
     /// <summary>Properties found in the file that this build does not know (written by a newer version); kept so a save does not drop them.</summary>
     [JsonIgnore]
@@ -86,6 +112,15 @@ public sealed record AppSettings(
 
     /// <summary>Highest valid UDP port.</summary>
     public const int MaxPort = 65535;
+
+    /// <summary>Lowest mini-window opacity: still readable over a bright track, yet clearly see-through.</summary>
+    public const double MinMiniOpacity = 0.6;
+
+    /// <summary>Fully opaque.</summary>
+    public const double MaxMiniOpacity = 1.0;
+
+    /// <summary>How many monitor arrangements keep a remembered mini-window position (the oldest is forgotten first), so the file cannot grow forever.</summary>
+    public const int MaxMiniPlacements = 8;
 
     /// <summary>The settings a fresh install starts with.</summary>
     public static AppSettings Default { get; } = new();
@@ -104,6 +139,31 @@ public sealed record AppSettings(
         UdpPort = IsValidPort(UdpPort) ? UdpPort : Default.UdpPort,
         SpeedUnit = Enum.IsDefined(SpeedUnit) ? SpeedUnit : Default.SpeedUnit,
         TemperatureUnit = Enum.IsDefined(TemperatureUnit) ? TemperatureUnit : Default.TemperatureUnit,
-        Language = Enum.IsDefined(Language) ? Language : Default.Language
+        Language = Enum.IsDefined(Language) ? Language : Default.Language,
+        MiniOpacity = IsValidMiniOpacity(MiniOpacity) ? MiniOpacity : Default.MiniOpacity,
+        MiniPlacements = SanitizedPlacements(MiniPlacements)
     };
+
+    /// <summary>True for a real number inside <see cref="MinMiniOpacity"/>..<see cref="MaxMiniOpacity"/> (NaN and infinity are not).</summary>
+    public static bool IsValidMiniOpacity(double opacity) => opacity is >= MinMiniOpacity and <= MaxMiniOpacity;
+
+    // Keeps the usable entries, one per monitor arrangement (the LAST one wins: it is the most recent), and only the newest few.
+    // Returns the same list when nothing needed fixing, so a sanitized copy of clean settings still compares equal to the original.
+    private static IReadOnlyList<MiniWindowPlacement>? SanitizedPlacements(IReadOnlyList<MiniWindowPlacement>? placements)
+    {
+        if (placements is null)
+        {
+            return null;
+        }
+
+        var kept = placements
+            .Where(p => p is { IsUsable: true })
+            .Reverse()
+            .DistinctBy(p => p.Setup)
+            .Take(MaxMiniPlacements)
+            .Reverse()
+            .ToList();
+
+        return kept.SequenceEqual(placements) ? placements : kept;
+    }
 }

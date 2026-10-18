@@ -12,10 +12,14 @@ public partial class MainWindow : Window
     // mouse travels a few pixels, so a plain click on the title bar of a maximized window does not un-maximize it.
     private Point? _pendingRestoreDrag;
 
+    // Opens and closes the mini window from the shell's Mini state; held in a field so it is plain that it lives as long as this window.
+    private readonly MiniModeController _miniMode;
+
     public MainWindow(ShellViewModel viewModel)
     {
         InitializeComponent();
         DataContext = viewModel;
+        _miniMode = new MiniModeController(this, viewModel.Mini);
     }
 
     /// <summary>

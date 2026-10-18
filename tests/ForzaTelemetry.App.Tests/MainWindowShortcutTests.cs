@@ -12,7 +12,7 @@ public class MainWindowShortcutTests
 {
     private static readonly XNamespace Presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
-    private static List<(string Key, string Modifiers, string Target)> ReadKeyBindings()
+    private static XDocument LoadMainWindowXaml()
     {
         // Walk up from the test binaries to the repository root, where the app's source lives.
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
@@ -22,9 +22,14 @@ public class MainWindowShortcutTests
         }
 
         Assert.NotNull(directory);
-        var xaml = XDocument.Load(Path.Combine(directory.FullName, "src", "ForzaTelemetry.App", "MainWindow.xaml"));
+        return XDocument.Load(Path.Combine(directory.FullName, "src", "ForzaTelemetry.App", "MainWindow.xaml"));
+    }
 
-        return xaml.Descendants(Presentation + "KeyBinding")
+    // Only the tab shortcuts: they are the bindings that carry a PageId as their parameter.
+    private static List<(string Key, string Modifiers, string Target)> ReadKeyBindings()
+    {
+        return LoadMainWindowXaml().Descendants(Presentation + "KeyBinding")
+            .Where(b => b.Attribute("CommandParameter") is not null)
             .Select(b => (
                 Key: (string?)b.Attribute("Key") ?? "",
                 Modifiers: (string?)b.Attribute("Modifiers") ?? "",
@@ -46,5 +51,15 @@ public class MainWindowShortcutTests
         }
 
         Assert.Equal(pages.Length * 2, bindings.Count); // nothing else hides in there
+    }
+
+    [Fact]
+    public void Ctrl_M_opens_mini_mode_through_the_shell_command()
+    {
+        var binding = LoadMainWindowXaml().Descendants(Presentation + "KeyBinding")
+            .Single(b => (string?)b.Attribute("Key") == "M");
+
+        Assert.Equal("Control", (string?)binding.Attribute("Modifiers"));
+        Assert.Equal("{Binding Mini.ToggleCommand}", (string?)binding.Attribute("Command"));
     }
 }

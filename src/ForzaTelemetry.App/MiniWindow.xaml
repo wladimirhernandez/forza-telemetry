@@ -1,0 +1,343 @@
+<Window x:Class="ForzaTelemetry.App.MiniWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:ForzaTelemetry.App"
+        xmlns:controls="clr-namespace:ForzaTelemetry.App.Controls"
+        xmlns:services="clr-namespace:ForzaTelemetry.App.Services"
+        xmlns:res="clr-namespace:ForzaTelemetry.App.Resources"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance local:MiniModeViewModel}"
+        Title="{x:Static res:MiniStrings.MiniWindowTitle}"
+        Icon="Resources/app.ico"
+        Width="360" Height="140" MinWidth="260" MinHeight="110" MaxWidth="640" MaxHeight="260"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        WindowStartupLocation="Manual"
+        UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Display"
+        Topmost="{Binding IsTopmost}"
+        Opacity="{Binding Opacity}">
+    <!--
+      The compact always-on-top window. Same borderless technique as MainWindow (transparent window, a rounded Border that draws the card
+      and its shadow, WindowChrome that gives back the resize edges), in a smaller size and with these differences:
+      - It is NOT in the taskbar and has no owner: an owned window is minimized together with its owner, and the whole point is to keep
+        this one up while the main window is hidden. The main window stays reachable from the taskbar.
+      - Its DataContext is the MiniModeViewModel, whose Dashboard and Laps are the very objects the main window binds: no second data path.
+      - The content scales (a Viewbox), so "resizable" means "a bigger readout", not "more empty space".
+      - Topmost and Opacity are bound to the view model: the pin button and the slider are the only code that changes them.
+    -->
+    <Window.Resources>
+        <shell:WindowChrome x:Key="MiniChrome" CaptionHeight="0" GlassFrameThickness="0" CornerRadius="0"
+                            UseAeroCaptionButtons="False" ResizeBorderThickness="10" />
+
+        <!--
+          Delta pill, the same look as the Laps screen (tinted fill + coloured text, chosen from the closed LapDeltaState, never by parsing
+          the text): green = ahead of the best lap, red = behind, plain = level. Smaller type, because it shares a 360 px window with the gear.
+        -->
+        <Style x:Key="MiniDeltaFill" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource MutedBrush}" />
+            <Setter Property="Opacity" Value="0.16" />
+            <Setter Property="CornerRadius" Value="20" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding DeltaState}" Value="Ahead">
+                    <Setter Property="Background" Value="{StaticResource ThrottleBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding DeltaState}" Value="Behind">
+                    <Setter Property="Background" Value="{StaticResource BrakeBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="MiniDeltaText" TargetType="TextBlock" BasedOn="{StaticResource NumeralText}">
+            <Setter Property="FontSize" Value="24" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding DeltaState}" Value="Ahead">
+                    <Setter Property="Foreground" Value="{StaticResource ThrottleBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding DeltaState}" Value="Behind">
+                    <Setter Property="Foreground" Value="{StaticResource BrakeBrush}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!--
+          The running lap time: shown only while a lap runs AND there is no delta to show (no reference lap yet), so the corner always holds
+          the one most useful number and never both. Collapsed otherwise, so it takes no room.
+        -->
+        <Style x:Key="MiniLapClock" TargetType="TextBlock" BasedOn="{StaticResource NumeralText}">
+            <Setter Property="FontSize" Value="24" />
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsRacing}" Value="True" />
+                        <Condition Binding="{Binding HasDelta}" Value="False" />
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible" />
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Pin: a toggle button (so a screen reader says "toggle button, on/off"). Outline and tilted when free, filled green and upright when pinned. -->
+        <Style x:Key="MiniPinToggle" TargetType="ToggleButton">
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+            <Setter Property="Width" Value="26" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Face" Background="Transparent" CornerRadius="{StaticResource ButtonRadius}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Face" Property="Background" Value="{StaticResource CardRaisedBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="Foreground" Value="{StaticResource ThrottleBrush}" />
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!--
+          Opacity slider, themed like the rest of the app: a thin hairline track, a muted fill up to the thumb and a round thumb. The two
+          RepeatButtons are the clickable halves of the track (a click pages the value, exactly like the stock slider); they are transparent
+          full-height hit areas with the visible 4 px bar drawn inside.
+        -->
+        <Style x:Key="MiniSliderTrackButton" TargetType="RepeatButton">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RepeatButton">
+                        <Border Background="Transparent" Height="24">
+                            <Border Height="4" CornerRadius="2" Background="{StaticResource HairlineBrush}" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="MiniSliderFillButton" TargetType="RepeatButton" BasedOn="{StaticResource MiniSliderTrackButton}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RepeatButton">
+                        <Border Background="Transparent" Height="24">
+                            <Border Height="4" CornerRadius="2" Background="{StaticResource MutedBrush}" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="MiniSliderThumb" TargetType="Thumb">
+            <Setter Property="Width" Value="14" />
+            <Setter Property="Height" Value="14" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Ellipse x:Name="Dot" Fill="{StaticResource TextBrush}" Stroke="{StaticResource CanvasBrush}" StrokeThickness="2" />
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Dot" Property="Fill" Value="{StaticResource ThrottleBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsDragging" Value="True">
+                                <Setter TargetName="Dot" Property="Fill" Value="{StaticResource ThrottleBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="MiniSlider" TargetType="Slider">
+            <Setter Property="Width" Value="84" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="IsMoveToPointEnabled" Value="False" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource PillFocusRing}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <Grid Background="Transparent">
+                            <Track x:Name="PART_Track">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="Slider.DecreaseLarge" Style="{StaticResource MiniSliderFillButton}" />
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="Slider.IncreaseLarge" Style="{StaticResource MiniSliderTrackButton}" />
+                                </Track.IncreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource MiniSliderThumb}" />
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The control strip is quiet until the pointer or the keyboard focus is in it, so it never competes with the numbers. -->
+        <Style x:Key="MiniControlStrip" TargetType="StackPanel">
+            <Setter Property="Opacity" Value="0.7" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Opacity" Value="1" />
+                </Trigger>
+                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                    <Setter Property="Opacity" Value="1" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <!--
+      Esc closes (and the main window comes back); Ctrl+M closes too, so the same shortcut that opened mini mode closes it even though the
+      main window is minimized and cannot hear it.
+    -->
+    <Window.InputBindings>
+        <KeyBinding Key="Escape" Command="{Binding CloseCommand}" />
+        <KeyBinding Key="M" Modifiers="Control" Command="{Binding CloseCommand}" />
+    </Window.InputBindings>
+    <Window.Style>
+        <Style TargetType="Window">
+            <Setter Property="shell:WindowChrome.WindowChrome" Value="{StaticResource MiniChrome}" />
+        </Style>
+    </Window.Style>
+
+    <!-- Dragging works from anywhere on the card (see OnCardMouseDown); buttons and the slider mark their own clicks handled. -->
+    <Border Margin="{StaticResource ChromeMargin}" CornerRadius="{StaticResource WindowRadius}"
+            Background="{StaticResource CanvasBrush}" BorderBrush="{StaticResource HairlineBrush}" BorderThickness="1"
+            TextElement.Foreground="{StaticResource TextBrush}"
+            TextElement.FontFamily="{StaticResource LabelFont}"
+            AutomationProperties.Name="{x:Static res:MiniStrings.MiniWindowTitle}"
+            MouseLeftButtonDown="OnCardMouseDown">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="20" ShadowDepth="0" Opacity="0.55" Color="Black" />
+        </Border.Effect>
+        <Grid Margin="14,12,14,6">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="26" />
+            </Grid.RowDefinitions>
+
+            <!--
+              The readout, designed at 306 x 70 and scaled to the window. Row 0: the shift lights (the existing control, so the blink rule
+              and the colours are the dashboard's). Row 1: gear, speed with its unit, and the delta (or the lap clock).
+            -->
+            <Viewbox Grid.Row="0" Stretch="Uniform" StretchDirection="Both">
+                <Grid Width="306" Height="70">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="6" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <controls:ShiftLightStrip Grid.Row="0" SegmentCount="12"
+                                              Value="{Binding Dashboard.Rpm}" Maximum="{Binding Dashboard.MaxRpm}" IsRedline="{Binding Dashboard.IsRedline}" />
+
+                    <Grid Grid.Row="1" Margin="0,9,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MinWidth="58" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0" Text="{Binding Dashboard.GearLabel}" Style="{StaticResource NumeralText}" FontSize="60"
+                                   LineHeight="56" LineStackingStrategy="BlockLineHeight" VerticalAlignment="Center"
+                                   AutomationProperties.Name="{x:Static res:Strings.GearLabel}" />
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                            <TextBlock Text="{Binding Dashboard.SpeedReadout}" Style="{StaticResource NumeralText}" FontSize="46"
+                                       LineHeight="52" LineStackingStrategy="BlockLineHeight"
+                                       AutomationProperties.Name="{x:Static res:Strings.SpeedLabel}" />
+                            <TextBlock Text="{Binding Dashboard.SpeedUnitLabel}" Style="{StaticResource MutedLabel}" FontSize="13"
+                                       VerticalAlignment="Bottom" Margin="6,0,0,10" />
+                        </StackPanel>
+
+                        <!-- The corner: the live delta pill when there is one, else the running lap time, else nothing. -->
+                        <Grid Grid.Column="2" VerticalAlignment="Center" DataContext="{Binding Laps}">
+                            <Grid Visibility="{Binding HasDelta, Converter={StaticResource BoolToVisibility}}"
+                                  AutomationProperties.Name="{Binding DeltaName}">
+                                <Border Style="{StaticResource MiniDeltaFill}" />
+                                <TextBlock Text="{Binding DeltaText}" Style="{StaticResource MiniDeltaText}" Margin="14,3,14,4"
+                                           HorizontalAlignment="Center" />
+                            </Grid>
+                            <TextBlock Text="{Binding CurrentLapText}" Style="{StaticResource MiniLapClock}" />
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </Viewbox>
+
+            <!-- Bottom strip: the lap number on the left; pin, opacity and close on the right. -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="{Binding Laps.LapNumberText}" Style="{StaticResource MutedLabel}" FontSize="12"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Style="{StaticResource MiniControlStrip}">
+                    <Slider Style="{StaticResource MiniSlider}" Minimum="{x:Static services:AppSettings.MinMiniOpacity}"
+                            Maximum="{x:Static services:AppSettings.MaxMiniOpacity}" SmallChange="0.05" LargeChange="0.1"
+                            Value="{Binding Opacity, Mode=TwoWay}"
+                            ToolTip="{Binding OpacityText}"
+                            AutomationProperties.Name="{x:Static res:MiniStrings.MiniOpacityName}"
+                            AutomationProperties.HelpText="{Binding OpacityText}" />
+                    <ToggleButton Style="{StaticResource MiniPinToggle}" Margin="6,0,0,0"
+                                  IsChecked="{Binding IsTopmost, Mode=TwoWay}"
+                                  ToolTip="{x:Static res:MiniStrings.MiniPinTooltip}"
+                                  AutomationProperties.Name="{x:Static res:MiniStrings.MiniPinName}">
+                        <Path Data="{StaticResource PinIcon}" Stretch="None"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"
+                              StrokeThickness="1.3" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round">
+                            <Path.Style>
+                                <Style TargetType="Path">
+                                    <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+                                    <Setter Property="RenderTransform">
+                                        <Setter.Value>
+                                            <RotateTransform Angle="40" />
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource AncestorType=ToggleButton}}" Value="True">
+                                            <Setter Property="Fill" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" />
+                                            <Setter Property="RenderTransform" Value="{x:Null}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Path.Style>
+                        </Path>
+                    </ToggleButton>
+                    <Button Style="{StaticResource CloseGlyphButton}" Width="26" Height="24" Margin="2,0,0,0"
+                            Command="{Binding CloseCommand}"
+                            ToolTip="{x:Static res:MiniStrings.MiniCloseTooltip}"
+                            AutomationProperties.Name="{x:Static res:MiniStrings.MiniCloseTooltip}"
+                            AutomationProperties.AcceleratorKey="Escape">
+                        <Path Data="{StaticResource CloseIcon}"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Stretch="None" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

@@ -255,6 +255,28 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Mini mode -->
+                <Border Style="{StaticResource CardStyle}" Margin="0,14,0,0"
+                        AutomationProperties.Name="{x:Static res:MiniStrings.MiniHideMainTitle}">
+                    <StackPanel>
+                        <TextBlock Text="{x:Static res:MiniStrings.MiniHideMainTitle}" Style="{StaticResource SectionTitle}" />
+                        <Grid Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,16,0">
+                                <TextBlock Text="{x:Static res:MiniStrings.MiniHideMainLabel}" Foreground="{StaticResource TextBrush}"
+                                           FontSize="14" TextWrapping="Wrap" />
+                                <TextBlock Text="{x:Static res:MiniStrings.MiniHideMainHint}" Style="{StaticResource SmallNote}" Margin="0,3,0,0" />
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding HideMainWindowInMiniMode, Mode=TwoWay}"
+                                      AutomationProperties.Name="{x:Static res:MiniStrings.MiniHideMainLabel}" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
                 <!-- Diagnostics -->
                 <Border Style="{StaticResource CardStyle}" Margin="0,14,0,0"
                         AutomationProperties.Name="{x:Static res:Strings.DiagnosticsTitle}">

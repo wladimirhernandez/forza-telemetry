@@ -68,6 +68,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _temperatureUnit = current.TemperatureUnit;
         _language = current.Language;
         _startListeningOnLaunch = current.StartListeningOnLaunch;
+        _hideMainWindowInMiniMode = current.HideMainWindowInMiniMode;
         _activeLanguage = current.Language;
 
         // The Data Out guide quotes the live address and port, so it must re-render when either changes.
@@ -213,6 +214,15 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     partial void OnStartListeningOnLaunchChanged(bool value) =>
         _settings.Update(s => s with { StartListeningOnLaunch = value });
+
+    // ---- Mini mode ----------------------------------------------------------------------------
+
+    /// <summary>Minimize the main window while the mini window is open (and bring it back when that closes). Pin and opacity live on the mini window itself.</summary>
+    [ObservableProperty]
+    private bool _hideMainWindowInMiniMode;
+
+    partial void OnHideMainWindowInMiniModeChanged(bool value) =>
+        _settings.Update(s => s with { HideMainWindowInMiniMode = value });
 
     // ---- Diagnostics --------------------------------------------------------------------------
 
