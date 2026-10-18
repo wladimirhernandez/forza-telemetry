@@ -88,6 +88,9 @@ internal static partial class AppLog
     [LoggerMessage(EventId = 133, Level = LogLevel.Warning, Message = "Ignoring the unusable value of setting '{Field}' in {Path}; that setting uses its default.")]
     public static partial void SettingsFieldRejected(ILogger logger, string field, string path);
 
+    [LoggerMessage(EventId = 134, Level = LogLevel.Warning, Message = "Could not keep a copy of the corrupt file {Path} (it is about to be replaced by defaults).")]
+    public static partial void CorruptCopyFailed(ILogger logger, string path);
+
     // ---- Network profile (140s) ----
 
     [LoggerMessage(EventId = 140, Level = LogLevel.Warning, Message = "Could not read the Windows network profile; the Public-network warning is skipped.")]

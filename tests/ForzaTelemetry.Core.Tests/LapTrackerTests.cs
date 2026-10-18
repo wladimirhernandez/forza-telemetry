@@ -337,4 +337,20 @@ public class LapTrackerTests
         Assert.Equal(8, lap.Number);
         Assert.Equal(0, lap.TimeSeconds);
     }
+
+    [Fact]
+    public void A_jump_of_more_than_one_lap_labels_the_finished_lap_with_the_packets_number_and_invents_no_laps()
+    {
+        var tracker = new LapTracker();
+        DriveLap(tracker, 3, 20, 3000);
+
+        // Two packets of the counter were lost (or the game paused): 3 -> 5. The lap that just finished is lap 5.
+        tracker.OnPacket(Lap(5, 0.0, 5000, lastLap: 21, bestLap: 20));
+
+        var snap = tracker.Current;
+        Assert.Equal(6, snap.CurrentLapNumber);
+        var lap = Assert.Single(snap.Laps); // lap 4 was never seen: no made-up row for it
+        Assert.Equal(5, lap.Number);
+        Assert.Equal(21, lap.TimeSeconds, 3);
+    }
 }

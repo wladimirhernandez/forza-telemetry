@@ -163,7 +163,12 @@ public sealed class PerformanceHistoryStore
         catch (JsonException ex)
         {
             AppLog.PerformanceHistoryCorrupt(_logger, ex, _path);
-            AtomicFile.KeepCorruptCopy(_path);
+            if (!AtomicFile.KeepCorruptCopy(_path))
+            {
+                // The copy is best effort, but the log line above promised one: say when it did not happen.
+                AppLog.CorruptCopyFailed(_logger, _path);
+            }
+
         }
     }
 

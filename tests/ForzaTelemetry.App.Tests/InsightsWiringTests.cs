@@ -48,7 +48,8 @@ public class InsightsWiringTests
                 settings: Settings,
                 analysisPage: Analysis,
                 mapPage: Map,
-                tuningPage: Tuning);
+                tuningPage: Tuning,
+                engines: Engines);
         }
 
         public TelemetryEngines Engines { get; }
@@ -231,15 +232,15 @@ public class InsightsWiringTests
     public async Task The_visible_page_is_refreshed_even_while_the_listener_is_faulted()
     {
         var rig = new Rig();
-        rig.Drive();
         rig.BusyPorts.Add(rig.Settings.Current.UdpPort);
         await rig.Shell.StartCommand.ExecuteAsync(null); // fails: port in use
+        rig.Drive(); // the engines still hold data (a loop that faulted mid-session leaves its session behind)
         rig.Shell.NavigateCommand.Execute(PageId.Analysis);
 
         rig.Shell.Refresh();
 
         Assert.NotNull(rig.Service.Fault);
-        Assert.True(rig.Analysis.HasData); // the session before the failure is still readable
+        Assert.True(rig.Analysis.HasData); // what the engines hold stays readable while faulted
     }
 
     // ---- Session semantics --------------------------------------------------------------------------------
@@ -268,8 +269,10 @@ public class InsightsWiringTests
     }
 
     [Fact]
-    public async Task A_start_that_fails_keeps_the_previous_sessions_traces_path_and_tallies()
+    public async Task A_start_that_fails_has_already_begun_the_new_session_so_the_old_data_is_gone()
     {
+        // The engines are reset BEFORE the receive loop starts (resetting after it raced the first packets), so a Start
+        // that then fails (port in use) cannot give the previous session back: that session ended when the user asked for another.
         var rig = new Rig();
         rig.Drive();
         rig.BusyPorts.Add(rig.Settings.Current.UdpPort);
@@ -277,9 +280,30 @@ public class InsightsWiringTests
         await rig.Shell.StartCommand.ExecuteAsync(null);
 
         Assert.NotNull(rig.Service.Fault);
-        Assert.Equal(10, rig.Engines.History.Count);
-        Assert.True(rig.Engines.Path.Count > 0);
-        Assert.Equal(1, rig.Engines.Bottoming.Counts.FrontLeft);
+        Assert.Equal(0, rig.Engines.History.Count);
+        Assert.Equal(0, rig.Engines.Path.Count);
+        Assert.Equal(0, rig.Engines.Bottoming.Counts.Total);
+    }
+
+    [Fact]
+    public async Task The_engines_are_already_empty_when_the_source_is_built_that_is_before_the_loop_can_run()
+    {
+        var rig = new Rig();
+        rig.Drive();
+        var historyWhenTheSourceWasBuilt = -1;
+        var service = new TelemetryService(
+            () =>
+            {
+                historyWhenTheSourceWasBuilt = rig.Engines.History.Count;
+                return new FakeTelemetrySource();
+            },
+            observers: rig.Engines.Observers);
+        var shell = new ShellViewModel(service, TimeProvider.System, analysisPage: rig.Analysis, engines: rig.Engines);
+
+        await shell.StartCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, historyWhenTheSourceWasBuilt);
+        await shell.StopCommand.ExecuteAsync(null);
     }
 
     [Fact]

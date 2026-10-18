@@ -151,6 +151,12 @@
         <!-- ===== Insight cards ===== -->
         <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
             <StackPanel>
+                <!-- No sample yet (a new session just started, or nothing is arriving): say so once, above the cards whose
+                     values are then blank, instead of leaving them to look like readings. -->
+                <TextBlock Text="{x:Static res:InsightsStrings.TuningEmptyHint}" Style="{StaticResource MutedLabel}" FontSize="13"
+                           TextWrapping="Wrap" Margin="2,0,0,10" LineHeight="19"
+                           Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
+
                 <!-- Balance -->
                 <Border Style="{StaticResource CardStyle}" Padding="18,14" AutomationProperties.Name="{x:Static res:InsightsStrings.BalanceTitle}">
                     <StackPanel>

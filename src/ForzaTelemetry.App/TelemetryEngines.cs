@@ -41,6 +41,29 @@ public sealed class TelemetryEngines
         Observers = [CarChanges, Acceleration, TopSpeed, Laps, History, Path, Dyno, Bottoming];
     }
 
+    /// <summary>
+    /// Gives every per-session engine a clean slate: the detector forgets the current car, and the top speed, the 0-100 timer, the
+    /// laps, the history, the driven path and the bottoming tallies restart empty. The dyno is NOT reset (see <see cref="Dyno"/>).
+    /// </summary>
+    /// <remarks>
+    /// <b>Call it BEFORE the telemetry service starts a fresh session, never after.</b> The engines are written by the receive
+    /// loop. Resetting them from the UI thread once the loop is running races with the first packets: the car change of the very
+    /// first packet could be queued and then dropped by the detector reset, or a reset could erase packets that already belong to
+    /// the new session. With the loop not running yet (or already stopped), nothing else touches them, so the reset is exact.
+    /// The one place that owns this ordering is <c>ShellViewModel</c>; the page view models only reset what they DISPLAY.
+    /// The previous session's top speed must have been saved before this call (the engines forget it).
+    /// </remarks>
+    public void BeginSession()
+    {
+        CarChanges.Reset();
+        TopSpeed.Reset();
+        Acceleration.Reset();
+        Laps.Reset();
+        History.Clear();
+        Path.Clear();
+        Bottoming.Reset();
+    }
+
     /// <summary>The 0-100 / 0-200 / quarter-mile timer.</summary>
     public AccelerationTimer Acceleration { get; }
 

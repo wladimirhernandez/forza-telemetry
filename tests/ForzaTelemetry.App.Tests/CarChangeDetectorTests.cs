@@ -142,4 +142,46 @@ public class CarChangeDetectorTests
         Assert.Equal(200, changes.Count);
         Assert.Equal(Enumerable.Range(1, 200), changes.Select(c => c.Car.CarOrdinal));
     }
+
+    [Fact]
+    public void Generation_moves_with_every_change_and_with_a_reset_and_pending_changes_are_visible()
+    {
+        var detector = new CarChangeDetector();
+        var start = detector.Generation;
+        Assert.False(detector.HasPendingChanges);
+
+        detector.OnPacket(Packet(1234, 780));
+        detector.OnPacket(Packet(1234, 780)); // the same car: no change, no new generation
+
+        Assert.Equal(start + 1, detector.Generation);
+        Assert.True(detector.HasPendingChanges);
+
+        Drain(detector);
+        Assert.False(detector.HasPendingChanges);
+        Assert.Equal(start + 1, detector.Generation); // taking a change does not move it
+
+        detector.OnPacket(Packet(77, 450));
+        Assert.Equal(start + 2, detector.Generation);
+
+        detector.Reset();
+        Assert.Equal(start + 3, detector.Generation);
+        Assert.False(detector.HasPendingChanges);
+    }
+
+    [Fact]
+    public void A_change_of_the_very_first_packet_after_a_reset_is_not_lost()
+    {
+        // The bug the engines' session reset fixes: a reset that ran AFTER the loop restarted dropped the queued first change.
+        // With the reset done first, the first packet of the new session reports its car normally.
+        var detector = new CarChangeDetector();
+        detector.OnPacket(Packet(1234, 780));
+        Drain(detector);
+        detector.Reset();
+
+        detector.OnPacket(Packet(77, 450));
+
+        var change = Assert.Single(Drain(detector));
+        Assert.Null(change.PreviousCar);
+        Assert.Equal(new CarKey(77, 450), change.Car);
+    }
 }

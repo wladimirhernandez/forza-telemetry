@@ -206,19 +206,29 @@ public sealed partial class TuningViewModel : ObservableObject, IRefreshablePage
     }
 
     /// <summary>
-    /// A new listening session starts: the bottoming tallies, the balance reading and the tire values of the previous session
+    /// A new listening session starts: the balance reading, the tire values and the bottoming display of the previous session
     /// leave the screen. The dyno curves stay on purpose: they describe the car, not the session (see <see cref="TelemetryEngines.Dyno"/>).
+    /// The bottoming tallies and the history are emptied by <see cref="TelemetryEngines.BeginSession"/> before the receive loop starts.
     /// </summary>
     public void BeginSession()
     {
-        _bottoming.Reset();
         _lastCounts = new(-1, -1, -1, -1);
         _hasBalanceReading = false;
         _lastTimeMs = 0;
+        BalanceValue = 0;
         BalanceActive = false;
         BalanceState = BalanceState.Unknown;
         BalanceLabel = InsightText.BalanceLabel(BalanceState.Unknown);
         BalanceAdvice = InsightText.BalanceAdvice(BalanceState.Unknown);
+
+        // The tire card is only rewritten when a temperature or the unit CHANGES, so forget what it showed, and blank it.
+        Array.Clear(_shownTemps);
+        _shownTempUnit = (TemperatureUnit)(-1);
+        _lastTireAdvice = (TireAdvice)(-1);
+        TempFrontLeft = TempFrontRight = TempRearLeft = TempRearRight = "-";
+        BandFrontLeft = BandFrontRight = BandRearLeft = BandRearRight = TireTempBand.Unknown;
+        TireLines = [InsightsStrings.TiresNoData];
+
         HasData = false;
         RefreshSuspension();
     }

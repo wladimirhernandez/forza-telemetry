@@ -80,7 +80,12 @@ public sealed class JsonSettingsStore : ISettingsStore
         catch (JsonException ex)
         {
             AppLog.SettingsCorrupt(_logger, ex, _path);
-            AtomicFile.KeepCorruptCopy(_path);
+            if (!AtomicFile.KeepCorruptCopy(_path))
+            {
+                // The copy is best effort, but the log line above promised one: say when it did not happen.
+                AppLog.CorruptCopyFailed(_logger, _path);
+            }
+
             return AppSettings.Default;
         }
     }

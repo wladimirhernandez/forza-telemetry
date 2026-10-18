@@ -299,7 +299,9 @@ public sealed partial class PerformanceViewModel : ObservableObject
     private void ResetRun()
     {
         // Save, then WRITE: the engines are about to forget this top speed, so a crash right after would otherwise lose a
-        // best that only ever lived in memory (Merge changes memory; only Flush persists).
+        // best that only ever lived in memory (Merge changes memory; only Flush persists). The engines are read first, and
+        // that read applies a pending change of car before it credits any number to a car (see ReadEngines).
+        ReadEngines();
         SaveTopSpeedOfCurrentCar();
         _history.Flush();
         _acceleration.Reset();
@@ -329,17 +331,17 @@ public sealed partial class PerformanceViewModel : ObservableObject
     // ---- Driven by the shell ------------------------------------------------------------------------------
 
     /// <summary>
-    /// A new listening session starts (Start): everything the previous one measured leaves the screen, engines included.
-    /// The saved history is untouched, and the previous session's top speed is saved first: a Start after a fault (no Stop in
-    /// between, so no <see cref="EndSession"/> ran) would otherwise throw that best away with the reset.
+    /// A new listening session starts: everything the previous one measured leaves the SCREEN. The saved history is untouched.
     /// </summary>
+    /// <remarks>
+    /// This resets only what this page displays. The engines (and the car-change detector) are reset by
+    /// <see cref="TelemetryEngines.BeginSession"/>, which the shell calls BEFORE the receive loop starts, after
+    /// <see cref="EndSession"/> saved the previous session's top speed. Doing the engine reset here, from the UI thread after the
+    /// loop was already running, raced with the first packets: a car change of packet one could be queued and then dropped, and
+    /// a top speed read after the loop restarted could be saved under the wrong car.
+    /// </remarks>
     public void BeginSession()
     {
-        SaveTopSpeedOfCurrentCar();
-        _history.Flush();
-        _carChanges.Reset(); // the first car of this session is a "first car" again, even if it is the one just driven
-        _acceleration.Reset();
-        _topSpeed.Reset();
         _car = null;
         _live = false;
         ForgetRun();
@@ -368,17 +370,52 @@ public sealed partial class PerformanceViewModel : ObservableObject
     {
         // Only a driving packet says anything about the car: menus and pauses send IsRaceOn = false with zeroed fields.
         _live = latest is { IsRaceOn: true };
-        ApplyCarChanges();
 
-        _snapshot = _acceleration.Current;
-        _topSpeedKmh = _topSpeed.TopSpeedKmh;
+        // When a change of car lands between the steps, the engines already hold the new car's numbers: this tick keeps
+        // the previous values and the next tick (which drains the change first) reads them under the right car.
+        if (ReadEngines())
+        {
+            TrackRun(_snapshot);
+            SaveTopSpeedWhenSettled(latest);
+        }
 
-        TrackRun(_snapshot);
-        SaveTopSpeedWhenSettled(latest);
         Show();
     }
 
     // ---- Car ---------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Takes the engines' numbers for the car this view model currently knows, or nothing when that cannot be guaranteed.
+    /// </summary>
+    /// <remarks>
+    /// The receive loop can switch cars at any moment (it resets the engines when it does), while this runs on the UI thread, so
+    /// "who is driving" and "what the engines say" cannot be read in one step. Without a guard, a change landing between the
+    /// two reads would credit the NEW car's numbers (a fresh, tiny top speed, an empty timer) to the OLD car, and a top speed
+    /// saved that way is wrong forever. The guard: apply every queued change first, read the detector's generation, check
+    /// nothing is pending, read the engines, read the generation again. If anything moved, the values are discarded
+    /// (<c>false</c>) and the next tick tries again. See <see cref="CarChangeDetector.Generation"/>.
+    /// </remarks>
+    private bool ReadEngines()
+    {
+        ApplyCarChanges();
+
+        var generation = _carChanges.Generation;
+        if (_carChanges.HasPendingChanges)
+        {
+            return false;
+        }
+
+        var snapshot = _acceleration.Current;
+        var topSpeedKmh = _topSpeed.TopSpeedKmh;
+        if (_carChanges.Generation != generation)
+        {
+            return false;
+        }
+
+        _snapshot = snapshot;
+        _topSpeedKmh = topSpeedKmh;
+        return true;
+    }
 
     /// <summary>
     /// Handles every change of car the receive loop has noticed since the last tick (normally none). The detector already
@@ -409,6 +446,10 @@ public sealed partial class PerformanceViewModel : ObservableObject
 
             _carClass = change.CarClass;
             _drivetrain = change.Drivetrain;
+
+            // What the screen last read belongs to the previous car; the engines were reset for this one.
+            _snapshot = AccelerationSnapshot.Empty;
+            _topSpeedKmh = 0;
             SetCar(change.Car);
         }
     }
@@ -517,7 +558,8 @@ public sealed partial class PerformanceViewModel : ObservableObject
 
     private void SaveTopSpeedOfCurrentCar()
     {
-        var top = _topSpeed.TopSpeedKmh;
+        // The value read by the last consistent ReadEngines, which always belongs to _car (see there).
+        var top = _topSpeedKmh;
         if (_car is not { } car || top <= 0)
         {
             return;

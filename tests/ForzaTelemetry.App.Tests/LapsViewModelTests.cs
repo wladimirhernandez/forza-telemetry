@@ -18,9 +18,13 @@ public class LapsViewModelTests
     {
         private uint _ms = 1_000;
 
-        public Rig() => Vm = new LapsViewModel(Tracker);
+        public Rig(LapTracker? tracker = null)
+        {
+            Tracker = tracker ?? new LapTracker();
+            Vm = new LapsViewModel(Tracker);
+        }
 
-        public LapTracker Tracker { get; } = new();
+        public LapTracker Tracker { get; }
 
         public LapsViewModel Vm { get; }
 
@@ -91,7 +95,7 @@ public class LapsViewModelTests
         Assert.Empty(vm.Rows);
         Assert.Equal(Strings.LapsEmptyNotRacing, vm.EmptyText);
         Assert.True(vm.HasEmptyText);
-        Assert.Equal(Strings.LapsEmptyNotRacing, vm.HeroName);
+        Assert.Equal(Strings.LapsNoLapInProgress, vm.HeroName); // the sentence the idle hero shows (LapsView), not the list's empty text
     }
 
     [Fact]
@@ -310,6 +314,7 @@ public class LapsViewModelTests
         rig.DriveSession(21.4, 20.3);
         Assert.True(rig.Vm.HasLaps);
 
+        rig.Tracker.Reset(); // the engine reset, which the shell does before the loop starts
         rig.Vm.BeginSession();
 
         Assert.False(rig.Vm.HasLaps);
@@ -378,9 +383,10 @@ public class LapsViewModelTests
     [Fact]
     public async Task Starting_the_listener_clears_the_previous_sessions_laps()
     {
-        var rig = new Rig();
-        var service = new TelemetryService(() => new FakeTelemetrySource(), observers: [rig.Tracker]);
-        var shell = new ShellViewModel(service, TimeProvider.System, lapsPage: rig.Vm);
+        var engines = new TelemetryEngines();
+        var rig = new Rig(engines.Laps);
+        var service = new TelemetryService(() => new FakeTelemetrySource(), observers: engines.Observers);
+        var shell = new ShellViewModel(service, TimeProvider.System, lapsPage: rig.Vm, engines: engines);
         rig.DriveSession(21.4);
         Assert.True(rig.Vm.HasLaps);
 
@@ -447,5 +453,18 @@ public class LapsViewModelTests
 
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, Strings.LapsLapFormat, 5), rig.Vm.LapNumberText);
         Assert.Equal("4", Assert.Single(rig.Vm.Rows).NumberText); // the lap that just ended is lap 4, as the game counts it
+    }
+
+    [Fact]
+    public void The_idle_hero_name_is_the_sentence_the_idle_hero_shows()
+    {
+        var rig = new Rig();
+        rig.DriveLap(0, 20, 0, stopAtSeconds: 5.0);
+        Assert.True(rig.Vm.IsRacing);
+
+        rig.Vm.Refresh(null); // the stream is gone
+
+        Assert.False(rig.Vm.IsRacing);
+        Assert.Equal(Strings.LapsNoLapInProgress, rig.Vm.HeroName);
     }
 }

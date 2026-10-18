@@ -177,12 +177,13 @@ public sealed class LapTracker : IPacketObserver
     {
         double time = packet.LastLap > 0 ? packet.LastLap : _previousCurrentLap;
 
-        // The lap that just ended is the one AFTER the laps completed before it: _lapsCompleted still holds the previous
-        // packet's count here (StartLap moves it on right after this). Numbering by the game's own counter, instead of by
-        // "how many laps are in my list", keeps the list in step with CurrentLapNumber when this tracker joined a race that
-        // was already on lap 4 (a Start in the middle of a race, or a Reset): the hero says "Lap 5" and the lap it finishes
-        // is listed as 5, not as 1.
-        var finishedLapNumber = _lapsCompleted + 1;
+        // The packet's LapNumber is the number of laps COMPLETED, so the lap that just ended is lap number LapNumber. Taking
+        // it from the packet (not from "my previous count + 1") keeps the list in step with CurrentLapNumber in two cases:
+        // this tracker joined a race that was already on lap 4 (the hero says "Lap 5" and the lap it finishes is listed as 5, not 1),
+        // and the counter jumped by more than one between two packets (a dropped burst, a pause: 3 -> 5). In that jump the one
+        // lap we can describe is the last one (5): its time is LastLap. Lap 4 is NOT invented: we never saw it, and a made-up
+        // row with an unknown time would claim knowledge we do not have.
+        var finishedLapNumber = packet.LapNumber;
 
         if (time <= 0)
         {

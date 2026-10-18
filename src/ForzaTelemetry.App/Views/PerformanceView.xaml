@@ -151,12 +151,15 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <!--
                       The current car as separate pills, never one string joined with a separator: the car (or "no car detected
-                      yet"), then, once there is a car, class + index + drivetrain exactly like the top bar's car pill. The
-                      StackPanel is one element for screen readers and speaks the whole car as a sentence.
+                      yet"), then, once there is a car, class + index + drivetrain exactly like the top bar's car pill.
+                      AutomationProperties.Name only reaches assistive technology from an element that has an automation peer,
+                      and a plain StackPanel has none, so the whole car sentence is the NAME OF THE FIRST PILL (a ContentControl
+                      is a Control). WPF has no way to hide the second pill from assistive technology, so a screen reader may also
+                      read its three fragments after the sentence; the sentence is what carries the meaning.
                     -->
-                    <StackPanel Orientation="Horizontal" AutomationProperties.Name="{Binding CarSummary}">
+                    <StackPanel Orientation="Horizontal">
                         <ContentControl Style="{StaticResource StatusPill}" Tag="{x:Null}" Content="{Binding CarText}"
-                                        AutomationProperties.Name="{x:Static res:Strings.PerfCurrentCarLabel}" />
+                                        AutomationProperties.Name="{Binding CarSummary}" />
                         <ContentControl Style="{StaticResource StatusPill}" Margin="10,0,0,0" Tag="{x:Null}"
                                         Visibility="{Binding HasCar, Converter={StaticResource BoolToVisibility}}">
                             <StackPanel Orientation="Horizontal">

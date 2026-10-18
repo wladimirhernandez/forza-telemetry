@@ -148,14 +148,13 @@ public sealed partial class LapsViewModel : ObservableObject
     /// <summary>The hero clock as one sentence for screen readers, for example "Lap 3, 1:02.345, behind your best by 0.412 s".</summary>
     public string HeroName => IsRacing
         ? string.Join(", ", new[] { LapNumberText, CurrentLapText, DeltaName }.Where(part => part.Length > 0))
-        : Strings.LapsEmptyNotRacing;
+        : Strings.LapsNoLapInProgress; // the same sentence the hero shows while idle (LapsView), so what is read is what is seen
 
-    /// <summary>A new listening session starts (Start): the previous session's laps leave the screen, engine included.</summary>
-    public void BeginSession()
-    {
-        _tracker.Reset();
-        Refresh(null);
-    }
+    /// <summary>
+    /// A new listening session starts (Start): the previous session's laps leave the screen. The tracker itself is reset by
+    /// <see cref="TelemetryEngines.BeginSession"/>, before the receive loop starts.
+    /// </summary>
+    public void BeginSession() => Refresh(null);
 
     /// <summary>The session ends (Stop): the laps stay readable, the live clock and delta give way to placeholders.</summary>
     public void EndSession() => Refresh(null);

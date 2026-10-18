@@ -124,4 +124,23 @@ public class LapTimeFormatterTests
     [InlineData(LapTimeFormatter.MaxSeconds + 1)]
     public void A_gap_beyond_a_day_shows_the_bare_placeholder_without_a_sign(double seconds) =>
         Assert.Equal(LapTimeFormatter.Placeholder, LapTimeFormatter.FormatDelta(seconds));
+
+    [Fact]
+    public void Zero_follows_the_culture_even_though_it_is_cached()
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+            Assert.Equal("0:00.000", LapTimeFormatter.Zero);
+            Assert.Same(LapTimeFormatter.Zero, LapTimeFormatter.Zero); // the second read is the cached instance
+
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("es-ES");
+            Assert.Equal("0:00,000", LapTimeFormatter.Zero);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
+    }
 }

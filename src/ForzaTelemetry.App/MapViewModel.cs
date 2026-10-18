@@ -164,15 +164,20 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshablePage
     }
 
     /// <summary>
-    /// A new listening session starts: the previous session's path, statistics and car position leave the map. The same reset as
-    /// the Clear button, because that is exactly what it is: a clear that nobody had to ask for.
+    /// A new listening session starts: the previous session's path, statistics and car position leave the map. Only the display
+    /// is reset here; the path itself is emptied by <see cref="TelemetryEngines.BeginSession"/> before the receive loop starts.
     /// </summary>
-    public void BeginSession() => Clear();
+    public void BeginSession() => ResetDisplay();
 
     [RelayCommand]
     private void Clear()
     {
         _path.Clear();
+        ResetDisplay();
+    }
+
+    private void ResetDisplay()
+    {
         ViewState.Reset();
         HasCurrent = false;
         CurrentX = 0;

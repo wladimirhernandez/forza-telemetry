@@ -21,8 +21,28 @@ public static class LapTimeFormatter
     /// <summary>What an unknown or not-yet-available time looks like (same width as a real one).</summary>
     public static string Placeholder => "--:--" + Separator + "---";
 
+    // One entry: the zero text of the culture it was built for. The Laps screen reads Zero on every 20 Hz tick while no lap
+    // runs, and rebuilding the same string 20 times a second is pointless. Keyed by culture (not computed once) because the
+    // decimal separator belongs to the culture, which tests, and a language switch, can change. A single immutable tuple
+    // swapped in one write keeps the cache thread-safe without a lock.
+    private static (CultureInfo Culture, string Text)? _zero;
+
     /// <summary>The zero time, <c>0:00.000</c>: what a clock that is not running shows.</summary>
-    public static string Zero => Format(0);
+    public static string Zero
+    {
+        get
+        {
+            var culture = CultureInfo.CurrentCulture;
+            if (_zero is { } cached && ReferenceEquals(cached.Culture, culture))
+            {
+                return cached.Text;
+            }
+
+            var text = Format(0);
+            _zero = (culture, text);
+            return text;
+        }
+    }
 
     private static string Separator => CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator;
 

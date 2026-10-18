@@ -57,6 +57,7 @@ public sealed class CarChangeDetector : IPacketObserver
     private CarKey? _car;
     private int _carClass;
     private int _drivetrain;
+    private int _generation;
 
     /// <param name="topSpeed">The top-speed engine to freeze and reset on a change; optional (tests, or nothing to own).</param>
     /// <param name="acceleration">The 0-100 engine to reset on a change; optional.</param>
@@ -64,6 +65,34 @@ public sealed class CarChangeDetector : IPacketObserver
     {
         _topSpeed = topSpeed;
         _acceleration = acceleration;
+    }
+
+    /// <summary>
+    /// Identifies WHICH car the engines currently hold data of: it grows by one on every change of car and on every
+    /// <see cref="Reset"/>, both under the same lock that resets the engines.
+    /// </summary>
+    /// <remarks>
+    /// A reader on another thread (the UI tick) cannot read "the car" and "the engines' numbers" in one atomic step, because
+    /// the receive loop may switch cars between the two reads, so it would credit the new car's numbers to the old one.
+    /// Instead it drains the queued changes, reads this number, checks <see cref="HasPendingChanges"/>, reads the engines and
+    /// reads this number again: when both reads agree and nothing was pending, no change happened in between and the values
+    /// belong to the car it knows. See <c>PerformanceViewModel.Refresh</c>.
+    /// </remarks>
+    public int Generation => Volatile.Read(ref _generation);
+
+    /// <summary>
+    /// True while a change of car has been noticed but not yet taken with <see cref="TryTake"/>. The change is queued under the
+    /// same lock that publishes the new <see cref="Generation"/>, so "generation moved" always implies "pending or already taken".
+    /// </summary>
+    public bool HasPendingChanges
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _changes.Count > 0;
+            }
+        }
     }
 
     /// <inheritdoc />
@@ -106,6 +135,10 @@ public sealed class CarChangeDetector : IPacketObserver
             _car = key;
             _carClass = packet.CarClass;
             _drivetrain = packet.DrivetrainType;
+
+            // Published AFTER the engines were reset above and BEFORE the lock is released, so a reader that sees the new
+            // generation also sees the reset engines (never the other way round).
+            Interlocked.Increment(ref _generation);
             _changes.Enqueue(new CarChange(
                 previous, previousClass, previousDrivetrain, previousTopSpeed, key, packet.CarClass, packet.DrivetrainType));
         }
@@ -133,6 +166,7 @@ public sealed class CarChangeDetector : IPacketObserver
             _carClass = 0;
             _drivetrain = 0;
             _changes.Clear();
+            Interlocked.Increment(ref _generation);
         }
     }
 }

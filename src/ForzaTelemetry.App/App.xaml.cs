@@ -145,7 +145,8 @@ public partial class App : Application, IAppRestarter
             lapsPage: lapsPage,
             analysisPage: analysisPage,
             mapPage: mapPage,
-            tuningPage: tuningPage);
+            tuningPage: tuningPage,
+            engines: engines);
 
         // The ticker runs on the UI thread and calls Refresh, which pulls the latest packet into the bound properties.
         _refresh = viewModel.Refresh;

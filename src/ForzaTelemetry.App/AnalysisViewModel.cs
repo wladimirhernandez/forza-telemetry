@@ -93,12 +93,12 @@ public sealed partial class AnalysisViewModel : ObservableObject, IRefreshablePa
     private string _steerText = "0%";
 
     /// <summary>
-    /// A new listening session starts: the traces of the previous one leave the screen. The shared history is emptied here (the
-    /// Map reads the car position from it too, so it restarts empty as well, which is what a new session means).
+    /// A new listening session starts: the traces of the previous one leave the screen. Only the display is reset: the shared
+    /// history (which the Map and Tuning pages read too) is emptied by <see cref="TelemetryEngines.BeginSession"/>, before the
+    /// receive loop starts, so no page owns a reset that others depend on.
     /// </summary>
     public void BeginSession()
     {
-        _history.Clear();
         _lastCount = 0;
         _lastTimeMs = 0;
         SampleCount = 0;

@@ -573,7 +573,7 @@ public class InsightsViewModelTests
     // ---- Session start ------------------------------------------------------------------------------------
 
     [Fact]
-    public void Analysis_BeginSession_empties_the_traces_and_the_shared_history()
+    public void Analysis_BeginSession_empties_the_traces()
     {
         var history = new TelemetryHistory();
         history.Add(Sample(timeMs: 0));
@@ -583,9 +583,9 @@ public class InsightsViewModelTests
         var version = vm.DataVersion;
         Assert.True(vm.HasData);
 
+        history.Clear(); // the engine reset, which the shell does before the loop starts
         vm.BeginSession();
 
-        Assert.Equal(0, history.Count);
         Assert.False(vm.HasData);
         Assert.Equal(0, vm.SampleCount);
         Assert.NotEqual(version, vm.DataVersion); // the chart is told to redraw as empty
@@ -606,7 +606,8 @@ public class InsightsViewModelTests
         Assert.True(vm.HasData);
         Assert.True(vm.HasCurrent);
 
-        history.Clear(); // the Analysis page empties the shared history in the same step
+        history.Clear(); // the engines are reset by the shell before the loop starts: the shared history...
+        path.Clear(); // ...and the path
         vm.BeginSession();
 
         Assert.Equal(0, path.Count);
@@ -633,7 +634,8 @@ public class InsightsViewModelTests
         Assert.Equal(1, vm.BottomFrontLeft);
         Assert.True(vm.HasCurve);
 
-        history.Clear();
+        history.Clear(); // the engine reset (the shell does it before the loop starts)
+        bottoming.Reset();
         vm.BeginSession();
 
         Assert.Equal(0, vm.BottomFrontLeft);
@@ -641,5 +643,31 @@ public class InsightsViewModelTests
         Assert.False(vm.HasData);
         Assert.True(vm.HasCurve); // a curve belongs to the car, not to the session
         Assert.Equal(5, dyno.GetCurve(2211, 700).Count);
+    }
+
+    [Fact]
+    public void Tuning_BeginSession_blanks_the_tire_card_and_the_balance()
+    {
+        var vm = NewTuning(out _, out var history, out _);
+        history.Add(Sample(timeMs: 10, slipFl: 0.02f, slipFr: 0.02f, slipRl: 0.2f, slipRr: 0.2f, tempFl: 190, tempFr: 195, tempRl: 200, tempRr: 205));
+        vm.Refresh();
+        Assert.NotEqual("-", vm.TempFrontLeft);
+        Assert.NotEqual(TireTempBand.Unknown, vm.BandFrontLeft);
+        Assert.True(vm.BalanceActive);
+
+        history.Clear();
+        vm.BeginSession();
+
+        Assert.Equal("-", vm.TempFrontLeft);
+        Assert.Equal("-", vm.TempFrontRight);
+        Assert.Equal("-", vm.TempRearLeft);
+        Assert.Equal("-", vm.TempRearRight);
+        Assert.Equal(TireTempBand.Unknown, vm.BandFrontLeft);
+        Assert.Equal(TireTempBand.Unknown, vm.BandRearRight);
+        Assert.Equal([InsightsStrings.TiresNoData], vm.TireLines);
+        Assert.False(vm.BalanceActive);
+        Assert.Equal(0, vm.BalanceValue);
+        Assert.Equal(BalanceState.Unknown, vm.BalanceState);
+        Assert.True(vm.IsEmpty);
     }
 }

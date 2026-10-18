@@ -68,6 +68,19 @@ public sealed class PerformanceViewModelTests : IDisposable
 
         public PerformanceViewModel Vm { get; }
 
+        /// <summary>
+        /// What the shell does for a fresh session, in its order: save the previous session, reset the engines (the detector
+        /// included) while no loop runs, then let the screen reset what it displays.
+        /// </summary>
+        public void StartNewSession()
+        {
+            Vm.EndSession();
+            CarChanges.Reset();
+            TopSpeed.Reset();
+            Acceleration.Reset();
+            Vm.BeginSession();
+        }
+
         public int Car { get; set; } = 1234;
 
         public int Pi { get; set; } = 780;
@@ -417,13 +430,13 @@ public sealed class PerformanceViewModelTests : IDisposable
     }
 
     [Fact]
-    public void BeginSession_saves_the_previous_sessions_top_speed_before_the_engines_are_reset()
+    public void A_new_session_saves_the_previous_sessions_top_speed_before_the_engines_are_reset()
     {
         var rig = NewRig();
         rig.Feed(70, gear: 5);
         Assert.Empty(rig.History.Records); // not saved yet: nothing ended the session (a fault restart has no Stop)
 
-        rig.Vm.BeginSession();
+        rig.StartNewSession();
 
         Assert.Equal(252, rig.History.Find(new CarKey(1234, 780))!.TopSpeedKmh!.Value, precision: 1);
         Assert.True(File.Exists(rig.HistoryPath)); // and written, not only merged in memory
@@ -435,7 +448,7 @@ public sealed class PerformanceViewModelTests : IDisposable
     {
         var rig = NewRig();
         rig.Feed(0);
-        rig.Vm.BeginSession();
+        rig.StartNewSession();
         Assert.False(rig.Vm.HasCar);
 
         rig.Feed(0); // the same car, first packet of the new session
@@ -539,7 +552,7 @@ public sealed class PerformanceViewModelTests : IDisposable
         rig.Launch(10.0);
         rig.Vm.EndSession();
 
-        rig.Vm.BeginSession();
+        rig.StartNewSession();
 
         Assert.Equal("--", rig.Vm.ZeroTo100Text);
         Assert.Equal("--", rig.Vm.TopSpeedText);

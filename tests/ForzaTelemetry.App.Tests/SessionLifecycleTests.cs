@@ -6,8 +6,8 @@ using Microsoft.Extensions.Time.Testing;
 namespace ForzaTelemetry.App.Tests;
 
 /// <summary>
-/// When the shell wipes the screens' session data: only when a user's Start really began listening, never on a failed Start and
-/// never when a port change merely moves the listener.
+/// When the shell wipes the engines' and screens' session data: on every Start the user asks for (before the receive loop exists,
+/// so nothing races its first packets, even when that Start then fails), never when a port change merely moves a running listener.
 /// </summary>
 public sealed class SessionLifecycleTests : IDisposable
 {
@@ -56,7 +56,8 @@ public sealed class SessionLifecycleTests : IDisposable
                 dataOut: new DataOutViewModel(Settings.Current.UdpPort, null),
                 settings: Settings,
                 performancePage: Performance,
-                lapsPage: Laps);
+                lapsPage: Laps,
+                engines: Engines);
         }
 
         public TelemetryEngines Engines { get; }
@@ -107,20 +108,19 @@ public sealed class SessionLifecycleTests : IDisposable
     }
 
     [Fact]
-    public async Task A_start_that_fails_keeps_the_previous_sessions_laps_and_results_on_screen()
+    public async Task A_start_that_fails_has_already_begun_the_new_session_and_clears_laps_and_results()
     {
         var rig = new Rig(_directory);
         rig.DriveOneLapAndTopSpeed();
         Assert.True(rig.Laps.HasLaps);
-        var topSpeedText = rig.Performance.TopSpeedText;
         rig.BusyPorts.Add(rig.Settings.Current.UdpPort);
 
         await rig.Shell.StartCommand.ExecuteAsync(null); // port in use
 
         Assert.NotNull(rig.Service.Fault);
-        Assert.True(rig.Laps.HasLaps);
-        Assert.Equal(topSpeedText, rig.Performance.TopSpeedText);
-        Assert.NotEqual("--", rig.Performance.TopSpeedText);
+        Assert.False(rig.Laps.HasLaps);
+        Assert.Equal("--", rig.Performance.TopSpeedText);
+        Assert.Equal(252, rig.History.Find(new CarKey(1234, 780))!.TopSpeedKmh!.Value, precision: 1); // saved, not lost
     }
 
     [Fact]
@@ -154,18 +154,21 @@ public sealed class SessionLifecycleTests : IDisposable
     }
 
     [Fact]
-    public async Task Retrying_on_a_new_port_after_a_failed_start_does_not_wipe_the_previous_session_either()
+    public async Task Retrying_on_a_new_port_after_a_failed_start_begins_a_fresh_session()
     {
         var rig = new Rig(_directory);
-        rig.DriveOneLapAndTopSpeed();
         rig.BusyPorts.Add(5300);
         await rig.Shell.StartCommand.ExecuteAsync(null);
         Assert.NotNull(rig.Service.Fault);
 
+        // While the listener is down something still fills the engines (a leftover from the failed attempt's session).
+        rig.DriveOneLapAndTopSpeed();
+        Assert.True(rig.Laps.HasLaps);
+
         rig.Settings.Update(s => s with { UdpPort = 5400 });
         Assert.True(await Wait.UntilAsync(() => rig.Service.IsRunning && !rig.Shell.IsBusy));
 
-        Assert.True(rig.Laps.HasLaps);
+        Assert.False(rig.Laps.HasLaps); // the retry is the first real start, not the continuation of a session that never began
         await rig.Shell.StopCommand.ExecuteAsync(null);
     }
 

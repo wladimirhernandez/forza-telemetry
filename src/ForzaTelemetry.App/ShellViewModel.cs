@@ -46,6 +46,7 @@ public sealed partial class ShellViewModel : ObservableObject
     private readonly TimeProvider _timeProvider;
     private readonly ILogger? _logger;
     private readonly SettingsService? _settings;
+    private readonly TelemetryEngines? _engines;
 
     // The port the LAST Start tried to bind (read from the settings at that moment, not when an error is shown). A port
     // change while the listener is running or has failed updates the settings at once, so the settings port can differ
@@ -109,6 +110,10 @@ public sealed partial class ShellViewModel : ObservableObject
     /// <param name="analysisPage">The Analysis screen's view model; when omitted that tab shows the placeholder.</param>
     /// <param name="mapPage">The Map screen's view model; when omitted that tab shows the placeholder.</param>
     /// <param name="tuningPage">The Tuning screen's view model; when omitted that tab shows the placeholder.</param>
+    /// <param name="engines">
+    /// The per-packet engines the receive loop feeds. The shell resets them at the start of every fresh session, BEFORE the loop
+    /// starts (see <see cref="StartCoreAsync"/>); when omitted (tests of other things) there is nothing to reset.
+    /// </param>
     public ShellViewModel(
         TelemetryService telemetryService,
         TimeProvider timeProvider,
@@ -123,9 +128,11 @@ public sealed partial class ShellViewModel : ObservableObject
         LapsViewModel? lapsPage = null,
         AnalysisViewModel? analysisPage = null,
         MapViewModel? mapPage = null,
-        TuningViewModel? tuningPage = null)
+        TuningViewModel? tuningPage = null,
+        TelemetryEngines? engines = null)
     {
         _telemetryService = telemetryService;
+        _engines = engines;
         _timeProvider = timeProvider;
         _logger = logger;
         _settings = settings;
@@ -507,8 +514,9 @@ public sealed partial class ShellViewModel : ObservableObject
         {
             await RunExclusiveAsync(async () =>
             {
-                // continuesSession: moving the port is the SAME listening session on another port. The laps, the bests and
-                // the charts are what the user is looking at; wiping them because a setting changed would be a data loss.
+                // continuesSession: moving the port of a RUNNING listener is the SAME listening session on another port. The laps,
+                // the bests and the charts are what the user is looking at; wiping them because a setting changed would be a
+                // data loss.
                 if (_telemetryService.IsRunning)
                 {
                     await StopCoreAsync();
@@ -516,7 +524,9 @@ public sealed partial class ShellViewModel : ObservableObject
                 }
                 else if (_telemetryService.Fault is not null)
                 {
-                    await StartCoreAsync(continuesSession: true); // nothing to stop: a failed start left no listener behind
+                    // Nothing to stop: a failed start left no listener behind. And nothing to continue either: that failed Start
+                    // already began a session (it reset the screens and the engines), so this retry is the first real start of it.
+                    await StartCoreAsync(continuesSession: false);
                 }
             });
         }
@@ -545,34 +555,62 @@ public sealed partial class ShellViewModel : ObservableObject
         RunExclusiveAsync(() => _telemetryService.IsRunning ? StopCoreAsync() : StartCoreAsync());
 
     /// <param name="continuesSession">
-    /// True when this Start only moves the listener (a port change): the session the screens show goes on, so they are not
+    /// True when this Start only moves a RUNNING listener (a port change): the session the screens show goes on, so nothing is
     /// reset. False for the user's own Start, which begins a new one.
     /// </param>
     private async Task StartCoreAsync(bool continuesSession = false)
     {
         await DataOut.RefreshAsync(); // The user may have changed network since the last Start.
 
+        // A fresh Start while already listening is not a new session, it is nothing: wiping the engines under a running loop
+        // is exactly what the ordering below exists to avoid. (Checked after the await: the state may have changed meanwhile.)
+        if (!continuesSession && _telemetryService.IsRunning)
+        {
+            return;
+        }
+
         // Remember what this Start is about to bind: the listener factory reads the same setting a moment from now.
         _attemptedPort = _settings?.Current.UdpPort ?? DataOut.Port;
+
+        // A NEW session begins with the Start ATTEMPT, before the receive loop exists. Why before and not "after it worked":
+        // the engines are written by the receive loop, so any reset that runs after the loop started races with its first
+        // packets. Before it starts nothing else touches them and the reset is exact. The price is that a Start that then
+        // fails (port in use) leaves the screens empty, which is honest: the previous session is over once the user asked
+        // for another one. (A port move continues the session and skips this.)
+        if (!continuesSession)
+        {
+            BeginFreshSession();
+        }
+
         await _telemetryService.StartAsync();
 
         // After the service started (it dropped its own stale Latest) and on the UI thread (this continuation
         // resumes there, so no tick can interleave): wipe the previous session's LIVE values from the dashboard.
         ResetSessionState();
 
-        // A NEW session (the screens' own data: laps, bests, charts) begins only when listening really began. A Start that
-        // failed (port in use) started nothing, so the previous session's laps and results, which the user may still be
-        // reading, must survive it; and a port move continues the session instead of beginning one (see the parameter).
-        if (!continuesSession && _telemetryService.IsRunning && _telemetryService.Fault is null)
-        {
-            Performance?.BeginSession();
-            Laps?.BeginSession();
-            Analysis?.BeginSession();
-            Map?.BeginSession();
-            Tuning?.BeginSession();
-        }
-
         Refresh(); // Show the result (running, or a friendly fault) immediately, without waiting for the next tick.
+    }
+
+    /// <summary>
+    /// Ends the previous session's bookkeeping and gives every engine and screen a clean slate. Must run while NO receive
+    /// loop is running (see <see cref="StartCoreAsync"/>). The order is the point:
+    /// <list type="number">
+    /// <item>The previous session's top speed is saved first: the engines are about to forget it, and a session that ended in a
+    /// fault never went through Stop. The loop is not running, so this read cannot race a change of car.</item>
+    /// <item>The ENGINES are reset (one call, <see cref="TelemetryEngines.BeginSession"/>), including the car-change detector.</item>
+    /// <item>The screens reset only what they DISPLAY, after their source is empty.</item>
+    /// </list>
+    /// </summary>
+    private void BeginFreshSession()
+    {
+        Performance?.EndSession();
+        _engines?.BeginSession();
+
+        Performance?.BeginSession();
+        Laps?.BeginSession();
+        Analysis?.BeginSession();
+        Map?.BeginSession();
+        Tuning?.BeginSession();
     }
 
     private async Task StopCoreAsync()
