@@ -126,6 +126,60 @@ public class MapMathTests
     }
 
     [Fact]
+    public void ZoomAt_on_a_view_that_was_never_fitted_changes_nothing()
+    {
+        var unfitted = default(MapViewport);
+
+        Assert.Equal(unfitted, unfitted.ZoomAt(new Point(10, 10), 2, 0.1, 10));
+    }
+
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(0)]
+    [InlineData(-2)]
+    public void ZoomAt_ignores_degenerate_factors_instead_of_producing_NaN(double factor)
+    {
+        var view = new MapViewport(1, 5, 5);
+
+        var result = view.ZoomAt(new Point(1, 1), factor, 0.1, 10);
+
+        Assert.Equal(view, result);
+    }
+
+    [Fact]
+    public void ZoomAt_ignores_a_non_finite_anchor()
+    {
+        var view = new MapViewport(1, 5, 5);
+
+        Assert.Equal(view, view.ZoomAt(new Point(double.NaN, 1), 2, 0.1, 10));
+    }
+
+    [Fact]
+    public void Pan_ignores_non_finite_deltas()
+    {
+        var view = new MapViewport(1, 5, 5);
+
+        Assert.Equal(view, view.Pan(double.NaN, 1));
+        Assert.Equal(view, view.Pan(1, double.PositiveInfinity));
+    }
+
+    [Fact]
+    public void ViewState_is_unusable_until_fitted_and_Reset_returns_to_auto_fit()
+    {
+        var state = new MapViewState();
+        Assert.False(state.HasUsableView);
+
+        state.Viewport = new MapViewport(2, 3, 4);
+        state.Manual = true;
+        Assert.True(state.HasUsableView);
+
+        state.Reset();
+        Assert.False(state.Manual);
+        Assert.False(state.HasUsableView);
+    }
+
+    [Fact]
     public void Pan_moves_the_view_by_the_drag_delta()
     {
         var view = new MapViewport(2, 10, 20).Pan(5, -3);

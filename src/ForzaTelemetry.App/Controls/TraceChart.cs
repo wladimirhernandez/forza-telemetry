@@ -386,7 +386,7 @@ public sealed class TraceChart : FrameworkElement
 
         _text.DrawRight(dc, "s", _plotLeft - 26, _plotBottom + 6, 11, ChartPalette.MutedBrush, dpi);
 
-        string[] titles = [InsightsStrings.LaneSpeed + " · " + SpeedUnit, InsightsStrings.LaneRpm, InsightsStrings.LanePedals, InsightsStrings.LaneSteering, InsightsStrings.LaneGear];
+        string[] titles = [string.Format(CultureInfo.CurrentCulture, InsightsStrings.LaneSpeedUnitFormat, SpeedUnit), InsightsStrings.LaneRpm, InsightsStrings.LanePedals, InsightsStrings.LaneSteering, InsightsStrings.LaneGear];
         for (var i = 0; i < _lanes.Length; i++)
         {
             var lane = _lanes[i];
@@ -471,9 +471,9 @@ public sealed class TraceChart : FrameworkElement
         [
             (s.SpeedMs * SpeedScale).ToString("0", CultureInfo.CurrentCulture) + " " + SpeedUnit,
             s.Rpm.ToString("0", CultureInfo.CurrentCulture),
-            (s.Throttle * 100).ToString("0", CultureInfo.CurrentCulture) + "%",
-            (s.Brake * 100).ToString("0", CultureInfo.CurrentCulture) + "%",
-            FormatSteer(s.Steer),
+            ReadoutFormat.Percent(s.Throttle),
+            ReadoutFormat.Percent(s.Brake),
+            ReadoutFormat.Steer(s.Steer),
             GearFormatter.Format(s.Gear),
         ];
         Brush[] swatches = [ChartPalette.TextBrush, ChartPalette.NeutralBrush, ChartPalette.ThrottleBrush, ChartPalette.BrakeBrush, ChartPalette.ColdBrush, ChartPalette.TextBrush];
@@ -500,10 +500,6 @@ public sealed class TraceChart : FrameworkElement
         // Dark ring + colored core: visible over any line or fill underneath.
         dc.DrawEllipse(brush, ReadoutBorder, new Point(x, y), 3.5, 3.5);
     }
-
-    private static string FormatSteer(float steer) =>
-        (Math.Abs(steer) < 0.005 ? "0" : (steer > 0 ? InsightsStrings.SteerRightShort : InsightsStrings.SteerLeftShort)
-         + " " + (Math.Abs(steer) * 100).ToString("0", CultureInfo.CurrentCulture)) + "%";
 
     private static string FormatRpm(double rpm) => rpm >= 1000
         ? (rpm / 1000).ToString(rpm % 1000 == 0 ? "0" : "0.#", CultureInfo.CurrentCulture) + "k"

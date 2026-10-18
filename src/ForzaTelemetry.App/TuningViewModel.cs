@@ -16,12 +16,15 @@ namespace ForzaTelemetry.App;
 /// <b>Smoothing the balance.</b> The balance index from <see cref="BalanceAnalyzer"/> is computed from instantaneous
 /// slip angles, which flicker from packet to packet; a bar that twitches is unreadable. The view model blends each new
 /// reading into a running value (an exponential moving average) so the bar glides. When the car is not sliding enough
-/// to judge, or no new sample arrives, the last value is held for about two seconds and then hidden rather than
-/// displayed as if it were still true.
+/// to judge, or no new sample arrives, the last value is held for <see cref="BalanceHold"/> of wall-clock time and then hidden rather than
+/// displayed as if it were still true. It is time-based (not "N refreshes") because refreshes stop while another tab is
+/// open: coming back after a minute must not show a minute-old balance as current.
 /// </para>
 /// <para>
-/// <b>Change detection.</b> Lists and sentences are only replaced when their content actually changed, so the 20 Hz
-/// refresh does not rebuild the advice lines or restart the chart's geometry for nothing.
+/// <b>Change detection and allocations.</b> Lists and sentences are only replaced when their content actually changed.
+/// <see cref="DynoCapture"/> has no version counter and building a curve allocates, so the curve is polled at
+/// <see cref="DynoPollInterval"/> (2 Hz) rather than every tick; the tire values reuse one array and their text is only
+/// rebuilt when a temperature or the unit changed.
 /// </para>
 /// </remarks>
 public sealed partial class TuningViewModel : ObservableObject
@@ -29,19 +32,30 @@ public sealed partial class TuningViewModel : ObservableObject
     /// <summary>Weight of a new balance reading in the running value (0..1); about a quarter second at 20 Hz.</summary>
     public const double BalanceSmoothing = 0.2;
 
-    /// <summary>Refreshes without a usable balance reading after which the bar is hidden (2 s at 20 Hz).</summary>
-    public const int BalanceHoldTicks = 40;
+    /// <summary>How long the last balance reading stays on screen once readings stop (not enough slip, or no new data).</summary>
+    public static readonly TimeSpan BalanceHold = TimeSpan.FromSeconds(2);
+
+    /// <summary>How often the dyno curve is re-read (it only changes during full-throttle pulls).</summary>
+    public static readonly TimeSpan DynoPollInterval = TimeSpan.FromMilliseconds(500);
 
     private readonly DynoCapture _dyno;
     private readonly TelemetryHistory _history;
     private readonly SuspensionBottomingCounter _bottoming;
     private readonly UnitsService _units;
+    private readonly TimeProvider _time;
+    private readonly float[] _temps = new float[4];
+    private readonly float[] _shownTemps = new float[4];
+    private TemperatureUnit _shownTempUnit = (TemperatureUnit)(-1);
+    private long _lastDynoPollStamp;
+    private bool _hasPolledDyno;
+    private int _shownCar = -1;
+    private int _shownPi = -1;
+    private long _lastBalanceStamp;
     private readonly TelemetrySample[] _latest = new TelemetrySample[1];
 
     private (int Count, double Power, double Torque, int Car, int Pi) _curveSignature;
     private TireAdvice _lastTireAdvice = (TireAdvice)(-1);
     private uint _lastTimeMs;
-    private int _balanceIdleTicks = BalanceHoldTicks;
     private bool _hasBalanceReading;
     private BottomingCounts _lastCounts = new(-1, -1, -1, -1);
 
@@ -49,14 +63,18 @@ public sealed partial class TuningViewModel : ObservableObject
     /// <param name="history">Used for the newest sample (slip angles, tire temperatures).</param>
     /// <param name="bottoming">Suspension bottoming counters.</param>
     /// <param name="units">Temperature unit conversion and label.</param>
+    /// <param name="timeProvider">Clock for the balance hold and the dyno poll; defaults to the system clock.</param>
     public TuningViewModel(
-        DynoCapture dyno, TelemetryHistory history, SuspensionBottomingCounter bottoming, UnitsService units)
+        DynoCapture dyno, TelemetryHistory history, SuspensionBottomingCounter bottoming, UnitsService units,
+        TimeProvider? timeProvider = null)
     {
+        _time = timeProvider ?? TimeProvider.System;
         _dyno = dyno;
         _history = history;
         _bottoming = bottoming;
         _units = units;
-        _carLabel = InsightsStrings.NoCarYet;
+        _carText = InsightsStrings.NoCarYet;
+        _piText = string.Empty;
         _balanceAdvice = InsightText.BalanceAdvice(BalanceState.Unknown);
         _suspensionAdvice = InsightText.SuspensionAdvice(default);
         _tireLines = [InsightsStrings.TiresNoData];
@@ -77,8 +95,16 @@ public sealed partial class TuningViewModel : ObservableObject
 
     public bool HasNoCurve => !HasCurve;
 
+    /// <summary>"Car 2211", or "No car detected yet"; shown as its own pill.</summary>
     [ObservableProperty]
-    private string _carLabel;
+    private string _carText;
+
+    /// <summary>"PI 612", empty until a car is detected; shown as a second pill.</summary>
+    [ObservableProperty]
+    private string _piText;
+
+    [ObservableProperty]
+    private bool _hasCar;
 
     // ---- Balance ---------------------------------------------------------------------------------
 
@@ -167,7 +193,7 @@ public sealed partial class TuningViewModel : ObservableObject
     /// <summary>Pulls the current state of every engine. Called by the shell on the UI thread while this page is showing.</summary>
     public void Refresh()
     {
-        RefreshDyno();
+        RefreshDyno(force: false);
         RefreshSuspension();
 
         var hasSample = _history.CopyTo(_latest) == 1;
@@ -184,7 +210,7 @@ public sealed partial class TuningViewModel : ObservableObject
     {
         _dyno.Reset(_dyno.CurrentCarOrdinal, _dyno.CurrentPerformanceIndex);
         _curveSignature = default;
-        RefreshDyno();
+        RefreshDyno(force: true);
     }
 
     [RelayCommand]
@@ -195,16 +221,38 @@ public sealed partial class TuningViewModel : ObservableObject
         RefreshSuspension();
     }
 
-    private void RefreshDyno()
+    private void RefreshDyno(bool force)
     {
+        if (!force && _hasPolledDyno && _time.GetElapsedTime(_lastDynoPollStamp) < DynoPollInterval)
+        {
+            return;
+        }
+
+        _hasPolledDyno = true;
+        _lastDynoPollStamp = _time.GetTimestamp();
+
         var car = _dyno.CurrentCarOrdinal;
         var pi = _dyno.CurrentPerformanceIndex;
-        CarLabel = car == 0
-            ? InsightsStrings.NoCarYet
-            : string.Format(CultureInfo.CurrentCulture, InsightsStrings.CarLabelFormat, car, pi);
+        if (car != _shownCar || pi != _shownPi)
+        {
+            _shownCar = car;
+            _shownPi = pi;
+            HasCar = car != 0;
+            CarText = car == 0
+                ? InsightsStrings.NoCarYet
+                : string.Format(CultureInfo.CurrentCulture, InsightsStrings.CarFormat, car);
+            PiText = car == 0 ? string.Empty : string.Format(CultureInfo.CurrentCulture, InsightsStrings.PiFormat, pi);
+        }
 
         var curve = _dyno.GetCurve(car, pi);
-        var signature = (curve.Count, curve.Sum(p => (double)p.PowerWatts), curve.Sum(p => (double)p.TorqueNewtonMeters), car, pi);
+        double power = 0, torque = 0;
+        for (var i = 0; i < curve.Count; i++)
+        {
+            power += curve[i].PowerWatts;
+            torque += curve[i].TorqueNewtonMeters;
+        }
+
+        var signature = (curve.Count, power, torque, car, pi);
         if (signature == _curveSignature)
         {
             return;
@@ -241,50 +289,58 @@ public sealed partial class TuningViewModel : ObservableObject
         var fresh = sample.TimeMs != _lastTimeMs;
         _lastTimeMs = sample.TimeMs;
 
-        var reading = BalanceAnalyzer.AnalyzeBalance(sample);
-        if (fresh && reading.State != BalanceState.Unknown)
-        {
-            // First reading after a gap snaps to it; later ones blend in.
-            BalanceValue = _hasBalanceReading
-                ? BalanceValue + ((reading.Index - BalanceValue) * BalanceSmoothing)
-                : reading.Index;
-            _hasBalanceReading = true;
-            _balanceIdleTicks = 0;
-        }
-        else if (_balanceIdleTicks < BalanceHoldTicks)
-        {
-            _balanceIdleTicks++;
-        }
-
-        var active = _balanceIdleTicks < BalanceHoldTicks;
-        if (!active)
+        // Held readings expire by the clock: after the hold, the next reading starts over instead of blending into a
+        // value that is no longer true (for example after returning to this tab).
+        if (_hasBalanceReading && _time.GetElapsedTime(_lastBalanceStamp) >= BalanceHold)
         {
             _hasBalanceReading = false;
         }
 
-        BalanceActive = active;
-        BalanceState = active ? InsightText.ClassifyBalance(BalanceValue) : BalanceState.Unknown;
+        var reading = BalanceAnalyzer.AnalyzeBalance(sample);
+        if (fresh && reading.State != BalanceState.Unknown)
+        {
+            BalanceValue = _hasBalanceReading
+                ? BalanceValue + ((reading.Index - BalanceValue) * BalanceSmoothing)
+                : reading.Index;
+            _hasBalanceReading = true;
+            _lastBalanceStamp = _time.GetTimestamp();
+        }
+
+        BalanceActive = _hasBalanceReading;
+        BalanceState = _hasBalanceReading ? InsightText.ClassifyBalance(BalanceValue) : BalanceState.Unknown;
         BalanceLabel = InsightText.BalanceLabel(BalanceState);
         BalanceAdvice = InsightText.BalanceAdvice(BalanceState);
     }
 
     private void RefreshTires(in TelemetrySample sample)
     {
-        var temps = new[] { sample.TireTempFrontLeft, sample.TireTempFrontRight, sample.TireTempRearLeft, sample.TireTempRearRight };
-        var hasTemps = temps.Any(t => t > 0);
+        _temps[0] = sample.TireTempFrontLeft;
+        _temps[1] = sample.TireTempFrontRight;
+        _temps[2] = sample.TireTempRearLeft;
+        _temps[3] = sample.TireTempRearRight;
+
+        // Text and bands only change when a temperature or the unit did: no string building on every tick.
+        if (_temps.AsSpan().SequenceEqual(_shownTemps) && _shownTempUnit == _units.TemperatureUnit)
+        {
+            return;
+        }
+
+        _temps.CopyTo(_shownTemps, 0);
+        _shownTempUnit = _units.TemperatureUnit;
+        var hasTemps = _temps[0] > 0 || _temps[1] > 0 || _temps[2] > 0 || _temps[3] > 0;
         var label = _units.TemperatureLabel;
 
-        TempFrontLeft = hasTemps ? FormatTemp(temps[0], label) : "-";
-        TempFrontRight = hasTemps ? FormatTemp(temps[1], label) : "-";
-        TempRearLeft = hasTemps ? FormatTemp(temps[2], label) : "-";
-        TempRearRight = hasTemps ? FormatTemp(temps[3], label) : "-";
-        BandFrontLeft = hasTemps ? Band(temps[0]) : TireTempBand.Unknown;
-        BandFrontRight = hasTemps ? Band(temps[1]) : TireTempBand.Unknown;
-        BandRearLeft = hasTemps ? Band(temps[2]) : TireTempBand.Unknown;
-        BandRearRight = hasTemps ? Band(temps[3]) : TireTempBand.Unknown;
+        TempFrontLeft = hasTemps ? FormatTemp(_temps[0], label) : "-";
+        TempFrontRight = hasTemps ? FormatTemp(_temps[1], label) : "-";
+        TempRearLeft = hasTemps ? FormatTemp(_temps[2], label) : "-";
+        TempRearRight = hasTemps ? FormatTemp(_temps[3], label) : "-";
+        BandFrontLeft = hasTemps ? Band(_temps[0]) : TireTempBand.Unknown;
+        BandFrontRight = hasTemps ? Band(_temps[1]) : TireTempBand.Unknown;
+        BandRearLeft = hasTemps ? Band(_temps[2]) : TireTempBand.Unknown;
+        BandRearRight = hasTemps ? Band(_temps[3]) : TireTempBand.Unknown;
 
         var advice = hasTemps
-            ? BalanceAnalyzer.AnalyzeTireTemperatures(temps[0], temps[1], temps[2], temps[3])
+            ? BalanceAnalyzer.AnalyzeTireTemperatures(_temps[0], _temps[1], _temps[2], _temps[3])
             : (TireAdvice)(-1);
         if (advice != _lastTireAdvice)
         {

@@ -99,9 +99,43 @@ public class InsightTextTests
     {
         Assert.Equal(InsightsStrings.SuspensionAdviceNone, InsightText.SuspensionAdvice(default));
         Assert.Equal(InsightsStrings.SuspensionAdviceFew, InsightText.SuspensionAdvice(new BottomingCounts(1, 0, 0, 1)));
-        Assert.Equal(InsightsStrings.SuspensionAdviceFront, InsightText.SuspensionAdvice(new BottomingCounts(2, 2, 0, 0)));
+        Assert.Equal(InsightsStrings.SuspensionAdviceFront, InsightText.SuspensionAdvice(new BottomingCounts(3, 0, 0, 0)));
         Assert.Equal(InsightsStrings.SuspensionAdviceRear, InsightText.SuspensionAdvice(new BottomingCounts(0, 0, 1, 4)));
         Assert.Equal(InsightsStrings.SuspensionAdviceBoth, InsightText.SuspensionAdvice(new BottomingCounts(3, 0, 0, 3)));
+    }
+
+    [Fact]
+    public void Suspension_advice_agrees_with_the_per_corner_severity_for_every_combination()
+    {
+        int[] values = [0, 1, 2, 3, 5];
+        foreach (var fl in values)
+        foreach (var fr in values)
+        foreach (var rl in values)
+        foreach (var rr in values)
+        {
+            var counts = new BottomingCounts(fl, fr, rl, rr);
+            var front = InsightText.BottomingSeverity(fl) == 2 || InsightText.BottomingSeverity(fr) == 2;
+            var rear = InsightText.BottomingSeverity(rl) == 2 || InsightText.BottomingSeverity(rr) == 2;
+            var advice = InsightText.SuspensionAdvice(counts);
+
+            // An axle is called out exactly when one of its counters is shown as "frequent" (red).
+            Assert.Equal(front && !rear, advice == InsightsStrings.SuspensionAdviceFront);
+            Assert.Equal(rear && !front, advice == InsightsStrings.SuspensionAdviceRear);
+            Assert.Equal(front && rear, advice == InsightsStrings.SuspensionAdviceBoth);
+        }
+    }
+
+    [Fact]
+    public void No_text_joins_metadata_with_a_middle_dot()
+    {
+        foreach (var culture in new[] { CultureInfo.InvariantCulture, CultureInfo.GetCultureInfo("es") })
+        {
+            var set = InsightsStrings.ResourceManager.GetResourceSet(culture, true, false)!;
+            foreach (DictionaryEntry entry in set)
+            {
+                Assert.DoesNotContain('\u00B7', (string)entry.Value!);
+            }
+        }
     }
 
     // ---- InsightsStrings resource integrity (same guarantees as LocalizationTests gives Strings) ----

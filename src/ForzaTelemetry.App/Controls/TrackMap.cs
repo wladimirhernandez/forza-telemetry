@@ -48,6 +48,14 @@ public sealed class TrackMap : FrameworkElement
     public static readonly DependencyProperty CurrentZProperty = Register(nameof(CurrentZ), 0.0, rebuild: false);
     public static readonly DependencyProperty HasCurrentProperty = Register(nameof(HasCurrent), false, rebuild: false);
 
+    /// <summary>
+    /// Pan/zoom state owned by the view model so it survives the view being rebuilt on tab switches. When null the
+    /// control keeps a private one (fine for a standalone use).
+    /// </summary>
+    public static readonly DependencyProperty ViewStateProperty = DependencyProperty.Register(
+        nameof(ViewState), typeof(MapViewState), typeof(TrackMap),
+        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, (d, _) => ((TrackMap)d)._dirty = true));
+
     public static readonly DependencyProperty SpeedScaleProperty = Register(nameof(SpeedScale), 3.6, rebuild: false);
     public static readonly DependencyProperty SpeedUnitProperty = Register(nameof(SpeedUnit), "km/h", rebuild: false);
 
@@ -68,11 +76,13 @@ public sealed class TrackMap : FrameworkElement
 
     private bool _dirty = true;
     private Size _builtFor;
-    private MapViewport _viewport;
-    private double _fitScale = 1;
-    private bool _manual;
+    private readonly MapViewState _ownState = new();
     private bool _dragging;
     private Point _dragLast;
+
+    public MapViewState? ViewState { get => (MapViewState?)GetValue(ViewStateProperty); set => SetValue(ViewStateProperty, value); }
+
+    private MapViewState State => ViewState ?? _ownState;
 
     public TrackMap()
     {
@@ -150,15 +160,16 @@ public sealed class TrackMap : FrameworkElement
     protected override void OnMouseWheel(MouseWheelEventArgs e)
     {
         base.OnMouseWheel(e);
-        if (_builtFor.IsEmpty)
+        var state = State;
+        if (!state.HasUsableView)
         {
             return;
         }
 
         // Exponential: every wheel notch (120) zooms by the same RATIO, so zooming feels uniform at any scale.
         var factor = Math.Pow(1.0015, e.Delta);
-        _viewport = _viewport.ZoomAt(e.GetPosition(this), factor, _fitScale * 0.4, _fitScale * MapViewport.MaxZoomFactor);
-        _manual = true;
+        state.Viewport = state.Viewport.ZoomAt(e.GetPosition(this), factor, state.FitScale * 0.4, state.FitScale * MapViewport.MaxZoomFactor);
+        state.Manual = true;
         _dirty = true;
         InvalidateVisual();
         e.Handled = true;
@@ -169,7 +180,7 @@ public sealed class TrackMap : FrameworkElement
         base.OnMouseLeftButtonDown(e);
         if (e.ClickCount == 2)
         {
-            _manual = false;
+            State.Manual = false;
             _dirty = true;
             InvalidateVisual();
             return;
@@ -190,9 +201,14 @@ public sealed class TrackMap : FrameworkElement
         }
 
         var position = e.GetPosition(this);
-        _viewport = _viewport.Pan(position.X - _dragLast.X, position.Y - _dragLast.Y);
+        var state = State;
+        if (state.HasUsableView)
+        {
+            state.Viewport = state.Viewport.Pan(position.X - _dragLast.X, position.Y - _dragLast.Y);
+            state.Manual = true;
+        }
+
         _dragLast = position;
-        _manual = true;
         _dirty = true;
         InvalidateVisual();
     }
@@ -268,7 +284,7 @@ public sealed class TrackMap : FrameworkElement
             return;
         }
 
-        var p = _viewport.ToScreen(CurrentX, CurrentZ);
+        var p = State.Viewport.ToScreen(CurrentX, CurrentZ);
         dc.DrawEllipse(GlowBrush, null, p, 20, 20);
         dc.DrawEllipse(ChartPalette.TextBrush, DotRing, p, 4.5, 4.5);
     }
@@ -278,7 +294,7 @@ public sealed class TrackMap : FrameworkElement
         const double barWidth = 150;
         var box = new Rect(14, height - 62, barWidth + 28 + 128, 50);
         dc.DrawRoundedRectangle(LegendBackground, LegendBorder, box, 10, 10);
-        _text.Draw(dc, InsightsStrings.MapLegendTitle + " · " + SpeedUnit, box.X + 14, box.Y + 7, 11, ChartPalette.MutedBrush, dpi, bold: true);
+        _text.Draw(dc, string.Format(CultureInfo.CurrentCulture, InsightsStrings.MapLegendTitleFormat, SpeedUnit), box.X + 14, box.Y + 7, 11, ChartPalette.MutedBrush, dpi, bold: true);
         dc.DrawRoundedRectangle(LegendRamp, null, new Rect(box.X + 14, box.Y + 26, barWidth, 5), 2.5, 2.5);
 
         var scale = SpeedScale;
@@ -305,7 +321,8 @@ public sealed class TrackMap : FrameworkElement
         }
 
         // Auto-fit unless the user took over the view.
-        if (!_manual || _viewport.Scale <= 0)
+        var view = State;
+        if (!view.Manual || !view.HasUsableView)
         {
             double minX = double.MaxValue, maxX = double.MinValue, minZ = double.MaxValue, maxZ = double.MinValue;
             foreach (var p in points)
@@ -324,8 +341,9 @@ public sealed class TrackMap : FrameworkElement
                 maxZ = Math.Max(maxZ, CurrentZ);
             }
 
-            _viewport = MapViewport.Fit(minX, maxX, minZ, maxZ, width, height, Padding);
-            _fitScale = _viewport.Scale;
+            view.Viewport = MapViewport.Fit(minX, maxX, minZ, maxZ, width, height, Padding);
+            view.FitScale = view.Viewport.Scale;
+            view.Manual = false;
         }
 
         var casing = new StreamGeometry();
@@ -341,12 +359,12 @@ public sealed class TrackMap : FrameworkElement
         using (var casingContext = casing.Open())
         {
             var casingOpen = false;
-            var previous = _viewport.ToScreen(points[0].X, points[0].Z);
+            var previous = State.Viewport.ToScreen(points[0].X, points[0].Z);
             AddMarkerIfZoneStart(points, 0, previous, bounds);
 
             for (var i = 1; i < points.Length; i++)
             {
-                var current = _viewport.ToScreen(points[i].X, points[i].Z);
+                var current = State.Viewport.ToScreen(points[i].X, points[i].Z);
                 AddMarkerIfZoneStart(points, i, current, bounds);
 
                 if (points[i].StartsSegment || (!bounds.Contains(previous) && !bounds.Contains(current)))

@@ -348,6 +348,13 @@ public readonly record struct MapViewport(double Scale, double OffsetX, double O
     /// <summary>Zooms by <paramref name="factor"/> keeping the world point under <paramref name="anchor"/> still (zoom to cursor).</summary>
     public MapViewport ZoomAt(Point anchor, double factor, double minScale, double maxScale)
     {
+        // A view that was never fitted (scale 0) or a degenerate gesture must not turn offsets into NaN/Infinity.
+        if (!(Scale > 0) || !double.IsFinite(Scale) || !double.IsFinite(factor) || factor <= 0
+            || !double.IsFinite(anchor.X) || !double.IsFinite(anchor.Y) || !(minScale > 0) || minScale > maxScale)
+        {
+            return this;
+        }
+
         var newScale = Math.Clamp(Scale * factor, minScale, maxScale);
         var applied = newScale / Scale;
         return new MapViewport(
@@ -357,7 +364,37 @@ public readonly record struct MapViewport(double Scale, double OffsetX, double O
     }
 
     /// <summary>Moves the view by a screen-space delta (drag to pan).</summary>
-    public MapViewport Pan(double dx, double dy) => this with { OffsetX = OffsetX + dx, OffsetY = OffsetY + dy };
+    public MapViewport Pan(double dx, double dy) =>
+        double.IsFinite(dx) && double.IsFinite(dy) && double.IsFinite(OffsetX + dx) && double.IsFinite(OffsetY + dy)
+            ? this with { OffsetX = OffsetX + dx, OffsetY = OffsetY + dy }
+            : this;
+}
+
+/// <summary>
+/// Pan/zoom state of the map: the current viewport, whether the user took over from auto-fit, and the auto-fit scale
+/// the zoom limits are relative to. A plain object so the view model can own it (it outlives the view) and reset it.
+/// </summary>
+public sealed class MapViewState
+{
+    public MapViewport Viewport { get; set; }
+
+    /// <summary>True once the user zoomed or panned; auto-fit then stops until <see cref="Reset"/> or a double-click.</summary>
+    public bool Manual { get; set; }
+
+    public double FitScale { get; set; } = 1;
+
+    /// <summary>True when <see cref="Viewport"/> has been fitted at least once and holds finite numbers.</summary>
+    public bool HasUsableView =>
+        Viewport.Scale > 0 && double.IsFinite(Viewport.Scale) && double.IsFinite(Viewport.OffsetX)
+        && double.IsFinite(Viewport.OffsetY) && FitScale > 0 && double.IsFinite(FitScale);
+
+    /// <summary>Back to auto-fit (a cleared path or a new session).</summary>
+    public void Reset()
+    {
+        Viewport = default;
+        Manual = false;
+        FitScale = 1;
+    }
 }
 
 /// <summary>Summary numbers of a driven path.</summary>

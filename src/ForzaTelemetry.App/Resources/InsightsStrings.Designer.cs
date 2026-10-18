@@ -39,6 +39,9 @@ public static class InsightsStrings
     /// <summary>"Speed"</summary>
     public static string LaneSpeed => ResourceManager.GetString("LaneSpeed", Culture)!;
 
+    /// <summary>"Speed ({0})"</summary>
+    public static string LaneSpeedUnitFormat => ResourceManager.GetString("LaneSpeedUnitFormat", Culture)!;
+
     /// <summary>"RPM"</summary>
     public static string LaneRpm => ResourceManager.GetString("LaneRpm", Culture)!;
 
@@ -96,8 +99,8 @@ public static class InsightsStrings
     /// <summary>"Braking zones"</summary>
     public static string MapBrakingZones => ResourceManager.GetString("MapBrakingZones", Culture)!;
 
-    /// <summary>"Speed"</summary>
-    public static string MapLegendTitle => ResourceManager.GetString("MapLegendTitle", Culture)!;
+    /// <summary>"Speed ({0})"</summary>
+    public static string MapLegendTitleFormat => ResourceManager.GetString("MapLegendTitleFormat", Culture)!;
 
     /// <summary>"Braking point"</summary>
     public static string MapBrakingLegend => ResourceManager.GetString("MapBrakingLegend", Culture)!;
@@ -153,23 +156,29 @@ public static class InsightsStrings
     /// <summary>"kW"</summary>
     public static string DynoPowerAxis => ResourceManager.GetString("DynoPowerAxis", Culture)!;
 
-    /// <summary>"N·m"</summary>
+    /// <summary>"Nm"</summary>
     public static string DynoTorqueAxis => ResourceManager.GetString("DynoTorqueAxis", Culture)!;
 
     /// <summary>"rpm"</summary>
     public static string DynoRpmAxis => ResourceManager.GetString("DynoRpmAxis", Culture)!;
 
-    /// <summary>"{0} kW · {1} hp @ {2} rpm"</summary>
+    /// <summary>"{0} kW ({1} hp)"</summary>
     public static string DynoPeakPowerFormat => ResourceManager.GetString("DynoPeakPowerFormat", Culture)!;
 
-    /// <summary>"{0} N·m @ {1} rpm"</summary>
+    /// <summary>"at {0} rpm"</summary>
+    public static string DynoAtRpmFormat => ResourceManager.GetString("DynoAtRpmFormat", Culture)!;
+
+    /// <summary>"{0} Nm"</summary>
     public static string DynoPeakTorqueFormat => ResourceManager.GetString("DynoPeakTorqueFormat", Culture)!;
 
     /// <summary>"Power and torque curve"</summary>
     public static string DynoChartName => ResourceManager.GetString("DynoChartName", Culture)!;
 
-    /// <summary>"Car {0} · PI {1}"</summary>
-    public static string CarLabelFormat => ResourceManager.GetString("CarLabelFormat", Culture)!;
+    /// <summary>"Car {0}"</summary>
+    public static string CarFormat => ResourceManager.GetString("CarFormat", Culture)!;
+
+    /// <summary>"PI {0}"</summary>
+    public static string PiFormat => ResourceManager.GetString("PiFormat", Culture)!;
 
     /// <summary>"No car detected yet"</summary>
     public static string NoCarYet => ResourceManager.GetString("NoCarYet", Culture)!;

@@ -30,6 +30,9 @@
   <data name="LaneSpeed" xml:space="preserve">
     <value>Velocidad</value>
   </data>
+  <data name="LaneSpeedUnitFormat" xml:space="preserve">
+    <value>Velocidad ({0})</value>
+  </data>
   <data name="LaneRpm" xml:space="preserve">
     <value>RPM</value>
   </data>
@@ -87,8 +90,8 @@
   <data name="MapBrakingZones" xml:space="preserve">
     <value>Zonas de frenada</value>
   </data>
-  <data name="MapLegendTitle" xml:space="preserve">
-    <value>Velocidad</value>
+  <data name="MapLegendTitleFormat" xml:space="preserve">
+    <value>Velocidad ({0})</value>
   </data>
   <data name="MapBrakingLegend" xml:space="preserve">
     <value>Punto de frenada</value>
@@ -145,22 +148,28 @@
     <value>kW</value>
   </data>
   <data name="DynoTorqueAxis" xml:space="preserve">
-    <value>N·m</value>
+    <value>Nm</value>
   </data>
   <data name="DynoRpmAxis" xml:space="preserve">
     <value>rpm</value>
   </data>
   <data name="DynoPeakPowerFormat" xml:space="preserve">
-    <value>{0} kW · {1} hp a {2} rpm</value>
+    <value>{0} kW ({1} hp)</value>
+  </data>
+  <data name="DynoAtRpmFormat" xml:space="preserve">
+    <value>a {0} rpm</value>
   </data>
   <data name="DynoPeakTorqueFormat" xml:space="preserve">
-    <value>{0} N·m a {1} rpm</value>
+    <value>{0} Nm</value>
   </data>
   <data name="DynoChartName" xml:space="preserve">
     <value>Curva de potencia y par</value>
   </data>
-  <data name="CarLabelFormat" xml:space="preserve">
-    <value>Coche {0} · PI {1}</value>
+  <data name="CarFormat" xml:space="preserve">
+    <value>Coche {0}</value>
+  </data>
+  <data name="PiFormat" xml:space="preserve">
+    <value>PI {0}</value>
   </data>
   <data name="NoCarYet" xml:space="preserve">
     <value>Aún no se detecta ningún coche</value>

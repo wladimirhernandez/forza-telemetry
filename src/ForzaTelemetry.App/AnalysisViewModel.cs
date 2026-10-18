@@ -22,6 +22,9 @@ public sealed partial class AnalysisViewModel : ObservableObject
 
     private readonly TelemetryHistory _history;
     private readonly UnitsService _units;
+    private const int AssumedMaxHz = 80;
+
+    private readonly TelemetrySample[] _newest = new TelemetrySample[1];
     private uint _lastTimeMs;
     private int _lastCount;
     private int _lastWindow;
@@ -95,37 +98,51 @@ public sealed partial class AnalysisViewModel : ObservableObject
         SpeedUnitLabel = _units.SpeedLabel;
         SpeedScale = _units.ConvertSpeed(3.6);
 
-        var count = _history.CopyTo(Samples);
-        SampleCount = count;
-        HasData = count > 0;
-        if (count == 0)
+        // Peek at the newest sample first (a 1-element copy): it is enough to know whether anything changed, so an idle
+        // or paused game costs one tiny copy per tick instead of thousands of samples.
+        if (_history.CopyTo(_newest) == 0)
         {
+            SampleCount = 0;
+            HasData = false;
             _lastCount = 0;
             return;
         }
 
-        var newest = Samples[count - 1];
+        var newest = _newest[0];
+        var count = _history.Count;
         if (count != _lastCount || newest.TimeMs != _lastTimeMs || WindowSeconds != _lastWindow)
         {
             _lastCount = count;
             _lastTimeMs = newest.TimeMs;
             _lastWindow = WindowSeconds;
+            CopyVisibleWindow();
             DataVersion++;
         }
 
+        HasData = true;
         SpeedText = _units.FormatSpeed(newest.SpeedMs * 3.6);
         RpmText = newest.Rpm.ToString("0", CultureInfo.CurrentCulture);
         GearText = GearFormatter.Format(newest.Gear);
-        ThrottleText = Percent(newest.Throttle);
-        BrakeText = Percent(newest.Brake);
-        SteerText = FormatSteer(newest.Steer);
+        ThrottleText = ReadoutFormat.Percent(newest.Throttle);
+        BrakeText = ReadoutFormat.Percent(newest.Brake);
+        SteerText = ReadoutFormat.Steer(newest.Steer);
     }
 
-    private static string Percent(float fraction) =>
-        (fraction * 100).ToString("0", CultureInfo.CurrentCulture) + "%";
+    /// <summary>
+    /// Copies only what the chart can show. The packet rate is not fixed, so the first copy assumes at most
+    /// <see cref="AssumedMaxHz"/> samples per second; if that did not reach back a whole window (a faster stream), it
+    /// copies everything the buffer holds.
+    /// </summary>
+    private void CopyVisibleWindow()
+    {
+        var limit = Math.Min(Samples.Length, WindowSeconds * AssumedMaxHz);
+        var copied = _history.CopyTo(Samples.AsSpan(0, limit));
+        if (copied == limit && limit < Samples.Length
+            && (long)Samples[copied - 1].TimeMs - Samples[0].TimeMs < WindowSeconds * 1000L)
+        {
+            copied = _history.CopyTo(Samples);
+        }
 
-    /// <summary>"R 35%", "L 12%" or "0%": direction letter plus magnitude, centered on zero like the chart lane.</summary>
-    public static string FormatSteer(float steer) => Math.Abs(steer) < 0.005f
-        ? "0%"
-        : (steer > 0 ? InsightsStrings.SteerRightShort : InsightsStrings.SteerLeftShort) + " " + Percent(Math.Abs(steer));
+        SampleCount = copied;
+    }
 }

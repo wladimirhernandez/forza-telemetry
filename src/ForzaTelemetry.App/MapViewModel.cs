@@ -12,16 +12,31 @@ namespace ForzaTelemetry.App;
 /// The Map screen: the driven path, its session statistics and a Clear command.
 /// </summary>
 /// <remarks>
-/// The path can hold up to 20,000 points (about 400 KB), so copying it on every 20 Hz tick would be wasteful. The
-/// view model remembers <see cref="TrackPath.Version"/> and copies only when it changed; the current-position dot is a
-/// separate, much cheaper update (one sample) that happens every refresh.
+/// <para>
+/// <b>Throttled copy.</b> The path can hold up to 20,000 points (about 400 KB) and <see cref="TrackPath"/> only offers a
+/// full copy, so copying it on every 20 Hz tick would be O(n) work while driving. The view model copies (and recomputes
+/// the statistics and the map geometry) at most <see cref="CopyInterval"/> apart, and only when
+/// <see cref="TrackPath.Version"/> changed; a clear is applied at once. The current-position dot is a much cheaper
+/// update (one sample) that still happens on every refresh, so it stays smooth.
+/// </para>
+/// <para>
+/// <b>View state.</b> Pan and zoom live in <see cref="ViewState"/>, owned here because the shell rebuilds the view on
+/// every tab visit; it returns to auto-fit when the path is cleared (here or elsewhere).
+/// </para>
 /// </remarks>
 public sealed partial class MapViewModel : ObservableObject
 {
     private const double MetersPerKilometer = 1000;
     private const double MetersPerMile = 1609.344;
 
+    /// <summary>Minimum time between path copies while driving (4 Hz).</summary>
+    public static readonly TimeSpan CopyInterval = TimeSpan.FromMilliseconds(250);
+
     private readonly TrackPath _path;
+    private readonly TimeProvider _time;
+    private long _lastCopyStamp;
+    private bool _hasCopied;
+    private uint? _suppressedSampleTime;
     private readonly TelemetryHistory _history;
     private readonly UnitsService _units;
     private readonly TelemetrySample[] _latest = new TelemetrySample[1];
@@ -30,8 +45,10 @@ public sealed partial class MapViewModel : ObservableObject
     /// <param name="path">The session path fed per packet.</param>
     /// <param name="history">Used only for the car's current position.</param>
     /// <param name="units">Speed unit and its label (the distance follows it: mph means miles).</param>
-    public MapViewModel(TrackPath path, TelemetryHistory history, UnitsService units)
+    /// <param name="timeProvider">Clock for the copy throttle; defaults to the system clock.</param>
+    public MapViewModel(TrackPath path, TelemetryHistory history, UnitsService units, TimeProvider? timeProvider = null)
     {
+        _time = timeProvider ?? TimeProvider.System;
         _path = path;
         _history = history;
         _units = units;
@@ -39,6 +56,9 @@ public sealed partial class MapViewModel : ObservableObject
         _speedUnitLabel = units.SpeedLabel;
         _speedScale = units.ConvertSpeed(3.6);
     }
+
+    /// <summary>Pan/zoom state of the map; survives the view being rebuilt and resets with the path.</summary>
+    public MapViewState ViewState { get; } = new();
 
     /// <summary>Copy of the path the map draws; only the first <see cref="PointCount"/> entries are valid.</summary>
     [ObservableProperty]
@@ -93,17 +113,20 @@ public sealed partial class MapViewModel : ObservableObject
         SpeedUnitLabel = _units.SpeedLabel;
         SpeedScale = _units.ConvertSpeed(3.6);
 
-        if (_history.CopyTo(_latest) == 1)
+        if (_history.CopyTo(_latest) == 1 && _latest[0].TimeMs != _suppressedSampleTime)
         {
+            _suppressedSampleTime = null;
             CurrentX = _latest[0].PositionX;
             CurrentZ = _latest[0].PositionZ;
             HasCurrent = true;
         }
 
         var version = _path.Version;
-        if (version != _lastVersion)
+        if (version != _lastVersion && (!_hasCopied || _time.GetElapsedTime(_lastCopyStamp) >= CopyInterval))
         {
             _lastVersion = version;
+            _lastCopyStamp = _time.GetTimestamp();
+            _hasCopied = true;
             CopyPath();
         }
 
@@ -124,6 +147,12 @@ public sealed partial class MapViewModel : ObservableObject
         }
 
         var copied = _path.CopyTo(Points);
+        if (copied == 0 || copied * 3 < PointCount)
+        {
+            // Thinning at most halves the path; anything smaller means it was cleared and started over.
+            ViewState.Reset();
+        }
+
         var stats = TrackStats.Compute(Points.AsSpan(0, copied));
         PointCount = copied;
         MinSpeedMs = stats.MinSpeedMs;
@@ -138,7 +167,14 @@ public sealed partial class MapViewModel : ObservableObject
     private void Clear()
     {
         _path.Clear();
+        ViewState.Reset();
+        HasCurrent = false;
+        CurrentX = 0;
+        CurrentZ = 0;
+        // The newest sample still sits in the history; do not draw it again until a newer one arrives.
+        _suppressedSampleTime = _history.CopyTo(_latest) == 1 ? _latest[0].TimeMs : null;
         _lastVersion = -1;
+        _hasCopied = false;
         Refresh();
     }
 

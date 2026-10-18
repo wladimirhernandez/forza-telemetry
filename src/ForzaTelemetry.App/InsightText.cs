@@ -72,8 +72,10 @@ public static class InsightText
     public static int BottomingSeverity(int count) => count <= 0 ? 0 : count < FrequentBottoming ? 1 : 2;
 
     /// <summary>
-    /// The suspension tip: nothing yet, a calming note for a few hits, or which axle bottoms out. An axle counts as the
-    /// problem when it has frequent hits; both axles frequent gives the combined sentence.
+    /// The suspension tip: nothing yet, a calming note for a few hits, or which axle bottoms out. It uses the SAME
+    /// per-corner rule as <see cref="BottomingSeverity"/>: a corner is "frequent" at <see cref="FrequentBottoming"/>
+    /// hits, an axle is the problem when either of its corners is frequent, and the tip can therefore never contradict
+    /// the colors of the counters next to it.
     /// </summary>
     public static string SuspensionAdvice(BottomingCounts counts)
     {
@@ -82,10 +84,8 @@ public static class InsightText
             return InsightsStrings.SuspensionAdviceNone;
         }
 
-        var front = counts.FrontLeft + counts.FrontRight;
-        var rear = counts.RearLeft + counts.RearRight;
-        var frontFrequent = front >= FrequentBottoming;
-        var rearFrequent = rear >= FrequentBottoming;
+        var frontFrequent = BottomingSeverity(counts.FrontLeft) == 2 || BottomingSeverity(counts.FrontRight) == 2;
+        var rearFrequent = BottomingSeverity(counts.RearLeft) == 2 || BottomingSeverity(counts.RearRight) == 2;
         return (frontFrequent, rearFrequent) switch
         {
             (true, true) => InsightsStrings.SuspensionAdviceBoth,

@@ -45,6 +45,7 @@
                 <controls:TrackMap Points="{Binding Points}" PointCount="{Binding PointCount}" DataVersion="{Binding DataVersion}"
                                    MinSpeedMs="{Binding MinSpeedMs}" MaxSpeedMs="{Binding MaxSpeedMs}"
                                    CurrentX="{Binding CurrentX}" CurrentZ="{Binding CurrentZ}" HasCurrent="{Binding HasCurrent}"
+                                   ViewState="{Binding ViewState}"
                                    SpeedScale="{Binding SpeedScale}" SpeedUnit="{Binding SpeedUnitLabel}"
                                    Visibility="{Binding HasData, Converter={StaticResource BoolToVisibility}}" />
 

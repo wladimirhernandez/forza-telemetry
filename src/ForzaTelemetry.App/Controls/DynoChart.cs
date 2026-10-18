@@ -8,7 +8,7 @@ namespace ForzaTelemetry.App.Controls;
 
 /// <summary>
 /// Power and torque against engine RPM, like a dyno sheet: two curves on a shared grid, the left axis for power (kW),
-/// the right axis for torque (N·m), and labeled markers at the two peaks.
+/// the right axis for torque (Nm), and labeled markers at the two peaks.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -251,27 +251,28 @@ public sealed class DynoChart : FrameworkElement
         var powerText = string.Format(
             CultureInfo.CurrentCulture, InsightsStrings.DynoPeakPowerFormat,
             (power.PowerWatts / 1000.0).ToString("0", CultureInfo.CurrentCulture),
-            DynoMath.ToHorsepower(power.PowerWatts).ToString("0", CultureInfo.CurrentCulture),
-            power.Rpm.ToString("#,0", CultureInfo.CurrentCulture));
+            DynoMath.ToHorsepower(power.PowerWatts).ToString("0", CultureInfo.CurrentCulture));
         var torqueText = string.Format(
             CultureInfo.CurrentCulture, InsightsStrings.DynoPeakTorqueFormat,
-            torque.TorqueNewtonMeters.ToString("0", CultureInfo.CurrentCulture),
-            torque.Rpm.ToString("#,0", CultureInfo.CurrentCulture));
+            torque.TorqueNewtonMeters.ToString("0", CultureInfo.CurrentCulture));
+        var powerAt = string.Format(CultureInfo.CurrentCulture, InsightsStrings.DynoAtRpmFormat, power.Rpm.ToString("#,0", CultureInfo.CurrentCulture));
+        var torqueAt = string.Format(CultureInfo.CurrentCulture, InsightsStrings.DynoAtRpmFormat, torque.Rpm.ToString("#,0", CultureInfo.CurrentCulture));
 
-        var powerChip = Chip(dc, powerText, InsightsStrings.DynoPeakPower, powerPoint, above: true, dpi, ChipPowerBorder, ChartPalette.WarmBrush, null);
-        Chip(dc, torqueText, InsightsStrings.DynoPeakTorque, torquePoint, above: true, dpi, ChipTorqueBorder, ChartPalette.ColdBrush, powerChip);
+        var powerChip = Chip(dc, powerText, InsightsStrings.DynoPeakPower, powerAt, powerPoint, dpi, ChipPowerBorder, ChartPalette.WarmBrush, null);
+        Chip(dc, torqueText, InsightsStrings.DynoPeakTorque, torqueAt, torquePoint, dpi, ChipTorqueBorder, ChartPalette.ColdBrush, powerChip);
     }
 
     /// <summary>Draws a label chip near a marker, clamped to the plot, nudged away from <paramref name="avoid"/>.</summary>
-    private Rect Chip(DrawingContext dc, string value, string title, Point anchor, bool above, double dpi, Pen border, Brush accent, Rect? avoid)
+    private Rect Chip(DrawingContext dc, string value, string title, string detail, Point anchor, double dpi, Pen border, Brush accent, Rect? avoid)
     {
         var titleText = _text.Get(title, 11, ChartPalette.MutedBrush, dpi);
         var valueText = _text.Get(value, 13, ChartPalette.TextBrush, dpi, numeral: true);
-        var width = Math.Max(titleText.Width, valueText.Width) + 28;
-        const double height = 46;
+        var detailText = _text.Get(detail, 11, ChartPalette.MutedBrush, dpi, numeral: true);
+        var width = Math.Max(Math.Max(titleText.Width, valueText.Width), detailText.Width) + 28;
+        const double height = 62;
 
         var x = Math.Clamp(anchor.X - width / 2, _left + 4, _right - width - 4);
-        var y = above ? anchor.Y - height - 14 : anchor.Y + 14;
+        var y = anchor.Y - height - 14;
         y = Math.Clamp(y, _top + 2, _bottom - height - 2);
         var rect = new Rect(x, y, width, height);
 
@@ -288,6 +289,7 @@ public sealed class DynoChart : FrameworkElement
         dc.DrawRoundedRectangle(ChipBackground, border, rect, 9, 9);
         _text.Draw(dc, title, rect.X + 14, rect.Y + 6, 11, ChartPalette.MutedBrush, dpi);
         dc.DrawText(valueText, new Point(rect.X + 14, rect.Y + 21));
+        dc.DrawText(detailText, new Point(rect.X + 14, rect.Y + 41));
         dc.DrawRoundedRectangle(accent, null, new Rect(rect.X + 5, rect.Y + 10, 3, rect.Height - 20), 1.5, 1.5);
         return rect;
     }

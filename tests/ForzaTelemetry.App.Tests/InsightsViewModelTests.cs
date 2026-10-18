@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Time.Testing;
 using ForzaTelemetry.App.Resources;
 using ForzaTelemetry.App.Services;
 using ForzaTelemetry.Core.Insights;
@@ -92,6 +93,55 @@ public class InsightsViewModelTests
         Assert.Equal(units.SpeedLabel, vm.SpeedUnitLabel);
     }
 
+    [Fact]
+    public void Analysis_does_not_copy_again_when_no_new_sample_arrived()
+    {
+        var history = new TelemetryHistory();
+        history.Add(Sample(timeMs: 0, speed: 20));
+        var vm = new AnalysisViewModel(history, new UnitsService());
+        vm.Refresh();
+        Assert.Equal(20, vm.Samples[0].SpeedMs);
+
+        vm.Samples[0] = default; // a marker: a second copy would overwrite it
+        vm.Refresh();
+
+        Assert.Equal(0, vm.Samples[0].SpeedMs);
+        Assert.Equal(1, vm.SampleCount);
+    }
+
+    [Fact]
+    public void Analysis_copies_only_the_visible_window_at_a_normal_packet_rate()
+    {
+        var history = new TelemetryHistory();
+        for (var i = 0; i < history.Capacity; i++)
+        {
+            history.Add(Sample(timeMs: (uint)(i * 16)));
+        }
+
+        var vm = new AnalysisViewModel(history, new UnitsService()) { WindowSeconds = 10 };
+        vm.Refresh();
+
+        Assert.True(vm.SampleCount < history.Capacity / 2, $"copied {vm.SampleCount} of {history.Capacity}");
+        // Whatever was copied still covers the whole 10 s window.
+        var span = vm.Samples[vm.SampleCount - 1].TimeMs - vm.Samples[0].TimeMs;
+        Assert.True(span >= 10_000, $"{span} ms is not a full window");
+    }
+
+    [Fact]
+    public void Analysis_copies_more_when_the_stream_is_faster_than_assumed()
+    {
+        var history = new TelemetryHistory();
+        for (var i = 0; i < history.Capacity; i++)
+        {
+            history.Add(Sample(timeMs: (uint)i)); // 1000 Hz: the first guess covers well under 10 s
+        }
+
+        var vm = new AnalysisViewModel(history, new UnitsService()) { WindowSeconds = 10 };
+        vm.Refresh();
+
+        Assert.Equal(history.Capacity, vm.SampleCount);
+    }
+
     [Theory]
     [InlineData(0f, "0%")]
     [InlineData(0.004f, "0%")]
@@ -99,7 +149,7 @@ public class InsightsViewModelTests
     [InlineData(-0.5f, "L 50%")]
     public void FormatSteer_shows_direction_and_magnitude(float steer, string expected)
     {
-        var text = AnalysisViewModel.FormatSteer(steer)
+        var text = ReadoutFormat.Steer(steer)
             .Replace(InsightsStrings.SteerRightShort, "R").Replace(InsightsStrings.SteerLeftShort, "L");
 
         Assert.Equal(expected, text);
@@ -151,10 +201,11 @@ public class InsightsViewModelTests
     [Fact]
     public void Map_rebuilds_only_when_the_path_changed()
     {
+        var clock = new FakeTimeProvider();
         var path = new TrackPath(minSpacingMeters: 1f);
         path.OnPacket(InsightPackets.At(0, 0));
         path.OnPacket(InsightPackets.At(10, 0));
-        var vm = new MapViewModel(path, new TelemetryHistory(), new UnitsService());
+        var vm = new MapViewModel(path, new TelemetryHistory(), new UnitsService(), clock);
         vm.Refresh();
         var version = vm.DataVersion;
 
@@ -162,9 +213,85 @@ public class InsightsViewModelTests
         Assert.Equal(version, vm.DataVersion);
 
         path.OnPacket(InsightPackets.At(20, 0));
+        clock.Advance(MapViewModel.CopyInterval);
         vm.Refresh();
         Assert.Equal(version + 1, vm.DataVersion);
         Assert.Equal(3, vm.PointCount);
+    }
+
+    [Fact]
+    public void Map_throttles_path_copies_but_applies_a_clear_at_once()
+    {
+        var clock = new FakeTimeProvider();
+        var path = new TrackPath(minSpacingMeters: 1f);
+        path.OnPacket(InsightPackets.At(0, 0));
+        path.OnPacket(InsightPackets.At(10, 0));
+        var vm = new MapViewModel(path, new TelemetryHistory(), new UnitsService(), clock);
+        vm.Refresh();
+        Assert.Equal(2, vm.PointCount);
+
+        path.OnPacket(InsightPackets.At(20, 0));
+        vm.Refresh(); // inside the interval: no O(n) copy
+        Assert.Equal(2, vm.PointCount);
+
+        clock.Advance(MapViewModel.CopyInterval);
+        vm.Refresh();
+        Assert.Equal(3, vm.PointCount);
+
+        vm.ClearCommand.Execute(null);
+        Assert.Equal(0, vm.PointCount);
+    }
+
+    [Fact]
+    public void Map_Clear_resets_the_view_and_the_position_dot_until_newer_data_arrives()
+    {
+        var path = new TrackPath(minSpacingMeters: 1f);
+        var history = new TelemetryHistory();
+        path.OnPacket(InsightPackets.At(0, 0));
+        path.OnPacket(InsightPackets.At(10, 0));
+        history.Add(Sample(timeMs: 5, x: 10, z: 0));
+        var vm = new MapViewModel(path, history, new UnitsService());
+        vm.Refresh();
+        vm.ViewState.Viewport = new Controls.MapViewport(2, 1, 1);
+        vm.ViewState.FitScale = 2;
+        vm.ViewState.Manual = true;
+        Assert.True(vm.HasCurrent);
+
+        vm.ClearCommand.Execute(null);
+
+        Assert.False(vm.ViewState.Manual);
+        Assert.False(vm.HasCurrent);
+        Assert.Equal(0, vm.CurrentX);
+        vm.Refresh();
+        Assert.False(vm.HasCurrent); // the old sample is not redrawn
+
+        history.Add(Sample(timeMs: 50, x: 3, z: 4));
+        vm.Refresh();
+        Assert.True(vm.HasCurrent);
+        Assert.Equal(3, vm.CurrentX);
+    }
+
+    [Fact]
+    public void Map_resets_the_view_when_the_path_was_cleared_elsewhere()
+    {
+        var clock = new FakeTimeProvider();
+        var path = new TrackPath(minSpacingMeters: 1f);
+        for (var i = 0; i < 40; i++)
+        {
+            path.OnPacket(InsightPackets.At(i * 2f, 0));
+        }
+
+        var vm = new MapViewModel(path, new TelemetryHistory(), new UnitsService(), clock);
+        vm.Refresh();
+        vm.ViewState.Manual = true;
+
+        path.Clear();
+        path.OnPacket(InsightPackets.At(0, 0));
+        path.OnPacket(InsightPackets.At(5, 0));
+        clock.Advance(MapViewModel.CopyInterval);
+        vm.Refresh();
+
+        Assert.False(vm.ViewState.Manual);
     }
 
     [Fact]
@@ -211,12 +338,13 @@ public class InsightsViewModelTests
     // ---- Tuning -----------------------------------------------------------------------------------
 
     private static TuningViewModel NewTuning(
-        out DynoCapture dyno, out TelemetryHistory history, out SuspensionBottomingCounter bottoming, UnitsService? units = null)
+        out DynoCapture dyno, out TelemetryHistory history, out SuspensionBottomingCounter bottoming,
+        UnitsService? units = null, TimeProvider? time = null)
     {
         dyno = new DynoCapture();
         history = new TelemetryHistory();
         bottoming = new SuspensionBottomingCounter();
-        return new TuningViewModel(dyno, history, bottoming, units ?? new UnitsService());
+        return new TuningViewModel(dyno, history, bottoming, units ?? new UnitsService(), time);
     }
 
     [Fact]
@@ -229,7 +357,8 @@ public class InsightsViewModelTests
         Assert.True(vm.IsEmpty);
         Assert.True(vm.HasNoCurve);
         Assert.False(vm.BalanceActive);
-        Assert.Equal(InsightsStrings.NoCarYet, vm.CarLabel);
+        Assert.Equal(InsightsStrings.NoCarYet, vm.CarText);
+        Assert.False(vm.HasCar);
         Assert.Equal(InsightsStrings.BalanceUnknown, vm.BalanceAdvice);
         Assert.Equal([InsightsStrings.TiresNoData], vm.TireLines);
         Assert.Equal(InsightsStrings.SuspensionAdviceNone, vm.SuspensionAdvice);
@@ -248,8 +377,10 @@ public class InsightsViewModelTests
 
         Assert.True(vm.HasCurve);
         Assert.Equal(31, vm.Curve.Count);
-        Assert.Contains("2211", vm.CarLabel);
-        Assert.Contains("612", vm.CarLabel);
+        Assert.True(vm.HasCar);
+        Assert.Contains("2211", vm.CarText);
+        Assert.Contains("612", vm.PiText);
+        Assert.DoesNotContain("612", vm.CarText); // car and PI are separate pills, not one joined string
         var version = vm.CurveVersion;
 
         vm.Refresh();
@@ -290,29 +421,67 @@ public class InsightsViewModelTests
     }
 
     [Fact]
-    public void Tuning_smooths_the_balance_and_hides_it_after_two_seconds_without_a_reading()
+    public void Tuning_smooths_the_balance_and_hides_it_after_the_hold_time_without_a_reading()
     {
-        var vm = NewTuning(out _, out var history, out _);
+        var clock = new FakeTimeProvider();
+        var vm = NewTuning(out _, out var history, out _, time: clock);
         history.Add(Sample(timeMs: 1, slipFl: 0.5f, slipFr: 0.5f, slipRl: 0.1f, slipRr: 0.1f)); // strong understeer: index +0.67
         vm.Refresh();
         var first = vm.BalanceValue;
 
         // A new, opposite reading moves the value only part of the way (exponential smoothing).
+        clock.Advance(TimeSpan.FromMilliseconds(50));
         history.Add(Sample(timeMs: 20, slipFl: 0.1f, slipFr: 0.1f, slipRl: 0.5f, slipRr: 0.5f)); // index -0.67
         vm.Refresh();
         Assert.True(vm.BalanceValue < first && vm.BalanceValue > -first);
 
-        // No new samples: the last value is held, then hidden.
-        for (var i = 0; i < TuningViewModel.BalanceHoldTicks - 1; i++)
-        {
-            vm.Refresh();
-        }
-
+        // No new samples: the last value is held while the clock is inside the hold, then hidden.
+        clock.Advance(TuningViewModel.BalanceHold - TimeSpan.FromMilliseconds(100));
+        vm.Refresh();
         Assert.True(vm.BalanceActive);
+        clock.Advance(TimeSpan.FromMilliseconds(200));
         vm.Refresh();
         Assert.False(vm.BalanceActive);
         Assert.Equal(BalanceState.Unknown, vm.BalanceState);
         Assert.Equal(InsightsStrings.BalanceUnknown, vm.BalanceAdvice);
+    }
+
+    [Fact]
+    public void Tuning_does_not_blend_into_a_stale_balance_after_returning_to_the_page()
+    {
+        var clock = new FakeTimeProvider();
+        var vm = NewTuning(out _, out var history, out _, time: clock);
+        history.Add(Sample(timeMs: 1, slipFl: 0.5f, slipFr: 0.5f, slipRl: 0.1f, slipRr: 0.1f)); // understeer
+        vm.Refresh();
+
+        // The user is on another tab for a minute (no refreshes), then comes back to an oversteering car.
+        clock.Advance(TimeSpan.FromMinutes(1));
+        history.Add(Sample(timeMs: 60_000, slipFl: 0.1f, slipFr: 0.1f, slipRl: 0.5f, slipRr: 0.5f));
+        vm.Refresh();
+
+        Assert.Equal(BalanceState.Oversteer, vm.BalanceState);
+        Assert.True(vm.BalanceValue < -0.6, "the first reading after a stale gap must snap, not blend with the old value");
+    }
+
+    [Fact]
+    public void Tuning_polls_the_dyno_at_a_low_rate_but_reset_applies_at_once()
+    {
+        var clock = new FakeTimeProvider();
+        var vm = NewTuning(out var dyno, out _, out _, time: clock);
+        dyno.OnPacket(InsightPackets.Pull(3000, 100_000, 300, 1, 1));
+        vm.Refresh();
+        Assert.Single(vm.Curve);
+
+        dyno.OnPacket(InsightPackets.Pull(3100, 110_000, 310, 1, 1));
+        vm.Refresh(); // same instant: polled recently, not read again
+        Assert.Single(vm.Curve);
+
+        clock.Advance(TuningViewModel.DynoPollInterval);
+        vm.Refresh();
+        Assert.Equal(2, vm.Curve.Count);
+
+        vm.ResetDynoCommand.Execute(null); // no waiting for the next poll
+        Assert.Empty(vm.Curve);
     }
 
     [Fact]

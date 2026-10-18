@@ -63,6 +63,14 @@
             <Setter Property="Margin" Value="0,3,0,0" />
         </Style>
 
+        <!-- A small outlined label (car, PI): metadata as separate pills instead of one string joined by dots. -->
+        <Style x:Key="MetaPill" TargetType="Border">
+            <Setter Property="BorderBrush" Value="{StaticResource HairlineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="11" />
+            <Setter Property="Padding" Value="10,2" />
+        </Style>
+
         <Style x:Key="CardTitle" TargetType="TextBlock" BasedOn="{StaticResource SectionTitle}" />
 
         <Style x:Key="AdviceText" TargetType="TextBlock" BasedOn="{StaticResource MutedLabel}">
@@ -101,9 +109,17 @@
                             AutomationProperties.Name="{x:Static res:InsightsStrings.DynoResetTooltip}" />
                     <StackPanel>
                         <TextBlock Text="{x:Static res:InsightsStrings.DynoTitle}" Style="{StaticResource CardTitle}" FontSize="20" />
-                        <TextBlock Margin="0,3,0,0" Style="{StaticResource MutedLabel}">
-                            <Run Text="{Binding CarLabel, Mode=OneWay}" /><Run Text="  &#183;  " /><Run Text="{x:Static res:InsightsStrings.DynoHint}" />
-                        </TextBlock>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <Border Style="{StaticResource MetaPill}">
+                                <TextBlock Text="{Binding CarText}" Style="{StaticResource MutedLabel}" FontSize="12" />
+                            </Border>
+                            <Border Style="{StaticResource MetaPill}" Margin="6,0,0,0"
+                                    Visibility="{Binding HasCar, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="{Binding PiText}" Style="{StaticResource MutedLabel}" FontSize="12" />
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="{x:Static res:InsightsStrings.DynoHint}" Style="{StaticResource MutedLabel}"
+                                   FontSize="12" Margin="0,6,0,0" />
                     </StackPanel>
                 </DockPanel>
 
