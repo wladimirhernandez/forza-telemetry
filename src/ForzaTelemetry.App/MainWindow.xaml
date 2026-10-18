@@ -13,30 +13,66 @@
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
-        WindowStartupLocation="CenterScreen"
+        WindowStartupLocation="Manual"
         UseLayoutRounding="True"
         TextOptions.TextFormattingMode="Display">
     <!--
       Borderless window technique:
       - WindowStyle=None removes the OS title bar; AllowsTransparency + Background=Transparent let the rounded
-        Border below show through with real rounded corners and a soft shadow (the 12 px transparent margin around
+        Border below show through with real rounded corners and a soft shadow (the transparent margin around
         it is where the shadow is drawn).
       - With the OS frame gone the window loses its resize edges, so WindowChrome gives them back: CaptionHeight=0
-        (our own title bar handles dragging) and ResizeBorderThickness=12 (exactly the transparent margin).
+        (our own title bar handles dragging) and ResizeBorderThickness = the same transparent margin.
+      - While maximized the window fills the work area exactly, so the margin, shadow and rounded corners are
+        removed and the resize band is zeroed (otherwise its 12 px would sit on top of the title bar glyph buttons).
+        A Style with a Trigger on WindowState does all of that declaratively: the trigger applies its Setters while
+        the window is maximized and undoes them when it is not, so no code-behind has to remember "the old values".
+      - WindowStartupLocation=Manual: MainWindow centers itself on the monitor under the cursor (WPF's CenterScreen
+        always uses the primary monitor).
     -->
-    <shell:WindowChrome.WindowChrome>
-        <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="12" GlassFrameThickness="0"
-                            CornerRadius="0" UseAeroCaptionButtons="False" />
-    </shell:WindowChrome.WindowChrome>
+    <Window.Resources>
+        <shell:WindowChrome x:Key="NormalChrome" CaptionHeight="0" GlassFrameThickness="0" CornerRadius="0"
+                            UseAeroCaptionButtons="False" ResizeBorderThickness="{StaticResource ChromeMargin}" />
+        <shell:WindowChrome x:Key="MaximizedChrome" CaptionHeight="0" GlassFrameThickness="0" CornerRadius="0"
+                            UseAeroCaptionButtons="False" ResizeBorderThickness="0" />
+    </Window.Resources>
+    <Window.Style>
+        <Style TargetType="Window">
+            <Setter Property="shell:WindowChrome.WindowChrome" Value="{StaticResource NormalChrome}" />
+            <Style.Triggers>
+                <Trigger Property="WindowState" Value="Maximized">
+                    <Setter Property="shell:WindowChrome.WindowChrome" Value="{StaticResource MaximizedChrome}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Style>
 
-    <Border x:Name="Chrome" Margin="12" CornerRadius="{StaticResource WindowRadius}"
+    <Border
             Background="{StaticResource CanvasBrush}" BorderBrush="{StaticResource HairlineBrush}" BorderThickness="1"
             TextElement.Foreground="{StaticResource TextBrush}"
             TextElement.FontFamily="{StaticResource LabelFont}"
             TextElement.FontSize="14">
-        <Border.Effect>
-            <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.6" Color="Black" />
-        </Border.Effect>
+        <!-- Margin, CornerRadius and Effect live in this Style (not as local attributes) so the trigger can override them:
+             a locally set value always beats a Style value. -->
+        <Border.Style>
+            <Style TargetType="Border">
+                <Setter Property="Margin" Value="{StaticResource ChromeMargin}" />
+                <Setter Property="CornerRadius" Value="{StaticResource WindowRadius}" />
+                <Setter Property="Effect">
+                    <Setter.Value>
+                        <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.6" Color="Black" />
+                    </Setter.Value>
+                </Setter>
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}"
+                                 Value="Maximized">
+                        <Setter Property="Margin" Value="0" />
+                        <Setter Property="CornerRadius" Value="0" />
+                        <Setter Property="Effect" Value="{x:Null}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Border.Style>
 
         <!--
           Star-sized rows share the leftover height (the hero takes everything the title bar, top bar and bottom
@@ -53,7 +89,8 @@
             </Grid.RowDefinitions>
 
             <!-- Title bar: the transparent-background Grid is what receives the mouse for dragging. -->
-            <Grid Grid.Row="0" Background="Transparent" MouseLeftButtonDown="OnDragAreaMouseDown">
+            <Grid Grid.Row="0" Background="Transparent" MouseLeftButtonDown="OnDragAreaMouseDown"
+                  MouseMove="OnDragAreaMouseMove" MouseLeftButtonUp="OnDragAreaMouseUp" LostMouseCapture="OnDragAreaLostCapture">
                 <TextBlock Text="{x:Static res:Strings.AppTitle}" Style="{StaticResource MutedLabel}"
                            VerticalAlignment="Center" Margin="28,0,0,0" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"

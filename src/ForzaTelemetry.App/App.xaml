@@ -45,6 +45,13 @@
         <CornerRadius x:Key="ButtonRadius">10</CornerRadius>
         <CornerRadius x:Key="PillRadius">999</CornerRadius>
 
+        <!--
+          Transparent margin around the window card: it is where the drop shadow is drawn AND the size of the
+          invisible resize band (WindowChrome.ResizeBorderThickness). One resource feeds both, so they cannot drift.
+          MainWindow zeroes both while maximized.
+        -->
+        <Thickness x:Key="ChromeMargin">12</Thickness>
+
         <!-- Window glyphs as vector geometry: crisp at any DPI and they take the button foreground color. -->
         <Geometry x:Key="MinimizeIcon">M 0,6 H 12</Geometry>
         <Geometry x:Key="MaximizeIcon">M 1,1 H 11 V 11 H 1 Z</Geometry>
