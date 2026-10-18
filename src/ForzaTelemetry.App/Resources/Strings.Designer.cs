@@ -130,15 +130,6 @@ namespace ForzaTelemetry.App.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Car info.
-        /// </summary>
-        public static string CarInfoPill {
-            get {
-                return ResourceManager.GetString("CarInfoPill", resourceCulture)!;
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Gear and speed.
         /// </summary>
         public static string GearSpeedTitle {
@@ -189,33 +180,6 @@ namespace ForzaTelemetry.App.Resources {
         public static string RpmLabel {
             get {
                 return ResourceManager.GetString("RpmLabel", resourceCulture)!;
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Session.
-        /// </summary>
-        public static string SessionTitle {
-            get {
-                return ResourceManager.GetString("SessionTitle", resourceCulture)!;
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Packets per second.
-        /// </summary>
-        public static string PacketsPerSecondLabel {
-            get {
-                return ResourceManager.GetString("PacketsPerSecondLabel", resourceCulture)!;
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Status.
-        /// </summary>
-        public static string StatusLabel {
-            get {
-                return ResourceManager.GetString("StatusLabel", resourceCulture)!;
             }
         }
         
@@ -289,5 +253,203 @@ namespace ForzaTelemetry.App.Resources {
                 return ResourceManager.GetString("HeroTitle", resourceCulture)!;
             }
         }
+        /// <summary>
+        ///   Looks up a localized string similar to PI {0}.
+        /// </summary>
+        public static string CarPerformanceIndexFormat {
+            get {
+                return ResourceManager.GetString("CarPerformanceIndexFormat", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to G-force.
+        /// </summary>
+        public static string GForceTitle {
+            get {
+                return ResourceManager.GetString("GForceTitle", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Lateral.
+        /// </summary>
+        public static string GForceLateralLabel {
+            get {
+                return ResourceManager.GetString("GForceLateralLabel", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Longitudinal.
+        /// </summary>
+        public static string GForceLongitudinalLabel {
+            get {
+                return ResourceManager.GetString("GForceLongitudinalLabel", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to g.
+        /// </summary>
+        public static string GForceUnit {
+            get {
+                return ResourceManager.GetString("GForceUnit", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Inputs.
+        /// </summary>
+        public static string InputsTitle {
+            get {
+                return ResourceManager.GetString("InputsTitle", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Throttle.
+        /// </summary>
+        public static string ThrottleLabel {
+            get {
+                return ResourceManager.GetString("ThrottleLabel", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Brake.
+        /// </summary>
+        public static string BrakeLabel {
+            get {
+                return ResourceManager.GetString("BrakeLabel", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Clutch.
+        /// </summary>
+        public static string ClutchLabel {
+            get {
+                return ResourceManager.GetString("ClutchLabel", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Handbrake.
+        /// </summary>
+        public static string HandbrakeLabel {
+            get {
+                return ResourceManager.GetString("HandbrakeLabel", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Steering.
+        /// </summary>
+        public static string SteeringLabel {
+            get {
+                return ResourceManager.GetString("SteeringLabel", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Power.
+        /// </summary>
+        public static string PowerLabel {
+            get {
+                return ResourceManager.GetString("PowerLabel", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Torque.
+        /// </summary>
+        public static string TorqueLabel {
+            get {
+                return ResourceManager.GetString("TorqueLabel", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Boost.
+        /// </summary>
+        public static string BoostLabel {
+            get {
+                return ResourceManager.GetString("BoostLabel", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Fuel.
+        /// </summary>
+        public static string FuelLabel {
+            get {
+                return ResourceManager.GetString("FuelLabel", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to kW.
+        /// </summary>
+        public static string PowerUnitKw {
+            get {
+                return ResourceManager.GetString("PowerUnitKw", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to hp.
+        /// </summary>
+        public static string PowerUnitHp {
+            get {
+                return ResourceManager.GetString("PowerUnitHp", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Nm.
+        /// </summary>
+        public static string TorqueUnit {
+            get {
+                return ResourceManager.GetString("TorqueUnit", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to psi.
+        /// </summary>
+        public static string BoostUnit {
+            get {
+                return ResourceManager.GetString("BoostUnit", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to %.
+        /// </summary>
+        public static string PercentUnit {
+            get {
+                return ResourceManager.GetString("PercentUnit", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Shift lights.
+        /// </summary>
+        public static string ShiftLightsName {
+            get {
+                return ResourceManager.GetString("ShiftLightsName", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to rpm.
+        /// </summary>
+        public static string RpmUnit {
+            get {
+                return ResourceManager.GetString("RpmUnit", resourceCulture)!;
+            }
+        }
+        
     }
 }

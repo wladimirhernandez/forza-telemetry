@@ -43,6 +43,15 @@ public sealed partial class MainViewModel : ObservableObject
     // own — see that class's remarks) so a test can make time "pass" deterministically for both.
     private DateTimeOffset _lastPacketArrivalAt;
 
+    // Highest power/torque/boost seen for the current car, the scale of the engine gauges (see PowerRatio).
+    private const double PeakPowerFloorKw = 100;
+    private const double PeakTorqueFloorNm = 100;
+    private const double PeakBoostFloorPsi = 10;
+    private double _peakPowerKw = PeakPowerFloorKw;
+    private double _peakTorqueNm = PeakTorqueFloorNm;
+    private double _peakBoostPsi = PeakBoostFloorPsi;
+    private int? _currentCarOrdinal;
+
     // Telemetry numbers read best with a space as thousands separator ("7 439"), regardless of the user's culture.
     private static readonly NumberFormatInfo SpacedNumbers = new() { NumberGroupSeparator = " ", NumberDecimalDigits = 0 };
 
@@ -87,6 +96,91 @@ public sealed partial class MainViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(StopCommand))]
     private bool _isRunning;
 
+    // ---- Shift lights ------------------------------------------------------
+
+    /// <summary>True from 97% of the redline RPM up: the shift-light strip blinks while this holds.</summary>
+    [ObservableProperty]
+    private bool _isRedline;
+
+    // ---- G-force -------------------------------------------------------------
+
+    /// <summary>Acceleration to the right in g (negative = left); the packet's car-local X axis.</summary>
+    [ObservableProperty]
+    private double _lateralG;
+
+    /// <summary>Acceleration forward in g (negative = braking); the packet's car-local Z axis.</summary>
+    [ObservableProperty]
+    private double _longitudinalG;
+
+    // ---- Inputs (all normalized: pedals 0..1, steering -1..1) -------------------
+
+    [ObservableProperty]
+    private double _throttleInput;
+
+    [ObservableProperty]
+    private double _brakeInput;
+
+    [ObservableProperty]
+    private double _clutchInput;
+
+    [ObservableProperty]
+    private double _handBrakeInput;
+
+    [ObservableProperty]
+    private double _steerInput;
+
+    // ---- Engine card ---------------------------------------------------------------
+
+    /// <summary>Engine power in kW, never negative (off-throttle engine braking reports negative watts).</summary>
+    [ObservableProperty]
+    private double _powerKw;
+
+    /// <summary>The same power in mechanical horsepower.</summary>
+    [ObservableProperty]
+    private double _powerHp;
+
+    /// <summary>Engine torque in Nm, never negative (see <see cref="PowerKw"/>).</summary>
+    [ObservableProperty]
+    private double _torqueNm;
+
+    /// <summary>Turbo/supercharger boost in psi (the unit FH sends). Vacuum on a naturally aspirated engine shows as 0.</summary>
+    [ObservableProperty]
+    private double _boostPsi;
+
+    /// <summary>Fuel left, 0..100.</summary>
+    [ObservableProperty]
+    private double _fuelPercent;
+
+    // Gauge fill, 0..1. Power, torque and boost have no fixed maximum (it depends on the car), so each is measured
+    // against the highest value seen for the CURRENT car (never below a floor, so a slow first second does not
+    // pin the gauge at 100%). Fuel is already a 0..1 fraction.
+    [ObservableProperty]
+    private double _powerRatio;
+
+    [ObservableProperty]
+    private double _torqueRatio;
+
+    [ObservableProperty]
+    private double _boostRatio;
+
+    [ObservableProperty]
+    private double _fuelRatio;
+
+    // ---- Car info pill -------------------------------------------------------------
+
+    /// <summary>False until a packet carries a real car (performance index 100..999); the pill is hidden meanwhile.</summary>
+    [ObservableProperty]
+    private bool _hasCarInfo;
+
+    [ObservableProperty]
+    private string _carClassLabel = "";
+
+    [ObservableProperty]
+    private int _carPerformanceIndex;
+
+    [ObservableProperty]
+    private string _drivetrainLabel = "";
+
     /// <summary>
     /// Design-time-only constructor: used by <c>MainWindow.xaml</c>'s <c>d:DataContext</c>
     /// (<c>IsDesignTimeCreatable=True</c>) so the Visual Studio/Rider designer shows a populated dashboard
@@ -107,6 +201,25 @@ public sealed partial class MainViewModel : ObservableObject
         Status = "Receiving";
         IsRunning = true;
         ConnectionState = ConnectionState.Receiving;
+
+        // Dashboard widgets: a mid-corner, mid-throttle snapshot so the previewer shows every control populated.
+        LateralG = 0.8;
+        LongitudinalG = 0.3;
+        ThrottleInput = 0.7;
+        SteerInput = 0.25;
+        PowerKw = 280;
+        PowerHp = DashboardMath.ToHorsepower(280);
+        PowerRatio = 0.8;
+        TorqueNm = 410;
+        TorqueRatio = 0.75;
+        BoostPsi = 14;
+        BoostRatio = 0.7;
+        FuelPercent = 62;
+        FuelRatio = 0.62;
+        HasCarInfo = true;
+        CarClassLabel = "A";
+        CarPerformanceIndex = 780;
+        DrivetrainLabel = "AWD";
     }
 
     /// <summary>
@@ -172,6 +285,7 @@ public sealed partial class MainViewModel : ObservableObject
             SpeedKmh = latest.SpeedKmh;
             GearLabel = GearFormatter.Format(latest.Gear);
             UpdateTires(latest);
+            UpdateDashboard(latest);
         }
 
         var silenceSoFar = _timeProvider.GetUtcNow() - _lastPacketArrivalAt;
@@ -185,6 +299,49 @@ public sealed partial class MainViewModel : ObservableObject
         FrontRight.Update(p.TireTempFrontRight, p.TireCombinedSlipFrontRight, p.NormalizedSuspensionTravelFrontRight);
         RearLeft.Update(p.TireTempRearLeft, p.TireCombinedSlipRearLeft, p.NormalizedSuspensionTravelRearLeft);
         RearRight.Update(p.TireTempRearRight, p.TireCombinedSlipRearRight, p.NormalizedSuspensionTravelRearRight);
+    }
+
+    /// <summary>Maps one packet to the shift-light, G-force, input, engine-gauge and car-info values.</summary>
+    private void UpdateDashboard(TelemetryPacket p)
+    {
+        IsRedline = DashboardMath.IsRedline(p.CurrentEngineRpm, p.EngineMaxRpm);
+
+        LateralG = DashboardMath.ToG(p.AccelerationX);
+        LongitudinalG = DashboardMath.ToG(p.AccelerationZ);
+
+        ThrottleInput = DashboardMath.NormalizePedal(p.Accel);
+        BrakeInput = DashboardMath.NormalizePedal(p.Brake);
+        ClutchInput = DashboardMath.NormalizePedal(p.Clutch);
+        HandBrakeInput = DashboardMath.NormalizePedal(p.HandBrake);
+        SteerInput = DashboardMath.NormalizeSteer(p.Steer);
+
+        // A different car (CarOrdinal) has a different power band: start its gauge scale over.
+        if (_currentCarOrdinal != p.CarOrdinal)
+        {
+            _currentCarOrdinal = p.CarOrdinal;
+            _peakPowerKw = PeakPowerFloorKw;
+            _peakTorqueNm = PeakTorqueFloorNm;
+            _peakBoostPsi = PeakBoostFloorPsi;
+        }
+
+        PowerKw = DashboardMath.ToKilowatts(p.Power);
+        PowerHp = DashboardMath.ToHorsepower(PowerKw);
+        TorqueNm = Math.Max(0, p.Torque);
+        BoostPsi = Math.Max(0, p.Boost);
+        FuelRatio = DashboardMath.Clamp01(p.Fuel);
+        FuelPercent = FuelRatio * 100;
+
+        _peakPowerKw = Math.Max(_peakPowerKw, PowerKw);
+        _peakTorqueNm = Math.Max(_peakTorqueNm, TorqueNm);
+        _peakBoostPsi = Math.Max(_peakBoostPsi, BoostPsi);
+        PowerRatio = DashboardMath.Normalize(PowerKw, 0, _peakPowerKw);
+        TorqueRatio = DashboardMath.Normalize(TorqueNm, 0, _peakTorqueNm);
+        BoostRatio = DashboardMath.Normalize(BoostPsi, 0, _peakBoostPsi);
+
+        HasCarInfo = p.CarPerformanceIndex > 0;
+        CarClassLabel = CarInfoFormatter.ClassLabel(p.CarClass);
+        CarPerformanceIndex = p.CarPerformanceIndex;
+        DrivetrainLabel = CarInfoFormatter.DrivetrainLabel(p.DrivetrainType);
     }
 
     private void UpdatePacketsPerSecond()

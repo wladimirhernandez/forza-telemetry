@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:po="http://schemas.microsoft.com/winfx/2006/xaml/presentation/options"
+             xmlns:controls="clr-namespace:ForzaTelemetry.App.Controls"
              xmlns:res="clr-namespace:ForzaTelemetry.App.Resources"
              mc:Ignorable="po">
     <!-- No StartupUri: the composition root in App.xaml.cs (OnStartup) builds the services and creates the window. -->
@@ -466,6 +467,35 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <!--
+          Default look of the custom drawing controls. A Style WITHOUT x:Key and with a TargetType is an implicit style:
+          WPF applies it to every element of exactly that type, so the XAML that uses a control only sets data
+          (Value, Maximum, ...) and never repeats brushes. The brushes are the frozen tokens above, which is also what
+          lets the controls freeze their pens (see RenderHelpers.CreatePen).
+        -->
+        <Style TargetType="controls:ShiftLightStrip">
+            <Setter Property="LowBrush" Value="{StaticResource ThrottleBrush}" />
+            <Setter Property="MidBrush" Value="{StaticResource WarmBrush}" />
+            <Setter Property="HighBrush" Value="{StaticResource BrakeBrush}" />
+            <Setter Property="OffBrush" Value="{StaticResource HairlineBrush}" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
+        <Style TargetType="controls:GForceMeter">
+            <Setter Property="RingBrush" Value="{StaticResource HairlineBrush}" />
+            <Setter Property="DotBrush" Value="{StaticResource TextBrush}" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
+        <Style TargetType="controls:BarMeter">
+            <Setter Property="TrackBrush" Value="{StaticResource HairlineBrush}" />
+            <Setter Property="FillBrush" Value="{StaticResource TextBrush}" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
+        <Style TargetType="controls:TickGauge">
+            <Setter Property="TrackBrush" Value="{StaticResource HairlineBrush}" />
+            <Setter Property="FillBrush" Value="{StaticResource TextBrush}" />
+            <Setter Property="IsHitTestVisible" Value="False" />
         </Style>
     </Application.Resources>
 </Application>

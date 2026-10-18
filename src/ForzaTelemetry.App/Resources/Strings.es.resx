@@ -36,9 +36,6 @@
   <data name="PacketsPerSecondPill" xml:space="preserve">
     <value>{0:F0} paquetes/s</value>
   </data>
-  <data name="CarInfoPill" xml:space="preserve">
-    <value>Datos del coche</value>
-  </data>
   <data name="GearSpeedTitle" xml:space="preserve">
     <value>Marcha y velocidad</value>
   </data>
@@ -56,15 +53,6 @@
   </data>
   <data name="RpmLabel" xml:space="preserve">
     <value>Régimen del motor (rpm)</value>
-  </data>
-  <data name="SessionTitle" xml:space="preserve">
-    <value>Sesión</value>
-  </data>
-  <data name="PacketsPerSecondLabel" xml:space="preserve">
-    <value>Paquetes por segundo</value>
-  </data>
-  <data name="StatusLabel" xml:space="preserve">
-    <value>Estado</value>
   </data>
   <data name="TireFrontLeft" xml:space="preserve">
     <value>Delantera izq.</value>
@@ -89,5 +77,71 @@
   </data>
   <data name="HeroTitle" xml:space="preserve">
     <value>Vista de neumáticos</value>
+  </data>
+  <data name="CarPerformanceIndexFormat" xml:space="preserve">
+    <value>PI {0}</value>
+  </data>
+  <data name="GForceTitle" xml:space="preserve">
+    <value>Fuerza G</value>
+  </data>
+  <data name="GForceLateralLabel" xml:space="preserve">
+    <value>Lateral</value>
+  </data>
+  <data name="GForceLongitudinalLabel" xml:space="preserve">
+    <value>Longitudinal</value>
+  </data>
+  <data name="GForceUnit" xml:space="preserve">
+    <value>g</value>
+  </data>
+  <data name="InputsTitle" xml:space="preserve">
+    <value>Controles</value>
+  </data>
+  <data name="ThrottleLabel" xml:space="preserve">
+    <value>Acelerador</value>
+  </data>
+  <data name="BrakeLabel" xml:space="preserve">
+    <value>Freno</value>
+  </data>
+  <data name="ClutchLabel" xml:space="preserve">
+    <value>Embrague</value>
+  </data>
+  <data name="HandbrakeLabel" xml:space="preserve">
+    <value>Freno de mano</value>
+  </data>
+  <data name="SteeringLabel" xml:space="preserve">
+    <value>Dirección</value>
+  </data>
+  <data name="PowerLabel" xml:space="preserve">
+    <value>Potencia</value>
+  </data>
+  <data name="TorqueLabel" xml:space="preserve">
+    <value>Par motor</value>
+  </data>
+  <data name="BoostLabel" xml:space="preserve">
+    <value>Turbo</value>
+  </data>
+  <data name="FuelLabel" xml:space="preserve">
+    <value>Combustible</value>
+  </data>
+  <data name="PowerUnitKw" xml:space="preserve">
+    <value>kW</value>
+  </data>
+  <data name="PowerUnitHp" xml:space="preserve">
+    <value>hp</value>
+  </data>
+  <data name="TorqueUnit" xml:space="preserve">
+    <value>Nm</value>
+  </data>
+  <data name="BoostUnit" xml:space="preserve">
+    <value>psi</value>
+  </data>
+  <data name="PercentUnit" xml:space="preserve">
+    <value>%</value>
+  </data>
+  <data name="ShiftLightsName" xml:space="preserve">
+    <value>Luces de cambio</value>
+  </data>
+  <data name="RpmUnit" xml:space="preserve">
+    <value>rpm</value>
   </data>
 </root>

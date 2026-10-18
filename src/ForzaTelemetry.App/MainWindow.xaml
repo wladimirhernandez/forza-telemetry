@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:ForzaTelemetry.App"
+        xmlns:controls="clr-namespace:ForzaTelemetry.App.Controls"
         xmlns:res="clr-namespace:ForzaTelemetry.App.Resources"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         mc:Ignorable="d"
@@ -31,6 +32,7 @@
         always uses the primary monitor).
     -->
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
         <shell:WindowChrome x:Key="NormalChrome" CaptionHeight="0" GlassFrameThickness="0" CornerRadius="0"
                             UseAeroCaptionButtons="False" ResizeBorderThickness="{StaticResource ChromeMargin}" />
         <shell:WindowChrome x:Key="MaximizedChrome" CaptionHeight="0" GlassFrameThickness="0" CornerRadius="0"
@@ -85,6 +87,7 @@
                 <RowDefinition Height="52" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
@@ -176,9 +179,16 @@
                     <ContentControl Style="{StaticResource StatusPill}" Margin="10,0,0,0" Tag="{x:Null}"
                                     Content="{Binding PacketsPerSecond}"
                                     ContentStringFormat="{x:Static res:Strings.PacketsPerSecondPill}" />
-                    <!-- Placeholder: the car info pill (class, PI, drivetrain) is filled in a later step. -->
+                    <!-- Car info: class letter, performance index and drivetrain. Hidden until a packet carries a real car. -->
                     <ContentControl Style="{StaticResource StatusPill}" Margin="10,0,0,0" Tag="{x:Null}"
-                                    Content="{x:Static res:Strings.CarInfoPill}" />
+                                    Visibility="{Binding HasCarInfo, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding CarClassLabel}" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding CarPerformanceIndex, StringFormat={x:Static res:Strings.CarPerformanceIndexFormat}}"
+                                       Foreground="{StaticResource MutedBrush}" Margin="10,0,0,0" />
+                            <TextBlock Text="{Binding DrivetrainLabel}" Foreground="{StaticResource MutedBrush}" Margin="10,0,0,0" />
+                        </StackPanel>
+                    </ContentControl>
                 </StackPanel>
 
                 <Button Style="{StaticResource ToggleListeningButton}" HorizontalAlignment="Right"
@@ -317,20 +327,31 @@
                 </Viewbox>
             </Border>
 
-            <!-- Bottom row: three equal cards. -->
-            <Grid Grid.Row="3" Margin="28,0,28,28">
+            <!--
+              Shift lights: a custom control (see Controls/ShiftLightStrip.cs). Value is the RPM, Maximum the redline; the
+              view model decides IsRedline so the blink rule lives in one tested place.
+            -->
+            <controls:ShiftLightStrip Grid.Row="3" Height="20" Margin="28,0,28,14"
+                                      Value="{Binding Rpm}" Maximum="{Binding MaxRpm}" IsRedline="{Binding IsRedline}" />
+
+            <!--
+              Bottom row: four cards, fixed 208 high so the hero (the only star row) gets what is left at any window size.
+              Column weights (0.9 / 1.1 / 1.15 / 1.25) give each card the width its content needs at the minimum size.
+            -->
+            <Grid Grid.Row="4" Margin="28,0,28,28" Height="208">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="0.9*" />
+                    <ColumnDefinition Width="1.1*" />
+                    <ColumnDefinition Width="1.15*" />
+                    <ColumnDefinition Width="1.25*" />
                 </Grid.ColumnDefinitions>
 
                 <!-- Gear and speed -->
-                <Border Grid.Column="0" Style="{StaticResource CardStyle}" Margin="0,0,9,0"
+                <Border Grid.Column="0" Style="{StaticResource CardStyle}" Padding="18" Margin="0,0,7,0"
                         AutomationProperties.Name="{x:Static res:Strings.GearSpeedTitle}">
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" MinWidth="84" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" VerticalAlignment="Bottom">
@@ -340,54 +361,171 @@
                         <StackPanel Grid.Column="1" VerticalAlignment="Bottom" Margin="0,0,0,10">
                             <TextBlock Text="{x:Static res:Strings.SpeedLabel}" Style="{StaticResource MutedLabel}" />
                             <TextBlock Text="{Binding SpeedKmh, StringFormat={}{0:F0}}" Style="{StaticResource NumeralText}"
-                                       FontSize="72" />
+                                       FontSize="64" />
                             <TextBlock Text="{x:Static res:Strings.SpeedUnit}" Style="{StaticResource MutedLabel}" />
                         </StackPanel>
                     </Grid>
                 </Border>
 
-                <!-- Engine: MaxRpm is the bar's scale because FH6 cars have very different redlines. -->
-                <Border Grid.Column="1" Style="{StaticResource CardStyle}" Margin="9,0,9,0"
+                <!-- G-force: traction circle on the left, the two numbers on the right. -->
+                <Border Grid.Column="1" Style="{StaticResource CardStyle}" Padding="18" Margin="7,0,7,0"
+                        AutomationProperties.Name="{x:Static res:Strings.GForceTitle}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="{x:Static res:Strings.GForceTitle}" Style="{StaticResource MutedLabel}" />
+                        <Grid Grid.Row="1" Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <!-- A FrameworkElement that draws itself measures to 0 x 0, so it must STRETCH to the cell (Center would collapse it);
+                                 it then draws a centered circle as large as the cell allows. -->
+                            <controls:GForceMeter Grid.Column="0"
+                                                  LateralG="{Binding LateralG}" LongitudinalG="{Binding LongitudinalG}" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,0,0">
+                                <TextBlock Text="{x:Static res:Strings.GForceLateralLabel}" Style="{StaticResource MutedLabel}" FontSize="12" />
+                                <TextBlock Style="{StaticResource NumeralText}" FontSize="26" Margin="0,0,0,10">
+                                    <Run Text="{Binding LateralG, Mode=OneWay, StringFormat={}{0:+0.00;-0.00;0.00}}" />
+                                    <Run Text="{x:Static res:Strings.GForceUnit}" FontSize="14" Foreground="{StaticResource MutedBrush}" />
+                                </TextBlock>
+                                <TextBlock Text="{x:Static res:Strings.GForceLongitudinalLabel}" Style="{StaticResource MutedLabel}" FontSize="12" />
+                                <TextBlock Style="{StaticResource NumeralText}" FontSize="26">
+                                    <Run Text="{Binding LongitudinalG, Mode=OneWay, StringFormat={}{0:+0.00;-0.00;0.00}}" />
+                                    <Run Text="{x:Static res:Strings.GForceUnit}" FontSize="14" Foreground="{StaticResource MutedBrush}" />
+                                </TextBlock>
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <!-- Inputs: throttle and brake as tall bars, then steering, clutch and handbrake as thin bars. -->
+                <Border Grid.Column="2" Style="{StaticResource CardStyle}" Padding="18" Margin="7,0,7,0"
+                        AutomationProperties.Name="{x:Static res:Strings.InputsTitle}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="{x:Static res:Strings.InputsTitle}" Style="{StaticResource MutedLabel}" />
+                        <Grid Grid.Row="1" Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid Grid.Column="0" Margin="0,0,16,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" MinWidth="58" />
+                                    <ColumnDefinition Width="Auto" MinWidth="58" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <controls:BarMeter Grid.Column="0" Orientation="Vertical" Width="22" Margin="0,0,0,6"
+                                                   Value="{Binding ThrottleInput}" FillBrush="{StaticResource ThrottleBrush}" />
+                                <controls:BarMeter Grid.Column="1" Orientation="Vertical" Width="22" Margin="0,0,0,6"
+                                                   Value="{Binding BrakeInput}" FillBrush="{StaticResource BrakeBrush}" />
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="{x:Static res:Strings.ThrottleLabel}"
+                                           Style="{StaticResource MutedLabel}" FontSize="11" HorizontalAlignment="Center" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Static res:Strings.BrakeLabel}"
+                                           Style="{StaticResource MutedLabel}" FontSize="11" HorizontalAlignment="Center" />
+                            </Grid>
+                            <Grid Grid.Column="1">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" VerticalAlignment="Center">
+                                    <TextBlock Text="{x:Static res:Strings.SteeringLabel}" Style="{StaticResource MutedLabel}" FontSize="11" />
+                                    <controls:BarMeter Height="8" Margin="0,4,0,0" IsBipolar="True" Minimum="-1" Maximum="1"
+                                                       Value="{Binding SteerInput}" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{x:Static res:Strings.ClutchLabel}" Style="{StaticResource MutedLabel}" FontSize="11" />
+                                    <controls:BarMeter Height="4" Margin="0,4,0,0" Value="{Binding ClutchInput}"
+                                                       FillBrush="{StaticResource MutedBrush}" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="2" VerticalAlignment="Center">
+                                    <TextBlock Text="{x:Static res:Strings.HandbrakeLabel}" Style="{StaticResource MutedLabel}" FontSize="11" />
+                                    <controls:BarMeter Height="4" Margin="0,4,0,0" Value="{Binding HandBrakeInput}"
+                                                       FillBrush="{StaticResource MutedBrush}" />
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <!--
+                  Engine: RPM readout, then a 2 x 2 grid of tick gauges (power, torque, boost, fuel). The shift lights
+                  above already show where the RPM is in the band, so the old RPM progress bar is gone.
+                -->
+                <Border Grid.Column="3" Style="{StaticResource CardStyle}" Padding="18" Margin="7,0,0,0"
                         AutomationProperties.Name="{x:Static res:Strings.EngineTitle}">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <TextBlock Grid.Row="0" Text="{x:Static res:Strings.EngineTitle}" Style="{StaticResource MutedLabel}" />
-                        <TextBlock Grid.Row="1" Text="{Binding RpmReadout}" Style="{StaticResource NumeralText}"
-                                   FontSize="40" VerticalAlignment="Center" />
-                        <ProgressBar Grid.Row="2" Style="{StaticResource ThinProgressBar}" Minimum="0"
-                                     Maximum="{Binding MaxRpm}" Value="{Binding Rpm, Mode=OneWay}"
-                                     AutomationProperties.Name="{x:Static res:Strings.RpmLabel}" />
-                        <TextBlock Grid.Row="3" Text="{x:Static res:Strings.RpmLabel}" Style="{StaticResource MutedLabel}"
-                                   Margin="0,8,0,0" />
-                    </Grid>
-                </Border>
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,2,0,0"
+                                    AutomationProperties.Name="{x:Static res:Strings.RpmLabel}">
+                            <TextBlock Text="{Binding RpmReadout}" Style="{StaticResource NumeralText}" FontSize="30" />
+                            <TextBlock Text="{x:Static res:Strings.RpmUnit}" Style="{StaticResource MutedLabel}" Margin="6,0,0,5"
+                                       VerticalAlignment="Bottom" />
+                        </StackPanel>
+                        <Grid Grid.Row="2" Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
 
-                <!-- Session -->
-                <Border Grid.Column="2" Style="{StaticResource CardStyle}" Margin="9,0,0,0"
-                        AutomationProperties.Name="{x:Static res:Strings.SessionTitle}">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <TextBlock Grid.Row="0" Text="{x:Static res:Strings.SessionTitle}" Style="{StaticResource MutedLabel}" />
-                        <StackPanel Grid.Row="1" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding PacketsPerSecond, StringFormat={}{0:F1}}"
-                                       Style="{StaticResource NumeralText}" FontSize="40" />
-                            <TextBlock Text="{x:Static res:Strings.PacketsPerSecondLabel}"
-                                       Style="{StaticResource MutedLabel}" />
-                        </StackPanel>
-                        <StackPanel Grid.Row="2" Margin="0,12,0,0">
-                            <TextBlock Text="{x:Static res:Strings.StatusLabel}" Style="{StaticResource MutedLabel}" />
-                            <TextBlock Text="{Binding Status}" Style="{StaticResource ValueText}" FontSize="15"
-                                       TextWrapping="Wrap" MinHeight="40" Margin="0,2,0,0" />
-                        </StackPanel>
+                            <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center">
+                                <TextBlock Text="{x:Static res:Strings.PowerLabel}" Style="{StaticResource MutedLabel}" FontSize="11" />
+                                <TextBlock Style="{StaticResource NumeralText}" FontSize="20">
+                                    <Run Text="{Binding PowerKw, Mode=OneWay, StringFormat={}{0:F0}}" />
+                                    <Run Text="{x:Static res:Strings.PowerUnitKw}" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                                    <Run Text="{Binding PowerHp, Mode=OneWay, StringFormat={}{0:F0}}" FontSize="14" Foreground="{StaticResource MutedBrush}" />
+                                    <Run Text="{x:Static res:Strings.PowerUnitHp}" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                                </TextBlock>
+                                <controls:TickGauge Height="8" Margin="0,3,0,0" Value="{Binding PowerRatio}" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="0" Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="{x:Static res:Strings.TorqueLabel}" Style="{StaticResource MutedLabel}" FontSize="11" />
+                                <TextBlock Style="{StaticResource NumeralText}" FontSize="20">
+                                    <Run Text="{Binding TorqueNm, Mode=OneWay, StringFormat={}{0:F0}}" />
+                                    <Run Text="{x:Static res:Strings.TorqueUnit}" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                                </TextBlock>
+                                <controls:TickGauge Height="8" Margin="0,3,0,0" Value="{Binding TorqueRatio}" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center">
+                                <TextBlock Text="{x:Static res:Strings.BoostLabel}" Style="{StaticResource MutedLabel}" FontSize="11" />
+                                <TextBlock Style="{StaticResource NumeralText}" FontSize="20">
+                                    <Run Text="{Binding BoostPsi, Mode=OneWay, StringFormat={}{0:F1}}" />
+                                    <Run Text="{x:Static res:Strings.BoostUnit}" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                                </TextBlock>
+                                <controls:TickGauge Height="8" Margin="0,3,0,0" Value="{Binding BoostRatio}" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="1" Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="{x:Static res:Strings.FuelLabel}" Style="{StaticResource MutedLabel}" FontSize="11" />
+                                <TextBlock Style="{StaticResource NumeralText}" FontSize="20">
+                                    <Run Text="{Binding FuelPercent, Mode=OneWay, StringFormat={}{0:F0}}" />
+                                    <Run Text="{x:Static res:Strings.PercentUnit}" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                                </TextBlock>
+                                <controls:TickGauge Height="8" Margin="0,3,0,0" Value="{Binding FuelRatio}" />
+                            </StackPanel>
+                        </Grid>
                     </Grid>
                 </Border>
             </Grid>
