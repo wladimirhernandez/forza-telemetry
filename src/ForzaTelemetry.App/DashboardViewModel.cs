@@ -204,6 +204,12 @@ public sealed partial class DashboardViewModel : ObservableObject
 
     private void OnUnitsChanged(object? sender, PropertyChangedEventArgs e)
     {
+        // Only a speed-unit change matters here (the temperature unit is the tires' business).
+        if (!UnitsService.AffectsSpeed(e.PropertyName))
+        {
+            return;
+        }
+
         OnPropertyChanged(nameof(SpeedReadout));
         OnPropertyChanged(nameof(SpeedUnitLabel));
     }

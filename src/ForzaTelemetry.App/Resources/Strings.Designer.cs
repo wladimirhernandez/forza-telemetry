@@ -993,5 +993,68 @@ namespace ForzaTelemetry.App.Resources {
             }
         }
         
+        /// <summary>
+        ///   Looks up a localized string similar to This PC's network is set to Public.
+        /// </summary>
+        public static string PublicNetworkTitle {
+            get {
+                return ResourceManager.GetString("PublicNetworkTitle", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Windows blocks incoming connections on Public networks, so the game's telemetry may never reach this app. Switch the network to Private, but only on a network you trust, such as your home..
+        /// </summary>
+        public static string PublicNetworkBody {
+            get {
+                return ResourceManager.GetString("PublicNetworkBody", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Open Windows Settings, then Network &amp; internet..
+        /// </summary>
+        public static string PublicNetworkStep1 {
+            get {
+                return ResourceManager.GetString("PublicNetworkStep1", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Choose Wi-Fi or Ethernet, then open the properties of your connection..
+        /// </summary>
+        public static string PublicNetworkStep2 {
+            get {
+                return ResourceManager.GetString("PublicNetworkStep2", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Under Network profile type, select Private network..
+        /// </summary>
+        public static string PublicNetworkStep3 {
+            get {
+                return ResourceManager.GetString("PublicNetworkStep3", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Alternatively, run the installer again and tick "Also allow on public networks (not recommended)". That opens the port on untrusted networks too, so prefer the Private profile..
+        /// </summary>
+        public static string PublicNetworkInstallerNote {
+            get {
+                return ResourceManager.GetString("PublicNetworkInstallerNote", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Check again.
+        /// </summary>
+        public static string PublicNetworkRecheckButton {
+            get {
+                return ResourceManager.GetString("PublicNetworkRecheckButton", resourceCulture)!;
+            }
+        }
+        
     }
 }

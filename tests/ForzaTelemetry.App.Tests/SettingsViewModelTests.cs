@@ -55,7 +55,9 @@ public class SettingsViewModelTests
         public Fixture(AppSettings? initial = null, bool canRestart = true)
         {
             Settings = new SettingsService(Store, initial ?? AppSettings.Default);
-            Vm = new SettingsViewModel(Settings, DataOut, @"C:\logs", Folder, canRestart ? Restarter : null);
+            // An English PC, whatever machine runs the tests: "System" must not depend on the host language.
+            Vm = new SettingsViewModel(
+                Settings, DataOut, @"C:\logs", Folder, canRestart ? Restarter : null, CultureInfo.GetCultureInfo("en-US"));
         }
     }
 
@@ -258,6 +260,39 @@ public class SettingsViewModelTests
 
         Assert.True(f.Vm.LanguageChangePending);
         Assert.False(f.Vm.CanRestart);
+    }
+
+    [Fact]
+    public void Choosing_the_language_the_PC_already_uses_needs_no_restart()
+    {
+        var englishPc = CultureInfo.GetCultureInfo("en-US");
+        var settings = new SettingsService(new MemoryStore(), AppSettings.Default); // language: System
+        var vm = new SettingsViewModel(
+            settings, new DataOutViewModel(5300), @"C:\logs", restarter: new FakeRestarter(), systemCulture: englishPc);
+
+        vm.Language = AppLanguage.English; // same text as System on an English PC
+
+        Assert.False(vm.LanguageChangePending);
+        Assert.False(vm.CanRestart);
+
+        vm.Language = AppLanguage.Spanish;
+
+        Assert.True(vm.LanguageChangePending);
+        Assert.True(vm.CanRestart);
+    }
+
+    [Fact]
+    public void On_a_Spanish_PC_switching_from_System_to_Spanish_needs_no_restart_and_to_English_does()
+    {
+        var settings = new SettingsService(new MemoryStore(), AppSettings.Default);
+        var vm = new SettingsViewModel(
+            settings, new DataOutViewModel(5300), @"C:\logs", systemCulture: CultureInfo.GetCultureInfo("es-ES"));
+
+        vm.Language = AppLanguage.Spanish;
+        Assert.False(vm.LanguageChangePending);
+
+        vm.Language = AppLanguage.English;
+        Assert.True(vm.LanguageChangePending);
     }
 
     [Fact]

@@ -325,4 +325,25 @@
   <data name="AboutDisclaimer" xml:space="preserve">
     <value>Unofficial. Not affiliated with Microsoft, Playground Games or Turn 10.</value>
   </data>
+  <data name="PublicNetworkTitle" xml:space="preserve">
+    <value>This PC's network is set to Public</value>
+  </data>
+  <data name="PublicNetworkBody" xml:space="preserve">
+    <value>Windows blocks incoming connections on Public networks, so the game's telemetry may never reach this app. Switch the network to Private, but only on a network you trust, such as your home.</value>
+  </data>
+  <data name="PublicNetworkStep1" xml:space="preserve">
+    <value>Open Windows Settings, then Network &amp; internet.</value>
+  </data>
+  <data name="PublicNetworkStep2" xml:space="preserve">
+    <value>Choose Wi-Fi or Ethernet, then open the properties of your connection.</value>
+  </data>
+  <data name="PublicNetworkStep3" xml:space="preserve">
+    <value>Under Network profile type, select Private network.</value>
+  </data>
+  <data name="PublicNetworkInstallerNote" xml:space="preserve">
+    <value>Alternatively, run the installer again and tick "Also allow on public networks (not recommended)". That opens the port on untrusted networks too, so prefer the Private profile.</value>
+  </data>
+  <data name="PublicNetworkRecheckButton" xml:space="preserve">
+    <value>Check again</value>
+  </data>
 </root>

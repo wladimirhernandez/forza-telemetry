@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -57,22 +58,24 @@ public sealed class JsonSettingsStore : ISettingsStore
 
         try
         {
-            var loaded = JsonSerializer.Deserialize(json, SettingsJsonContext.Default.AppSettings);
+            // Field-by-field read (see AppSettingsReader): a bad value costs that value only. What still throws here is a
+            // file that is not JSON or not an object, which is genuinely corrupt.
+            var result = AppSettingsReader.Read(json);
 
-            // "null" deserializes to null: that is not a usable file either.
-            if (loaded is null)
+            if (result.FileSchemaVersion > AppSettings.CurrentSchemaVersion)
             {
-                throw new JsonException("The settings file does not contain a settings object.");
+                // Written by a NEWER version of the app. Known fields still apply; unknown ones are kept in
+                // ExtensionData so saving this file does not erase them for that newer version.
+                AppLog.SettingsFromNewerVersion(_logger, result.FileSchemaVersion, AppSettings.CurrentSchemaVersion);
             }
 
-            if (loaded.SchemaVersion > AppSettings.CurrentSchemaVersion)
+            foreach (var field in result.RejectedFields)
             {
-                // Written by a NEWER version of the app. Unknown fields are ignored, known ones still apply.
-                AppLog.SettingsFromNewerVersion(_logger, loaded.SchemaVersion, AppSettings.CurrentSchemaVersion);
+                AppLog.SettingsFieldRejected(_logger, field, _path);
             }
 
-            // (Place for future migrations: if loaded.SchemaVersion < CurrentSchemaVersion, upgrade the values here.)
-            var settings = loaded.Sanitized();
+            // (Place for future migrations: if result.FileSchemaVersion < CurrentSchemaVersion, upgrade the values here.)
+            var settings = result.Settings.Sanitized();
             AppLog.SettingsLoaded(_logger, _path);
             return settings;
         }
@@ -90,7 +93,10 @@ public sealed class JsonSettingsStore : ISettingsStore
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            File.WriteAllText(temp, JsonSerializer.Serialize(settings, SettingsJsonContext.Default.AppSettings));
+
+            // Always this build's layout version, whatever the value in hand says (it may have come from a newer file).
+            var toWrite = settings with { SchemaVersion = AppSettings.CurrentSchemaVersion };
+            File.WriteAllText(temp, Serialize(toWrite));
 
             if (File.Exists(_path))
             {
@@ -110,6 +116,26 @@ public sealed class JsonSettingsStore : ISettingsStore
             TryDelete(temp);
             return false;
         }
+    }
+
+    /// <summary>
+    /// The known settings through the source-generated serializer, plus every property this build did not recognize when it
+    /// read the file (<see cref="AppSettings.ExtensionData"/>), copied through untouched. A known name always wins over an
+    /// unknown one of the same name.
+    /// </summary>
+    private static string Serialize(AppSettings settings)
+    {
+        var node = JsonSerializer.SerializeToNode(settings, SettingsJsonContext.Default.AppSettings)!.AsObject();
+
+        if (settings.ExtensionData is { } extra)
+        {
+            foreach (var (name, value) in extra)
+            {
+                node.TryAdd(name, JsonNode.Parse(value.GetRawText()));
+            }
+        }
+
+        return node.ToJsonString(SettingsJsonContext.Default.Options);
     }
 
     /// <summary>

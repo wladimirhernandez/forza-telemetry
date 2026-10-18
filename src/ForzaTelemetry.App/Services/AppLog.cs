@@ -52,7 +52,7 @@ internal static partial class AppLog
     [LoggerMessage(EventId = 122, Level = LogLevel.Warning, Message = "The settings file {Path} is corrupt; using the defaults (a copy is kept next to it as .corrupt).")]
     public static partial void SettingsCorrupt(ILogger logger, Exception exception, string path);
 
-    [LoggerMessage(EventId = 123, Level = LogLevel.Warning, Message = "The settings file was written by a newer version (schema {Found}, this build reads {Supported}); unknown fields are ignored.")]
+    [LoggerMessage(EventId = 123, Level = LogLevel.Warning, Message = "The settings file was written by a newer version (schema {Found}, this build reads {Supported}); fields it does not know are kept and written back.")]
     public static partial void SettingsFromNewerVersion(ILogger logger, int found, int supported);
 
     [LoggerMessage(EventId = 124, Level = LogLevel.Information, Message = "Settings loaded from {Path}.")]
@@ -81,4 +81,15 @@ internal static partial class AppLog
 
     [LoggerMessage(EventId = 132, Level = LogLevel.Error, Message = "Could not start the new instance while restarting.")]
     public static partial void RestartFailed(ILogger logger, Exception exception);
+
+    [LoggerMessage(EventId = 133, Level = LogLevel.Warning, Message = "Ignoring the unusable value of setting '{Field}' in {Path}; that setting uses its default.")]
+    public static partial void SettingsFieldRejected(ILogger logger, string field, string path);
+
+    // ---- Network profile (140s) ----
+
+    [LoggerMessage(EventId = 140, Level = LogLevel.Warning, Message = "Could not read the Windows network profile; the Public-network warning is skipped.")]
+    public static partial void NetworkProfileUnavailable(ILogger logger, Exception exception);
+
+    [LoggerMessage(EventId = 141, Level = LogLevel.Information, Message = "Network profile of {Address}: {Category}.")]
+    public static partial void NetworkProfile(ILogger logger, string address, string category);
 }

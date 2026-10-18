@@ -47,6 +47,19 @@ public sealed partial class UnitsService : ObservableObject
     public string TemperatureLabel =>
         TemperatureUnit == TemperatureUnit.Fahrenheit ? Strings.TemperatureUnitFahrenheit : Strings.TemperatureUnit;
 
+    /// <summary>
+    /// True when a <see cref="System.ComponentModel.INotifyPropertyChanged.PropertyChanged"/> from this service can change a
+    /// speed readout or label. Listeners filter with it instead of re-announcing everything on every notification (a
+    /// temperature switch must not re-render the speed). A null or empty name means "everything changed" in WPF, so it
+    /// counts.
+    /// </summary>
+    public static bool AffectsSpeed(string? propertyName) =>
+        string.IsNullOrEmpty(propertyName) || propertyName is nameof(SpeedUnit) or nameof(SpeedLabel);
+
+    /// <summary>The temperature counterpart of <see cref="AffectsSpeed"/>.</summary>
+    public static bool AffectsTemperature(string? propertyName) =>
+        string.IsNullOrEmpty(propertyName) || propertyName is nameof(TemperatureUnit) or nameof(TemperatureLabel);
+
     public static double KmhToMph(double kmh) => kmh / KilometersPerMile;
 
     public static double CelsiusToFahrenheit(double celsius) => celsius * 9.0 / 5.0 + 32.0;

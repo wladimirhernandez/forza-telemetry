@@ -56,7 +56,8 @@
     </Window.Resources>
     <!--
       Ctrl+1..8 jump straight to a tab. KeyBindings live on the Window so they work wherever the focus is; each one runs
-      the shell's NavigateCommand with the target PageId as its parameter.
+      the shell's NavigateCommand with the target PageId as its parameter. The digit row (D1..D8) and the numeric keypad
+      (NumPad1..NumPad8) are different keys to WPF, so each shortcut is declared twice.
     -->
     <Window.InputBindings>
         <KeyBinding Key="D1" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static local:PageId.Dashboard}" />
@@ -67,6 +68,14 @@
         <KeyBinding Key="D6" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static local:PageId.Map}" />
         <KeyBinding Key="D7" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static local:PageId.Tuning}" />
         <KeyBinding Key="D8" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static local:PageId.Settings}" />
+        <KeyBinding Key="NumPad1" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static local:PageId.Dashboard}" />
+        <KeyBinding Key="NumPad2" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static local:PageId.Performance}" />
+        <KeyBinding Key="NumPad3" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static local:PageId.Laps}" />
+        <KeyBinding Key="NumPad4" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static local:PageId.Sessions}" />
+        <KeyBinding Key="NumPad5" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static local:PageId.Analysis}" />
+        <KeyBinding Key="NumPad6" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static local:PageId.Map}" />
+        <KeyBinding Key="NumPad7" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static local:PageId.Tuning}" />
+        <KeyBinding Key="NumPad8" Modifiers="Control" Command="{Binding NavigateCommand}" CommandParameter="{x:Static local:PageId.Settings}" />
     </Window.InputBindings>
     <Window.Style>
         <Style TargetType="Window">

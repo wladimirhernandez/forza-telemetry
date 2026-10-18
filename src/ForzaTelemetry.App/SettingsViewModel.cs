@@ -30,23 +30,29 @@ public sealed partial class SettingsViewModel : ObservableObject
     // takes effect after a restart (see LanguageChangePending).
     private readonly AppLanguage _activeLanguage;
 
+    // What AppLanguage.System resolves to on this PC; injectable so a test does not depend on the machine's language.
+    private readonly CultureInfo? _systemCulture;
+
     /// <param name="settings">The live settings this screen edits.</param>
     /// <param name="dataOut">The same address/port object the top bar shows.</param>
     /// <param name="logDirectory">Folder the "Open logs folder" button opens.</param>
     /// <param name="folderOpener">Opens the folder; optional (the button then does nothing).</param>
     /// <param name="restarter">Restarts the app for a language change; optional (the restart button is then hidden).</param>
+    /// <param name="systemCulture">The culture "System" means; optional (the one Windows gave the process at startup).</param>
     public SettingsViewModel(
         SettingsService settings,
         DataOutViewModel dataOut,
         string logDirectory,
         IFolderOpener? folderOpener = null,
-        IAppRestarter? restarter = null)
+        IAppRestarter? restarter = null,
+        CultureInfo? systemCulture = null)
     {
         _settings = settings;
         DataOut = dataOut;
         LogDirectory = logDirectory;
         _folderOpener = folderOpener;
         _restarter = restarter;
+        _systemCulture = systemCulture;
 
         var current = settings.Current;
         _portText = current.UdpPort.ToString(CultureInfo.InvariantCulture);
@@ -161,8 +167,12 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     partial void OnLanguageChanged(AppLanguage value) => _settings.Update(s => s with { Language = value });
 
-    /// <summary>True when the chosen language differs from the one on screen, so the "applies after restart" note shows.</summary>
-    public bool LanguageChangePending => Language != _activeLanguage;
+    /// <summary>
+    /// True when the chosen language would show DIFFERENT text from the one on screen, so the "applies after restart" note
+    /// shows. It compares what each choice resolves to, not the enum: "System" and "English" are the same on an English PC.
+    /// </summary>
+    public bool LanguageChangePending =>
+        !LanguageService.ResolvesToSameDisplayLanguage(Language, _activeLanguage, _systemCulture);
 
     /// <summary>True when a restart can be offered (a language change is pending and the app can restart itself).</summary>
     public bool CanRestart => LanguageChangePending && _restarter is not null;

@@ -12,24 +12,39 @@ namespace ForzaTelemetry.App;
 /// <remarks>
 /// A view model of its own (instead of properties on the shell) because TWO screens show it: the top bar pill and the
 /// Data Out guide on the Settings page. Both bind to the same instance, so they can never disagree.
+/// <para>
+/// It also knows whether the network those packets will arrive on is marked <b>Public</b> in Windows (<see cref="IsPublicNetwork"/>).
+/// That is the single most common reason "everything is set up and nothing arrives": the installer's firewall rule only
+/// covers Private networks. The lookup is asynchronous and best effort (see <see cref="INetworkProfileInfo"/>).
+/// </para>
 /// </remarks>
 public sealed partial class DataOutViewModel : ObservableObject
 {
     private readonly INetworkInfo? _networkInfo;
     private readonly IClipboardService? _clipboard;
     private readonly ILogger? _logger;
+    private readonly INetworkProfileInfo? _networkProfile;
+
+    // Incremented per lookup so a slow answer for an OLD address can never overwrite the answer for the current one.
+    private int _categoryLookupVersion;
 
     /// <param name="port">The UDP port the game must send to.</param>
     /// <param name="networkInfo">Source of the LAN addresses; optional so tests that do not care can omit it.</param>
     /// <param name="clipboard">Target of the copy command; optional (the command then does nothing).</param>
     /// <param name="logger">Receives the address list on every read (so the log shows what the user was told); optional.</param>
+    /// <param name="networkProfile">Tells whether the network of the primary address is Public; optional (no warning is ever shown without it).</param>
     public DataOutViewModel(
-        int port, INetworkInfo? networkInfo = null, IClipboardService? clipboard = null, ILogger? logger = null)
+        int port,
+        INetworkInfo? networkInfo = null,
+        IClipboardService? clipboard = null,
+        ILogger? logger = null,
+        INetworkProfileInfo? networkProfile = null)
     {
         _port = port;
         _networkInfo = networkInfo;
         _clipboard = clipboard;
         _logger = logger;
+        _networkProfile = networkProfile;
         Refresh(); // the one read at startup
     }
 
@@ -50,11 +65,22 @@ public sealed partial class DataOutViewModel : ObservableObject
     [ObservableProperty]
     private int _port;
 
+    /// <summary>
+    /// True when Windows marks the network of <see cref="PrimaryAddress"/> as Public, so the guide shows how to switch it to
+    /// Private. False while unknown (including before the first lookup finishes): a missing answer is never a warning.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isPublicNetwork;
+
     /// <summary>True when there is an address to copy; enables the copy buttons.</summary>
     public bool HasAddress => PrimaryAddress is not null;
 
     /// <summary>Re-reads this PC's LAN addresses (synchronously; used once at startup).</summary>
-    public void Refresh() => Apply(_networkInfo?.GetLanAddresses() ?? []);
+    public void Refresh()
+    {
+        Apply(_networkInfo?.GetLanAddresses() ?? []);
+        _ = RefreshNetworkCategoryAsync(); // fire and forget by design: it never throws and must not delay startup
+    }
 
     /// <summary>
     /// Adapter enumeration is a blocking OS call that can take a noticeable moment on a PC with many virtual adapters,
@@ -66,6 +92,50 @@ public sealed partial class DataOutViewModel : ObservableObject
         var network = _networkInfo;
         var addresses = network is null ? [] : await Task.Run(network.GetLanAddresses);
         Apply(addresses);
+
+        // Not awaited: the Start that called this must not wait for a COM lookup. The warning appears when it lands.
+        _ = RefreshNetworkCategoryAsync();
+    }
+
+    /// <summary>
+    /// Asks Windows whether the network of <see cref="PrimaryAddress"/> is Public and updates <see cref="IsPublicNetwork"/>.
+    /// Never throws. Also what the "Check again" button runs, after the user switched the network to Private.
+    /// </summary>
+    [RelayCommand]
+    public async Task RefreshNetworkCategoryAsync()
+    {
+        var provider = _networkProfile;
+        var address = PrimaryAddress;
+        var version = ++_categoryLookupVersion;
+
+        var category = NetworkCategory.Unknown;
+        if (provider is not null && address is not null && System.Net.IPAddress.TryParse(address, out var ip))
+        {
+            try
+            {
+                // The provider offloads its own blocking work; this await resumes on the UI thread.
+                category = await provider.GetCategoryAsync(ip);
+            }
+            catch (Exception ex)
+            {
+                // A contract-breaking provider must still not break the Settings page or the Start button.
+                if (_logger is not null)
+                {
+                    AppLog.NetworkProfileUnavailable(_logger, ex);
+                }
+            }
+
+            if (_logger is not null && version == _categoryLookupVersion)
+            {
+                AppLog.NetworkProfile(_logger, address, category.ToString());
+            }
+        }
+
+        // A newer lookup started while this one was waiting (the address changed): its answer is the one that counts.
+        if (version == _categoryLookupVersion)
+        {
+            IsPublicNetwork = category == NetworkCategory.Public;
+        }
     }
 
     private void Apply(IReadOnlyList<LanAddress> addresses)

@@ -55,6 +55,28 @@ public class SettingsModelTests
         Assert.True(clean.StartListeningOnLaunch);
     }
 
+    [Fact]
+    public void Sanitized_always_carries_the_current_schema_version()
+    {
+        Assert.Equal(AppSettings.CurrentSchemaVersion, (AppSettings.Default with { SchemaVersion = 99 }).Sanitized().SchemaVersion);
+        Assert.Equal(AppSettings.CurrentSchemaVersion, (AppSettings.Default with { SchemaVersion = 0 }).Sanitized().SchemaVersion);
+    }
+
+    [Fact]
+    public void Sanitized_keeps_the_unknown_fields_of_a_newer_file()
+    {
+        var unknown = new Dictionary<string, System.Text.Json.JsonElement>
+        {
+            ["theme"] = System.Text.Json.JsonDocument.Parse("\"midnight\"").RootElement
+        };
+        var settings = new AppSettings { ExtensionData = unknown, UdpPort = 0 };
+
+        var clean = settings.Sanitized();
+
+        Assert.Same(unknown, clean.ExtensionData);
+        Assert.Equal(5300, clean.UdpPort);
+    }
+
     // ---- SettingsService -------------------------------------------------------------------------
 
     private sealed class FakeStore : ISettingsStore
@@ -184,6 +206,41 @@ public class SettingsModelTests
         Assert.Equal(SpeedUnit.Mph, new UnitsService(service).SpeedUnit); // and a new one starts from the stored value
     }
 
+    [Theory]
+    [InlineData("SpeedUnit", true, false)]
+    [InlineData("SpeedLabel", true, false)]
+    [InlineData("TemperatureUnit", false, true)]
+    [InlineData("TemperatureLabel", false, true)]
+    [InlineData("SomethingElse", false, false)]
+    [InlineData(null, true, true)] // WPF: a null or empty name means "everything changed"
+    [InlineData("", true, true)]
+    public void Property_filters_say_which_readouts_a_units_notification_can_change(string? name, bool speed, bool temperature)
+    {
+        Assert.Equal(speed, UnitsService.AffectsSpeed(name));
+        Assert.Equal(temperature, UnitsService.AffectsTemperature(name));
+    }
+
+    [Fact]
+    public void A_speed_unit_change_does_not_re_render_the_tires_and_a_temperature_change_does_not_re_render_the_speed()
+    {
+        var units = new UnitsService();
+        var tire = new TireViewModel(units);
+        var dashboard = new DashboardViewModel(units);
+        var tireChanged = new List<string?>();
+        var dashboardChanged = new List<string?>();
+        tire.PropertyChanged += (_, e) => tireChanged.Add(e.PropertyName);
+        dashboard.PropertyChanged += (_, e) => dashboardChanged.Add(e.PropertyName);
+
+        units.SpeedUnit = SpeedUnit.Mph;
+        Assert.Empty(tireChanged);
+        Assert.Contains(nameof(DashboardViewModel.SpeedReadout), dashboardChanged);
+
+        dashboardChanged.Clear();
+        units.TemperatureUnit = TemperatureUnit.Fahrenheit;
+        Assert.Empty(dashboardChanged);
+        Assert.Contains(nameof(TireViewModel.TemperatureReadout), tireChanged);
+    }
+
     // ---- Units on screen (dashboard + tires) ----------------------------------------------------------
 
     [Fact]
@@ -250,6 +307,22 @@ public class SettingsModelTests
         // The same lookup the app does: a ResourceManager asked for a culture. English and Spanish differ for this key.
         Assert.Equal("Settings", Strings.ResourceManager.GetString(nameof(Strings.TabSettings), CultureInfo.GetCultureInfo("en")));
         Assert.Equal("Ajustes", Strings.ResourceManager.GetString(nameof(Strings.TabSettings), CultureInfo.GetCultureInfo("es")));
+    }
+
+    [Fact]
+    public void System_and_English_are_the_same_display_language_on_an_English_PC_but_not_on_a_Spanish_one()
+    {
+        var english = CultureInfo.GetCultureInfo("en-US");
+        var spanishMexico = CultureInfo.GetCultureInfo("es-MX");
+        var french = CultureInfo.GetCultureInfo("fr-FR");
+
+        Assert.True(LanguageService.ResolvesToSameDisplayLanguage(AppLanguage.System, AppLanguage.English, english));
+        Assert.False(LanguageService.ResolvesToSameDisplayLanguage(AppLanguage.System, AppLanguage.Spanish, english));
+        Assert.True(LanguageService.ResolvesToSameDisplayLanguage(AppLanguage.System, AppLanguage.Spanish, spanishMexico)); // es-MX uses the es resources
+        Assert.False(LanguageService.ResolvesToSameDisplayLanguage(AppLanguage.System, AppLanguage.English, spanishMexico));
+        Assert.True(LanguageService.ResolvesToSameDisplayLanguage(AppLanguage.System, AppLanguage.English, french)); // no French file: falls back to English
+        Assert.True(LanguageService.ResolvesToSameDisplayLanguage(AppLanguage.English, AppLanguage.English, french));
+        Assert.False(LanguageService.ResolvesToSameDisplayLanguage(AppLanguage.English, AppLanguage.Spanish, english));
     }
 
     // ---- App info -----------------------------------------------------------------------------

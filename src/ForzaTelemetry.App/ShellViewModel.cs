@@ -45,6 +45,13 @@ public sealed partial class ShellViewModel : ObservableObject
     private readonly TelemetryService _telemetryService;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger? _logger;
+    private readonly SettingsService? _settings;
+
+    // The port the LAST Start tried to bind (read from the settings at that moment, not when an error is shown). A port
+    // change while the listener is running or has failed updates the settings at once, so the settings port can differ
+    // from the one the current listener, or the failed bind, used. Null until the first Start; messages then fall back to
+    // the displayed port.
+    private int? _attemptedPort;
 
     // Used by Refresh to turn "packets received since last time" into a per-second rate.
     private long _receivedCountAtLastRefresh;
@@ -111,6 +118,7 @@ public sealed partial class ShellViewModel : ObservableObject
         _telemetryService = telemetryService;
         _timeProvider = timeProvider;
         _logger = logger;
+        _settings = settings;
         Dashboard = dashboard ?? new DashboardViewModel();
         DataOut = dataOut
             ?? new DataOutViewModel(settings?.Current.UdpPort ?? UdpTelemetryListener.DefaultPort, networkInfo, clipboard, logger);
@@ -309,7 +317,7 @@ public sealed partial class ShellViewModel : ObservableObject
 
     private string DescribeStatus(ConnectionState state, TimeSpan silenceSoFar) => state switch
     {
-        ConnectionState.Listening => string.Format(CultureInfo.CurrentCulture, Strings.StatusListening, DataOut.Port),
+        ConnectionState.Listening => string.Format(CultureInfo.CurrentCulture, Strings.StatusListening, _attemptedPort ?? DataOut.Port),
         ConnectionState.NoData => string.Format(CultureInfo.CurrentCulture, Strings.StatusNoData, silenceSoFar.TotalSeconds),
         ConnectionState.Receiving => Strings.StatusReceiving,
         _ => Strings.StatusStopped
@@ -318,7 +326,7 @@ public sealed partial class ShellViewModel : ObservableObject
     private string DescribeFault(Exception fault) => fault switch
     {
         SocketException { SocketErrorCode: SocketError.AddressAlreadyInUse } =>
-            string.Format(CultureInfo.CurrentCulture, Strings.ErrorPortInUse, DataOut.Port),
+            string.Format(CultureInfo.CurrentCulture, Strings.ErrorPortInUse, _attemptedPort ?? DataOut.Port),
         SocketException socketEx =>
             string.Format(CultureInfo.CurrentCulture, Strings.ErrorSocket, socketEx.SocketErrorCode, socketEx.Message),
         _ => string.Format(CultureInfo.CurrentCulture, Strings.ErrorGeneric, fault.Message)
@@ -364,13 +372,15 @@ public sealed partial class ShellViewModel : ObservableObject
             // The service's state changed while IsRunning (the tick copy) did not notify: re-evaluate the buttons now.
             StartCommand.NotifyCanExecuteChanged();
             StopCommand.NotifyCanExecuteChanged();
-        }
 
-        // A port change that arrived while this command was in flight was parked (see RestartListenerAsync): run it now.
-        if (_portRestartPending)
-        {
-            _portRestartPending = false;
-            await RestartListenerAsync();
+            // A port change that arrived while this command was in flight was parked (see RestartListenerAsync). It runs
+            // in `finally`, not after it: if `action` threw, code after the try/finally would be skipped and the user's
+            // port change would never be applied. RestartListenerAsync never throws, so it cannot hide the original error.
+            if (_portRestartPending)
+            {
+                _portRestartPending = false;
+                await RestartListenerAsync();
+            }
         }
     }
 
@@ -384,7 +394,7 @@ public sealed partial class ShellViewModel : ObservableObject
     /// at startup): the pills must quote the new port, and a listener that is running must move to it.
     /// </summary>
     // async void is normally a smell (nobody can await it or observe its exception), but an event handler has to return
-    // void. Everything awaited inside is wrapped in a try/catch that logs, so nothing can escape unobserved.
+    // void. RestartListenerAsync catches and logs everything itself, so nothing can escape unobserved.
     private async void OnSettingsChanged(object? sender, SettingsChangedEventArgs e)
     {
         if (e.Previous.UdpPort == e.Current.UdpPort)
@@ -398,25 +408,19 @@ public sealed partial class ShellViewModel : ObservableObject
         }
 
         DataOut.Port = e.Current.UdpPort;
-
-        try
-        {
-            await RestartListenerAsync();
-        }
-        catch (Exception ex)
-        {
-            if (_logger is not null)
-            {
-                AppLog.PortRestartFailed(_logger, ex);
-            }
-        }
+        await RestartListenerAsync();
     }
 
     /// <summary>
-    /// Moves a RUNNING listener to the port now in the settings by stopping and starting it through the same serialized
-    /// path as the Start/Stop buttons (so it cannot interleave with them). The listener factory reads the port when it
-    /// builds a new listener, so a plain Stop then Start is all it takes. If a command is already in flight, the restart is
-    /// parked and runs right after it. A stopped listener is left stopped: the next Start uses the new port.
+    /// Moves the listener to the port now in the settings by stopping and starting it through the same serialized path as
+    /// the Start/Stop buttons (so it cannot interleave with them). The listener factory reads the port when it builds a
+    /// new listener, so a plain Stop then Start is all it takes. If a command is already in flight, the restart is parked
+    /// and runs right after it. A listener the user left STOPPED stays stopped: the next Start uses the new port.
+    /// <para>
+    /// A listener that FAILED (for example "port in use" on the old port) counts as one the user wants running: they are
+    /// looking at the error and just typed another port to get out of it, so applying it retries the Start.
+    /// </para>
+    /// Never throws: failures are logged (it is awaited from an event handler and from a <c>finally</c> block).
     /// </summary>
     private async Task RestartListenerAsync()
     {
@@ -426,14 +430,28 @@ public sealed partial class ShellViewModel : ObservableObject
             return;
         }
 
-        await RunExclusiveAsync(async () =>
+        try
         {
-            if (_telemetryService.IsRunning)
+            await RunExclusiveAsync(async () =>
             {
-                await StopCoreAsync();
-                await StartCoreAsync();
+                if (_telemetryService.IsRunning)
+                {
+                    await StopCoreAsync();
+                    await StartCoreAsync();
+                }
+                else if (_telemetryService.Fault is not null)
+                {
+                    await StartCoreAsync(); // nothing to stop: a failed start left no listener behind
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            if (_logger is not null)
+            {
+                AppLog.PortRestartFailed(_logger, ex);
             }
-        });
+        }
     }
 
     // [RelayCommand]: CommunityToolkit.Mvvm's source generator turns this method into a public
@@ -454,6 +472,9 @@ public sealed partial class ShellViewModel : ObservableObject
     private async Task StartCoreAsync()
     {
         await DataOut.RefreshAsync(); // The user may have changed network since the last Start.
+
+        // Remember what this Start is about to bind: the listener factory reads the same setting a moment from now.
+        _attemptedPort = _settings?.Current.UdpPort ?? DataOut.Port;
         await _telemetryService.StartAsync();
 
         // After the service started (it dropped its own stale Latest) and on the UI thread (this continuation

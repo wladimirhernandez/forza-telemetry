@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using Microsoft.Extensions.Logging;
@@ -21,8 +20,11 @@ public sealed class ExplorerFolderOpener(ILogger logger) : IFolderOpener
             Process.Start(new ProcessStartInfo(path) { UseShellExecute = true })?.Dispose();
             return true;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Win32Exception)
+        catch (Exception ex)
         {
+            // Deliberately every exception, not a list: "open the folder" is a convenience button, and the ways it can fail
+            // are open-ended (an illegal path throws ArgumentException or NotSupportedException, a locked-down machine
+            // throws from the shell, ...). None of them may escape a click handler and reach the global error dialog.
             AppLog.OpenFolderFailed(logger, ex, path);
             return false;
         }

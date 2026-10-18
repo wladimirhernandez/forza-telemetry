@@ -17,6 +17,14 @@ namespace ForzaTelemetry.App.Services;
 public static class LanguageService
 {
     /// <summary>
+    /// The UI culture Windows gave this process, captured the first time this class is touched. That is in
+    /// <c>OnStartup</c> BEFORE <see cref="Apply"/> overrides the thread's culture, which is what makes it the answer to
+    /// "what would System mean?" for the rest of the run (afterwards <see cref="CultureInfo.CurrentUICulture"/> reports the
+    /// forced language and the original is gone).
+    /// </summary>
+    public static CultureInfo SystemCulture { get; } = CultureInfo.CurrentUICulture;
+
+    /// <summary>
     /// The culture to force for <paramref name="language"/>, or null for "System": leave the process on whatever Windows
     /// provides.
     /// </summary>
@@ -41,4 +49,24 @@ public static class LanguageService
 
         return CultureInfo.CurrentUICulture;
     }
+
+    /// <summary>
+    /// The culture <paramref name="language"/> actually shows: the forced culture, or <paramref name="system"/> (default
+    /// <see cref="SystemCulture"/>) for <see cref="AppLanguage.System"/>.
+    /// </summary>
+    public static CultureInfo Resolve(AppLanguage language, CultureInfo? system = null) =>
+        ResolveCulture(language) ?? system ?? SystemCulture;
+
+    /// <summary>
+    /// True when the two choices put the SAME text on screen. Comparing the enum values would say "System" and "English"
+    /// differ on a PC that is already in English, and offer a pointless restart; what matters is the culture each resolves
+    /// to. Only the languages the app ships count: Windows in French or Swiss-German falls back to the neutral English
+    /// resources, so it is the same display language as English.
+    /// </summary>
+    public static bool ResolvesToSameDisplayLanguage(AppLanguage first, AppLanguage second, CultureInfo? system = null) =>
+        ShippedLanguage(Resolve(first, system)) == ShippedLanguage(Resolve(second, system));
+
+    // The resource set a culture lands on: Spanish (es, es-MX, es-AR, ...) has its own file, everything else uses the neutral one.
+    private static string ShippedLanguage(CultureInfo culture) =>
+        string.Equals(culture.TwoLetterISOLanguageName, "es", StringComparison.OrdinalIgnoreCase) ? "es" : "en";
 }

@@ -325,4 +325,25 @@
   <data name="AboutDisclaimer" xml:space="preserve">
     <value>No oficial. Sin afiliación con Microsoft, Playground Games ni Turn 10.</value>
   </data>
+  <data name="PublicNetworkTitle" xml:space="preserve">
+    <value>La red de este PC está configurada como Pública</value>
+  </data>
+  <data name="PublicNetworkBody" xml:space="preserve">
+    <value>Windows bloquea las conexiones entrantes en las redes públicas, así que la telemetría del juego puede no llegar nunca a esta app. Cambia la red a Privada, pero solo en una red de confianza, como la de tu casa.</value>
+  </data>
+  <data name="PublicNetworkStep1" xml:space="preserve">
+    <value>Abre Configuración de Windows y entra en Red e Internet.</value>
+  </data>
+  <data name="PublicNetworkStep2" xml:space="preserve">
+    <value>Elige Wi-Fi o Ethernet y abre las propiedades de tu conexión.</value>
+  </data>
+  <data name="PublicNetworkStep3" xml:space="preserve">
+    <value>En Tipo de perfil de red, selecciona Red privada.</value>
+  </data>
+  <data name="PublicNetworkInstallerNote" xml:space="preserve">
+    <value>Como alternativa, ejecuta el instalador de nuevo y marca "Permitir tambien en redes publicas (no recomendado)". Eso abre el puerto también en redes no confiables, así que es mejor usar el perfil Privado.</value>
+  </data>
+  <data name="PublicNetworkRecheckButton" xml:space="preserve">
+    <value>Comprobar de nuevo</value>
+  </data>
 </root>

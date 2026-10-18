@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using ForzaTelemetry.Udp;
 
 namespace ForzaTelemetry.App.Services;
@@ -29,7 +31,9 @@ public enum AppLanguage
 /// </summary>
 /// <param name="SchemaVersion">
 /// Layout version of the file. The file outlives the app version that wrote it: writing the version into it is what lets a
-/// future release recognise an old layout and migrate it instead of guessing. Today there is only version 1.
+/// future release recognise an old layout and migrate it instead of guessing. Today there is only version 1. This build
+/// always WRITES its own <see cref="CurrentSchemaVersion"/> (see <see cref="Sanitized"/>): the value stored here describes the
+/// layout of what this build saves, never the layout of a file it merely read.
 /// </param>
 /// <param name="UdpPort">The UDP port the game's Data Out sends to (1..65535).</param>
 /// <param name="SpeedUnit">Unit of every speed readout.</param>
@@ -46,6 +50,16 @@ public enum AppLanguage
 /// is not: System.Text.Json's source generator builds init-only properties without running their initializers, so a missing
 /// JSON field would silently become 0/false. Constructor parameters with default values are honored.
 /// </para>
+/// <para>
+/// <b>Unknown fields survive a round trip.</b> A newer version of the app may add settings this build has never heard of.
+/// If this build loaded such a file and saved it back, plain deserialization would silently drop them and the newer version
+/// would lose the user's choices after a downgrade. <see cref="ExtensionData"/> keeps every unrecognized property exactly as
+/// it was read, and <see cref="JsonSettingsStore"/> writes them back next to the known ones. (It is deliberately not
+/// System.Text.Json's <c>[JsonExtensionData]</c> attribute: the source generator treats init-only properties as constructor
+/// parameters and refuses to bind an extension-data slot to one, and the record is meant to stay immutable.) The property
+/// takes part in record equality by reference, which is the right answer here: a copy made with <c>with</c> shares the same
+/// dictionary, so equality still means "did a KNOWN setting change?".
+/// </para>
 /// </remarks>
 public sealed record AppSettings(
     int SchemaVersion = AppSettings.CurrentSchemaVersion,
@@ -55,6 +69,10 @@ public sealed record AppSettings(
     AppLanguage Language = AppLanguage.System,
     bool StartListeningOnLaunch = false)
 {
+    /// <summary>Properties found in the file that this build does not know (written by a newer version); kept so a save does not drop them.</summary>
+    [JsonIgnore]
+    public IReadOnlyDictionary<string, JsonElement>? ExtensionData { get; init; }
+
     /// <summary>The layout version this build reads and writes.</summary>
     public const int CurrentSchemaVersion = 1;
 
@@ -72,10 +90,12 @@ public sealed record AppSettings(
 
     /// <summary>
     /// A copy that is safe to use: any value that is out of range (a hand-edited file, a number cast to an enum) is
-    /// replaced by its default, field by field, so one bad value never discards the user's other choices.
+    /// replaced by its default, field by field, so one bad value never discards the user's other choices. The schema
+    /// version is always this build's own: whatever version the file claimed, what this build writes is its layout.
     /// </summary>
     public AppSettings Sanitized() => this with
     {
+        SchemaVersion = CurrentSchemaVersion,
         UdpPort = IsValidPort(UdpPort) ? UdpPort : Default.UdpPort,
         SpeedUnit = Enum.IsDefined(SpeedUnit) ? SpeedUnit : Default.SpeedUnit,
         TemperatureUnit = Enum.IsDefined(TemperatureUnit) ? TemperatureUnit : Default.TemperatureUnit,

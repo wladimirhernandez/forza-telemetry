@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
@@ -94,7 +95,11 @@ public partial class App : Application, IAppRestarter
         // The data-out object reads the adapters once (and logs what it read, now and on every later Start), so this
         // root does not enumerate them a second time.
         var dataOut = new DataOutViewModel(
-            _settings.Current.UdpPort, new NetworkInfo(), clipboard, loggerFactory.CreateLogger<DataOutViewModel>());
+            _settings.Current.UdpPort,
+            new NetworkInfo(),
+            clipboard,
+            loggerFactory.CreateLogger<DataOutViewModel>(),
+            new NetworkListManagerProfileInfo(loggerFactory.CreateLogger<NetworkListManagerProfileInfo>()));
         var settingsPage = new SettingsViewModel(
             _settings,
             dataOut,
@@ -174,10 +179,25 @@ public partial class App : Application, IAppRestarter
     {
         try
         {
-            if (Environment.ProcessPath is { } path)
+            // See RelaunchPlan: under the dotnet host the process path is dotnet.exe, so the assembly must be passed to it.
+            var plan = RelaunchPlan.Create(
+                Environment.ProcessPath,
+                Assembly.GetEntryAssembly()?.Location,
+                Environment.GetCommandLineArgs().Skip(1).ToList());
+            if (plan is null)
             {
-                Process.Start(new ProcessStartInfo(path) { UseShellExecute = true })?.Dispose();
+                return;
             }
+
+            // ArgumentList (not a joined string) so the OS-level quoting is done for us. It requires UseShellExecute=false,
+            // which is what we want anyway: this starts our own executable, it does not "open a document".
+            var startInfo = new ProcessStartInfo(plan.FileName) { UseShellExecute = false };
+            foreach (var argument in plan.Arguments)
+            {
+                startInfo.ArgumentList.Add(argument);
+            }
+
+            Process.Start(startInfo)?.Dispose();
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {

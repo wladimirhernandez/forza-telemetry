@@ -24,6 +24,12 @@ public sealed partial class TireViewModel : ObservableObject
 
     private void OnUnitsChanged(object? sender, PropertyChangedEventArgs e)
     {
+        // Only a temperature-unit change matters here (a speed-unit switch must not re-render four tires).
+        if (!UnitsService.AffectsTemperature(e.PropertyName))
+        {
+            return;
+        }
+
         OnPropertyChanged(nameof(TemperatureReadout));
         OnPropertyChanged(nameof(TemperatureUnitLabel));
     }
