@@ -24,6 +24,18 @@ namespace ForzaTelemetry.Core.Recording;
 /// first record.
 /// </para>
 /// <para>
+/// <b>End of recording:</b> by default (<see cref="HoldAtEnd"/> = true) the enumeration does NOT finish when
+/// the last record has been delivered. It stays open in the "finished" state (<see cref="IsFinished"/>) so
+/// that <see cref="SeekToStart"/> restarts playback inside the SAME enumeration, which is what a player
+/// UI wants ("replay" button after the end). It ends only when the caller cancels. With
+/// <c>HoldAtEnd = false</c> the enumeration simply ends after the last record (useful for batch
+/// processing and tests).
+/// </para>
+/// <para>
+/// <b>Cancellation</b> at any point (initial scan, reading, waiting, holding at the end) ends the
+/// enumeration cleanly without an exception, matching the live UDP adapter.
+/// </para>
+/// <para>
 /// Only ONE enumeration at a time is supported. The recording is re-opened (via the supplied factory)
 /// for the duration scan and for each restart, so it streams from disk and never loads fully into memory.
 /// </para>
@@ -42,6 +54,8 @@ public sealed class ReplayDatagramSource
     private long _positionTicks;
     private long _durationTicks;
     private int _enumerating;
+    private bool _finished;
+    private volatile bool _holdAtEnd = true;
 
     /// <param name="openRecording">
     /// Opens a FRESH readable stream positioned at the start of the recording each time it is called
@@ -81,6 +95,22 @@ public sealed class ReplayDatagramSource
         }
     }
 
+    /// <summary>
+    /// When true (default) the enumeration stays open after the last record until cancelled or sought, see the
+    /// class remarks. When false it ends after the last record. Read when the end is reached.
+    /// </summary>
+    public bool HoldAtEnd
+    {
+        get => _holdAtEnd;
+        set => _holdAtEnd = value;
+    }
+
+    /// <summary>True once the last record has been delivered and playback is waiting for a seek or cancellation.</summary>
+    public bool IsFinished
+    {
+        get { lock (_gate) { return _finished; } }
+    }
+
     /// <summary>Whether delivery is currently held by <see cref="Pause"/>.</summary>
     public bool IsPaused
     {
@@ -112,31 +142,44 @@ public sealed class ReplayDatagramSource
     /// <summary>Releases a <see cref="Pause"/>. The held record is delivered immediately (no catch-up burst).</summary>
     public void Resume()
     {
+        TaskCompletionSource? signal = null;
         lock (_gate)
         {
             if (_paused)
             {
                 _paused = false;
-                _resumeSignal.TrySetResult();
+                signal = _resumeSignal;
             }
         }
+
+        // Completed outside the lock (and the signal runs continuations asynchronously) so no waiter's
+        // code ever executes inside our critical section or inline on the caller's (UI) thread.
+        signal?.TrySetResult();
     }
 
-    /// <summary>Restarts playback from the first record, interrupting any wait. Keeps the paused state.</summary>
+    /// <summary>
+    /// Restarts playback from the first record, interrupting any wait or the end-of-recording hold. Keeps
+    /// the paused state. Only effective while an enumeration is running (it is what plays the recording).
+    /// </summary>
     public void SeekToStart()
     {
+        CancellationTokenSource interrupt;
         lock (_gate)
         {
             _restartRequested = true;
+            _finished = false;
             Interlocked.Exchange(ref _positionTicks, 0);
-            _interrupt.Cancel();
+            interrupt = _interrupt;
         }
+
+        // Cancel() runs registered callbacks inline on THIS thread. Doing it outside the lock keeps those
+        // callbacks from executing while we hold _gate (and from deadlocking on it).
+        interrupt.Cancel();
     }
 
     /// <summary>
     /// Delivers the recording's datagrams in order, paced by the recorded timing and the current
-    /// <see cref="Speed"/>. Ends when the recording ends (a truncated tail just ends it earlier) or when
-    /// <paramref name="ct"/> is cancelled (cancellation ends the enumeration cleanly, matching the live UDP adapter).
+    /// <see cref="Speed"/>. See the class remarks for end-of-recording and cancellation behavior.
     /// </summary>
     /// <exception cref="InvalidRecordingException">The stream is not a (supported) recording; thrown on the first MoveNext.</exception>
     public async IAsyncEnumerable<ReadOnlyMemory<byte>> ReadDatagramsAsync([EnumeratorCancellation] CancellationToken ct = default)
@@ -149,53 +192,107 @@ public sealed class ReplayDatagramSource
         try
         {
             // One scan up front gives the UI its total duration (and validates the file before playback).
-            var info = await RecordingFileInfo.ScanAsync(_openRecording(), leaveOpen: false, ct).ConfigureAwait(false);
+            var info = await TryScanAsync(ct).ConfigureAwait(false);
+            if (info is null)
+            {
+                yield break; // cancelled
+            }
+
             Interlocked.Exchange(ref _durationTicks, info.Duration.Ticks);
 
             var restart = true;
-            while (restart && !ct.IsCancellationRequested)
+            while (restart)
             {
+                if (ct.IsCancellationRequested)
+                {
+                    yield break;
+                }
+
                 restart = false;
                 ConsumeRestart();
 
-                await using var reader = await SessionRecordingReader.OpenAsync(_openRecording(), leaveOpen: false, ct).ConfigureAwait(false);
-
-                var previous = TimeSpan.Zero;
-                var first = true;
-
-                await foreach (var record in reader.ReadAllAsync(ct).ConfigureAwait(false))
+                var reader = await TryOpenAsync(ct).ConfigureAwait(false);
+                if (reader is null)
                 {
-                    var gap = first ? TimeSpan.Zero : record.Elapsed - previous;
-                    first = false;
-                    previous = record.Elapsed;
-
-                    var outcome = await PaceAsync(gap, ct).ConfigureAwait(false);
-                    if (outcome == PaceOutcome.Cancelled)
-                    {
-                        yield break;
-                    }
-
-                    if (outcome == PaceOutcome.Restart)
-                    {
-                        restart = true;
-                        break;
-                    }
-
-                    Interlocked.Exchange(ref _positionTicks, record.Elapsed.Ticks);
-                    yield return record.Payload;
+                    yield break; // cancelled
                 }
+
+                await using (reader.ConfigureAwait(false))
+                {
+                    // Manual enumerator (instead of await foreach) so a cancellation raised by the READ itself
+                    // can be caught: a yield may not sit inside a try that has a catch.
+                    await using var records = reader.ReadAllAsync(ct).GetAsyncEnumerator(ct);
+
+                    var previous = TimeSpan.Zero;
+                    var first = true;
+
+                    while (true)
+                    {
+                        var hasNext = await MoveNextOrCancelledAsync(records, ct).ConfigureAwait(false);
+                        if (hasNext is null)
+                        {
+                            yield break; // cancelled
+                        }
+
+                        if (!hasNext.Value)
+                        {
+                            break; // end of recording
+                        }
+
+                        var record = records.Current;
+                        var gap = first ? TimeSpan.Zero : record.Elapsed - previous;
+                        first = false;
+                        previous = record.Elapsed;
+
+                        var outcome = await PaceAsync(gap, ct).ConfigureAwait(false);
+                        if (outcome == WaitOutcome.Cancelled)
+                        {
+                            yield break;
+                        }
+
+                        if (outcome == WaitOutcome.Restart)
+                        {
+                            restart = true;
+                            break;
+                        }
+
+                        Interlocked.Exchange(ref _positionTicks, record.Elapsed.Ticks);
+                        yield return record.Payload;
+                    }
+                }
+
+                if (restart || !_holdAtEnd)
+                {
+                    continue; // a seek interrupted playback, or the caller wants the enumeration to end
+                }
+
+                // Reached the end: stay "Finished" until the player seeks or the caller stops.
+                lock (_gate)
+                {
+                    if (!_restartRequested)
+                    {
+                        _finished = true;
+                    }
+                }
+
+                restart = await HoldAtEndAsync(ct).ConfigureAwait(false) == WaitOutcome.Restart;
             }
         }
         finally
         {
+            lock (_gate)
+            {
+                _finished = false;
+            }
+
             Volatile.Write(ref _enumerating, 0);
         }
     }
 
-    private enum PaceOutcome { Ready, Restart, Cancelled }
+    private enum WaitOutcome { Ready, Restart, Cancelled }
 
     /// <summary>Waits for pause release and for the (speed-scaled) gap. Reports if a seek or cancellation cut it short.</summary>
-    private async Task<PaceOutcome> PaceAsync(TimeSpan gap, CancellationToken ct)
+    private async Task<WaitOutcome> PaceAsync(TimeSpan gap, CancellationToken ct)
     {
         CancellationToken interrupt;
         double speed;
@@ -207,7 +304,7 @@ public sealed class ReplayDatagramSource
 
         if (IsRestartRequested())
         {
-            return PaceOutcome.Restart;
+            return WaitOutcome.Restart;
         }
 
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, interrupt);
@@ -216,7 +313,7 @@ public sealed class ReplayDatagramSource
         {
             if (!await WaitWhilePausedAsync(linked.Token).ConfigureAwait(false))
             {
-                return PaceOutcome.Restart;
+                return WaitOutcome.Restart;
             }
 
             if (!double.IsPositiveInfinity(speed) && gap > TimeSpan.Zero)
@@ -230,16 +327,43 @@ public sealed class ReplayDatagramSource
                 // A pause pressed DURING the wait must still hold this record back.
                 if (!await WaitWhilePausedAsync(linked.Token).ConfigureAwait(false))
                 {
-                    return PaceOutcome.Restart;
+                    return WaitOutcome.Restart;
                 }
             }
 
-            return IsRestartRequested() ? PaceOutcome.Restart : PaceOutcome.Ready;
+            return IsRestartRequested() ? WaitOutcome.Restart : WaitOutcome.Ready;
         }
         catch (OperationCanceledException)
         {
             // Two different tokens feed `linked`: the caller's (stop) and ours (seek). Tell them apart.
-            return ct.IsCancellationRequested ? PaceOutcome.Cancelled : PaceOutcome.Restart;
+            return ct.IsCancellationRequested ? WaitOutcome.Cancelled : WaitOutcome.Restart;
+        }
+    }
+
+    /// <summary>Blocks at the end of the recording until a seek (Restart) or cancellation.</summary>
+    private async Task<WaitOutcome> HoldAtEndAsync(CancellationToken ct)
+    {
+        CancellationToken interrupt;
+        lock (_gate)
+        {
+            interrupt = _interrupt.Token;
+        }
+
+        if (IsRestartRequested())
+        {
+            return WaitOutcome.Restart;
+        }
+
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, interrupt);
+        try
+        {
+            // An infinite delay without a TimeProvider creates no timer: it just waits for the token.
+            await Task.Delay(Timeout.Infinite, linked.Token).ConfigureAwait(false);
+            return WaitOutcome.Ready; // unreachable: the delay never completes on its own
+        }
+        catch (OperationCanceledException)
+        {
+            return ct.IsCancellationRequested ? WaitOutcome.Cancelled : WaitOutcome.Restart;
         }
     }
 
@@ -278,9 +402,49 @@ public sealed class ReplayDatagramSource
             if (_restartRequested || _interrupt.IsCancellationRequested)
             {
                 _restartRequested = false;
-                _interrupt.Dispose();
+
+                // Deliberately NOT disposed: a concurrent SeekToStart may still hold this instance and
+                // call Cancel() on it outside the lock; Cancel on a disposed source would throw. It has no
+                // timer or handle, so letting the GC collect it costs nothing.
                 _interrupt = new CancellationTokenSource();
             }
+        }
+    }
+
+    private async Task<RecordingFileInfo?> TryScanAsync(CancellationToken ct)
+    {
+        try
+        {
+            return await RecordingFileInfo.ScanAsync(_openRecording(), leaveOpen: false, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return null;
+        }
+    }
+
+    private async Task<SessionRecordingReader?> TryOpenAsync(CancellationToken ct)
+    {
+        try
+        {
+            return await SessionRecordingReader.OpenAsync(_openRecording(), leaveOpen: false, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>MoveNext that reports cancellation as null instead of throwing.</summary>
+    private static async ValueTask<bool?> MoveNextOrCancelledAsync(IAsyncEnumerator<RecordedDatagram> records, CancellationToken ct)
+    {
+        try
+        {
+            return await records.MoveNextAsync().ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return null;
         }
     }
 

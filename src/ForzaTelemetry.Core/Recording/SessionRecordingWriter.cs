@@ -1,3 +1,5 @@
+using System.Buffers;
+
 namespace ForzaTelemetry.Core.Recording;
 
 /// <summary>
@@ -26,12 +28,9 @@ public sealed class SessionRecordingWriter : IAsyncDisposable
     private readonly BufferedStream _buffered;
     private readonly bool _leaveOpen;
 
-    // Reused for every record: with a single writer there is no aliasing, and it avoids allocating
-    // 12 bytes sixty times a second (and stackalloc/Span cannot live across an await).
-    private readonly byte[] _recordHeader = new byte[RecordingFormat.RecordHeaderSize];
-
     private long _lastElapsedMicroseconds;
     private bool _disposed;
+    private bool _faulted;
 
     private SessionRecordingWriter(Stream destination, bool leaveOpen, int bufferSize)
     {
@@ -95,9 +94,19 @@ public sealed class SessionRecordingWriter : IAsyncDisposable
     /// </summary>
     /// <param name="datagram">The raw datagram bytes (copied into the buffer; the caller may reuse its memory afterwards).</param>
     /// <param name="elapsed">Arrival time relative to the recording start. Must not be negative.</param>
+    /// <param name="ct">Honored only BEFORE the record starts being written. Once the first byte is handed to the
+    /// stream the write always runs to completion: abandoning it half way would leave a torn record in the middle
+    /// of the file, which readers could not recover from.</param>
+    /// <exception cref="InvalidOperationException">A previous write failed; the file may hold a torn record, so the writer refuses to append more.</exception>
     public async ValueTask WriteAsync(ReadOnlyMemory<byte> datagram, TimeSpan elapsed, CancellationToken ct = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        ct.ThrowIfCancellationRequested();
+
+        if (_faulted)
+        {
+            throw new InvalidOperationException("A previous write failed; the recording can no longer be appended to.");
+        }
 
         if (elapsed < TimeSpan.Zero)
         {
@@ -116,12 +125,32 @@ public sealed class SessionRecordingWriter : IAsyncDisposable
         var micros = Math.Max(RecordingFormat.ToMicroseconds(elapsed), _lastElapsedMicroseconds);
         _lastElapsedMicroseconds = micros;
 
-        RecordingFormat.WriteRecordHeader(_recordHeader, micros, datagram.Length);
-        await _buffered.WriteAsync(_recordHeader, ct).ConfigureAwait(false);
-        await _buffered.WriteAsync(datagram, ct).ConfigureAwait(false);
+        // Header + payload go out as ONE write from one pooled buffer, so the record is never split
+        // across two awaits (where a cancellation or failure could tear it).
+        var total = RecordingFormat.RecordHeaderSize + datagram.Length;
+        var buffer = ArrayPool<byte>.Shared.Rent(total);
+        try
+        {
+            RecordingFormat.WriteRecordHeader(buffer, micros, datagram.Length);
+            datagram.Span.CopyTo(buffer.AsSpan(RecordingFormat.RecordHeaderSize));
+
+            try
+            {
+                await _buffered.WriteAsync(buffer.AsMemory(0, total), CancellationToken.None).ConfigureAwait(false);
+            }
+            catch
+            {
+                _faulted = true; // unknown how much reached the file
+                throw;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
 
         RecordCount++;
-        BytesWritten += RecordingFormat.RecordHeaderSize + datagram.Length;
+        BytesWritten += total;
     }
 
     /// <summary>Pushes buffered bytes to the destination (e.g. so a crash loses less).</summary>

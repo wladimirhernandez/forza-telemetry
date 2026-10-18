@@ -42,6 +42,16 @@ public sealed class ReplayTelemetrySource : ITelemetrySource
         set => _datagrams.Speed = value;
     }
 
+    /// <summary>Keep the enumeration open after the last packet so <see cref="SeekToStart"/> can replay; see <see cref="ReplayDatagramSource"/>.</summary>
+    public bool HoldAtEnd
+    {
+        get => _datagrams.HoldAtEnd;
+        set => _datagrams.HoldAtEnd = value;
+    }
+
+    /// <summary>True when the last packet has been delivered and playback awaits a seek or cancellation.</summary>
+    public bool IsFinished => _datagrams.IsFinished;
+
     /// <summary>Whether playback is held by <see cref="Pause"/>.</summary>
     public bool IsPaused => _datagrams.IsPaused;
 
@@ -65,7 +75,8 @@ public sealed class ReplayTelemetrySource : ITelemetrySource
 
     /// <summary>
     /// Yields the parsed packets of the recording with their original spacing. The enumeration ends when
-    /// the recording ends or <paramref name="ct"/> is cancelled.
+    /// the recording ends (only when <see cref="HoldAtEnd"/> is false; otherwise it stays open in the
+    /// finished state) or <paramref name="ct"/> is cancelled.
     /// </summary>
     public async IAsyncEnumerable<TelemetryPacket> ReadPacketsAsync([EnumeratorCancellation] CancellationToken ct = default)
     {

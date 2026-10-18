@@ -225,4 +225,83 @@ public class SessionRecordingFormatTests
             }
         });
     }
+
+    [Fact]
+    public async Task OverflowingElapsedTime_IsTreatedAsCorruption()
+    {
+        var bytes = await WriteRecordingAsync((Datagram(1), TimeSpan.Zero), (Datagram(2), TimeSpan.FromMilliseconds(16)));
+        var secondRecord = RecordingFormat.HeaderSize + RecordingFormat.RecordHeaderSize + TelemetryParser.PacketSize;
+        BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(secondRecord), long.MaxValue); // would overflow TimeSpan ticks
+
+        var (records, reader) = await ReadAllAsync(bytes);
+
+        Assert.Single(records);
+        Assert.True(reader.IsTruncated);
+    }
+
+    [Fact]
+    public async Task Writer_AfterAFailedWrite_RefusesFurtherWrites()
+    {
+        var failing = new FailingStream();
+        await using var writer = await SessionRecordingWriter.CreateAsync(failing, Start, leaveOpen: true, bufferSize: 16);
+        failing.Fail = true;
+
+        await Assert.ThrowsAsync<IOException>(async () => await writer.WriteAsync(Datagram(1), TimeSpan.Zero));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await writer.WriteAsync(Datagram(2), TimeSpan.Zero));
+    }
+
+    [Fact]
+    public async Task Writer_WithAnAlreadyCancelledToken_WritesNothingOfThatRecord()
+    {
+        var stream = new MemoryStream();
+        await using var writer = await SessionRecordingWriter.CreateAsync(stream, Start, leaveOpen: true);
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            async () => await writer.WriteAsync(Datagram(1), TimeSpan.Zero, cts.Token));
+        await writer.WriteAsync(Datagram(2), TimeSpan.Zero); // not faulted: nothing was torn
+        await writer.FlushAsync();
+
+        var (records, _) = await ReadAllAsync(stream.ToArray());
+        Assert.Single(records);
+        Assert.Equal(Datagram(2), records[0].Payload.ToArray());
+    }
+
+    private sealed class FailingStream : Stream
+    {
+        public bool Fail { get; set; }
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) =>
+            Fail ? throw new IOException("disk failure") : ValueTask.CompletedTask;
+
+        public override void Write(byte[] buffer, int offset, int count) =>
+            _ = Fail ? throw new IOException("disk failure") : 0;
+
+        public override Task FlushAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public override void Flush()
+        {
+        }
+
+        public override bool CanRead => false;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => true;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+    }
 }

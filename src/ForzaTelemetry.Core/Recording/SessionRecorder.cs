@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Runtime.ExceptionServices;
 using System.Threading.Channels;
 
@@ -29,8 +30,9 @@ namespace ForzaTelemetry.Core.Recording;
 /// </para>
 /// <para>
 /// <b>Threading:</b> <see cref="OnDatagram"/> is meant for ONE thread (the receive loop);
-/// <see cref="StartAsync(Stream, bool)"/>, <see cref="StopAsync"/> and the counters may be used from any other
-/// thread (typically the UI). A recorder can be started again after being stopped; counters reset on start.
+/// <see cref="StartAsync(Stream, bool, CancellationToken)"/>, <see cref="StopAsync"/> and the counters may be used
+/// from any other thread (typically the UI). A recorder can be started again after being stopped; counters
+/// reset on start.
 /// </para>
 /// </remarks>
 public sealed class SessionRecorder : IDatagramObserver, IAsyncDisposable
@@ -44,6 +46,8 @@ public sealed class SessionRecorder : IDatagramObserver, IAsyncDisposable
     private readonly Lock _gate = new();
 
     private Session? _session; // volatile semantics via Volatile.Read/Write
+    private Exception? _lastFault;
+    private bool _starting;
     private long _datagramCount;
     private long _bytesRecorded;
     private long _droppedCount;
@@ -91,28 +95,62 @@ public sealed class SessionRecorder : IDatagramObserver, IAsyncDisposable
         }
     }
 
-    /// <summary>The I/O error that stopped the writer, if any. Datagrams after it are counted as dropped.</summary>
-    public Exception? Fault => Volatile.Read(ref _session)?.Fault;
+    /// <summary>
+    /// The I/O error that stopped the writer, if any. Datagrams after it are counted as dropped. Kept after
+    /// <see cref="StopAsync"/> until the next start, so a UI can still show why the last recording failed.
+    /// </summary>
+    public Exception? Fault => Volatile.Read(ref _session)?.Fault ?? Volatile.Read(ref _lastFault);
 
-    /// <summary>Starts recording to a file, creating or overwriting it. The caller picks the path and ensures its folder exists.</summary>
-    public async Task StartAsync(string path, CancellationToken ct = default)
+    /// <summary>
+    /// Starts recording to a file. The caller picks the path and ensures its folder exists.
+    /// </summary>
+    /// <param name="path">Destination file.</param>
+    /// <param name="overwrite">
+    /// When false (default) an existing file is never touched and an <see cref="IOException"/> is thrown:
+    /// a recording is irreplaceable (a drive cannot be repeated), so overwriting must be a deliberate choice.
+    /// </param>
+    /// <exception cref="InvalidOperationException">Already recording (checked BEFORE the file is opened, so nothing is truncated).</exception>
+    public async Task StartAsync(string path, bool overwrite = false, CancellationToken ct = default)
     {
-        var stream = new FileStream(
-            path, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 0, FileOptions.Asynchronous);
+        Reserve();
         try
         {
-            await StartAsync(stream, leaveOpen: false, ct).ConfigureAwait(false);
+            var stream = new FileStream(
+                path, overwrite ? FileMode.Create : FileMode.CreateNew, FileAccess.Write, FileShare.Read,
+                bufferSize: 0, FileOptions.Asynchronous);
+            try
+            {
+                await StartCoreAsync(stream, leaveOpen: false, ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                await stream.DisposeAsync().ConfigureAwait(false);
+                throw;
+            }
         }
-        catch
+        finally
         {
-            await stream.DisposeAsync().ConfigureAwait(false);
-            throw;
+            Release();
         }
     }
 
     /// <summary>Starts recording into <paramref name="destination"/>. Writes the file header before returning.</summary>
     /// <exception cref="InvalidOperationException">Already recording.</exception>
     public async Task StartAsync(Stream destination, bool leaveOpen = false, CancellationToken ct = default)
+    {
+        Reserve();
+        try
+        {
+            await StartCoreAsync(destination, leaveOpen, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            Release();
+        }
+    }
+
+    // Claims the "starting" slot synchronously so two concurrent starts cannot both proceed.
+    private void Reserve()
     {
         lock (_gate)
         {
@@ -123,36 +161,39 @@ public sealed class SessionRecorder : IDatagramObserver, IAsyncDisposable
 
             _starting = true;
         }
+    }
 
-        try
+    private void Release()
+    {
+        lock (_gate)
         {
-            var startTimestamp = _timeProvider.GetTimestamp();
-            var writer = await SessionRecordingWriter
-                .CreateAsync(destination, _timeProvider.GetUtcNow(), leaveOpen, _bufferSize, ct)
-                .ConfigureAwait(false);
-
-            Interlocked.Exchange(ref _datagramCount, 0);
-            Interlocked.Exchange(ref _bytesRecorded, 0);
-            Interlocked.Exchange(ref _droppedCount, 0);
-            Interlocked.Exchange(ref _stoppedDurationTicks, -1);
-            Interlocked.Exchange(ref _startTimestamp, startTimestamp);
-
-            var session = new Session(writer, startTimestamp, _queueCapacity);
-            Volatile.Write(ref _session, session);
-        }
-        finally
-        {
-            lock (_gate)
-            {
-                _starting = false;
-            }
+            _starting = false;
         }
     }
 
-    private bool _starting;
+    private async Task StartCoreAsync(Stream destination, bool leaveOpen, CancellationToken ct)
+    {
+        var startTimestamp = _timeProvider.GetTimestamp();
+        var writer = await SessionRecordingWriter
+            .CreateAsync(destination, _timeProvider.GetUtcNow(), leaveOpen, _bufferSize, ct)
+            .ConfigureAwait(false);
+
+        Interlocked.Exchange(ref _datagramCount, 0);
+        Interlocked.Exchange(ref _bytesRecorded, 0);
+        Interlocked.Exchange(ref _droppedCount, 0);
+        Interlocked.Exchange(ref _stoppedDurationTicks, -1);
+        Interlocked.Exchange(ref _startTimestamp, startTimestamp);
+        Volatile.Write(ref _lastFault, null);
+
+        Volatile.Write(ref _session, new Session(writer, startTimestamp, _queueCapacity));
+    }
 
     /// <inheritdoc />
-    /// <remarks>Copies the bytes (the caller's buffer may be reused) and enqueues; never blocks and never throws.</remarks>
+    /// <remarks>
+    /// Copies the bytes into a pooled buffer (the caller's buffer may be reused) and enqueues; never blocks
+    /// and never throws. Pooling avoids allocating ~336 bytes sixty times a second, which would otherwise
+    /// feed the garbage collector from the very loop that must stay smooth.
+    /// </remarks>
     public void OnDatagram(ReadOnlyMemory<byte> datagram)
     {
         var session = Volatile.Read(ref _session);
@@ -161,16 +202,27 @@ public sealed class SessionRecorder : IDatagramObserver, IAsyncDisposable
             return; // not recording: observing is free
         }
 
+        // Writer already failed: do not even copy, the datagram cannot be stored.
+        if (session.Fault is not null)
+        {
+            Interlocked.Increment(ref _droppedCount);
+            return;
+        }
+
         // Arrival time is taken NOW, on the receive thread, not by the writer task.
         var elapsed = _timeProvider.GetElapsedTime(session.StartTimestamp);
 
-        if (session.Channel.Writer.TryWrite(new QueuedDatagram(elapsed, datagram.ToArray())))
+        var buffer = ArrayPool<byte>.Shared.Rent(datagram.Length);
+        datagram.Span.CopyTo(buffer);
+
+        if (session.Channel.Writer.TryWrite(new QueuedDatagram(elapsed, buffer, datagram.Length)))
         {
             Interlocked.Increment(ref _datagramCount);
             Interlocked.Add(ref _bytesRecorded, datagram.Length);
         }
         else
         {
+            ArrayPool<byte>.Shared.Return(buffer); // never queued: nobody else will return it
             Interlocked.Increment(ref _droppedCount);
         }
     }
@@ -206,6 +258,7 @@ public sealed class SessionRecorder : IDatagramObserver, IAsyncDisposable
         var error = session.Fault ?? closeError;
         if (error is not null)
         {
+            Volatile.Write(ref _lastFault, error);
             ExceptionDispatchInfo.Throw(error);
         }
     }
@@ -223,7 +276,8 @@ public sealed class SessionRecorder : IDatagramObserver, IAsyncDisposable
         }
     }
 
-    private readonly record struct QueuedDatagram(TimeSpan Elapsed, byte[] Payload);
+    /// <summary>A queued datagram; <c>Buffer</c> is rented from the pool and only its first <c>Length</c> bytes are valid.</summary>
+    private readonly record struct QueuedDatagram(TimeSpan Elapsed, byte[] Buffer, int Length);
 
     /// <summary>State of one start..stop cycle: its queue, writer and the task that links them.</summary>
     private sealed class Session
@@ -264,15 +318,29 @@ public sealed class SessionRecorder : IDatagramObserver, IAsyncDisposable
             {
                 await foreach (var item in Channel.Reader.ReadAllAsync().ConfigureAwait(false))
                 {
-                    await Writer.WriteAsync(item.Payload, item.Elapsed).ConfigureAwait(false);
+                    try
+                    {
+                        await Writer.WriteAsync(item.Buffer.AsMemory(0, item.Length), item.Elapsed).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        ArrayPool<byte>.Shared.Return(item.Buffer);
+                    }
                 }
             }
             catch (Exception ex)
             {
                 Volatile.Write(ref _fault, ex);
+
                 // Completing with the error makes further TryWrite calls return false, so the receive
                 // loop keeps running and the lost datagrams are counted as dropped.
                 Channel.Writer.TryComplete(ex);
+
+                // Give back the buffers of everything still queued; nothing will ever write them.
+                while (Channel.Reader.TryRead(out var abandoned))
+                {
+                    ArrayPool<byte>.Shared.Return(abandoned.Buffer);
+                }
             }
         }
     }

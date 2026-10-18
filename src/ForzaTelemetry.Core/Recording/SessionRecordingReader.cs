@@ -122,7 +122,9 @@ public sealed class SessionRecordingReader : IAsyncDisposable
 
             RecordingFormat.ReadRecordHeader(recordHeader, out var micros, out var length);
 
-            if (length < 0 || length > RecordingFormat.MaxPayloadLength || micros < 0)
+            // The upper bound on micros keeps FromMicroseconds from overflowing TimeSpan's tick range.
+            if (length < 0 || length > RecordingFormat.MaxPayloadLength
+                || micros < 0 || micros > long.MaxValue / TimeSpan.TicksPerMicrosecond)
             {
                 // Damaged length/time: we cannot know where the next record starts, so stop here.
                 IsTruncated = true;

@@ -100,7 +100,7 @@ public class ReplayTelemetrySourceTests
     {
         var time = new ObservableTimeProvider();
         var source = new ReplayTelemetrySource(
-            (Func<Stream>)(() => new MemoryStream(ThreePacketsAsync().Result)), time);
+            (Func<Stream>)(() => new MemoryStream(ThreePacketsAsync().Result)), time) { HoldAtEnd = false };
         var consumer = new Consumer(source);
 
         await consumer.WaitForPacketAsync(); // first record is immediate
@@ -133,7 +133,7 @@ public class ReplayTelemetrySourceTests
     {
         var time = new ObservableTimeProvider();
         var bytes = await RecordingAsync((Packet(1), 0), (Packet(2), 100));
-        var source = new ReplayTelemetrySource(() => new MemoryStream(bytes), time) { Speed = speed };
+        var source = new ReplayTelemetrySource(() => new MemoryStream(bytes), time) { Speed = speed, HoldAtEnd = false };
         var consumer = new Consumer(source);
 
         await consumer.WaitForPacketAsync();
@@ -153,7 +153,7 @@ public class ReplayTelemetrySourceTests
     {
         var time = new FakeTimeProvider();
         var bytes = await RecordingAsync((Packet(1), 0), (Packet(2), 60_000), (Packet(3), 3_600_000));
-        var source = new ReplayTelemetrySource(() => new MemoryStream(bytes), time) { Speed = ReplaySpeed.Max };
+        var source = new ReplayTelemetrySource(() => new MemoryStream(bytes), time) { Speed = ReplaySpeed.Max, HoldAtEnd = false };
 
         var ordinals = new List<int>();
         await foreach (var packet in source.ReadPacketsAsync())
@@ -169,7 +169,7 @@ public class ReplayTelemetrySourceTests
     {
         var time = new ObservableTimeProvider();
         var bytes = await RecordingAsync((Packet(1), 0), (Packet(2), 100));
-        var source = new ReplayTelemetrySource(() => new MemoryStream(bytes), time);
+        var source = new ReplayTelemetrySource(() => new MemoryStream(bytes), time) { HoldAtEnd = false };
         var consumer = new Consumer(source);
 
         await consumer.WaitForPacketAsync();
@@ -193,7 +193,7 @@ public class ReplayTelemetrySourceTests
     {
         var time = new ObservableTimeProvider();
         var bytes = await RecordingAsync((Packet(1), 0));
-        var source = new ReplayTelemetrySource(() => new MemoryStream(bytes), time);
+        var source = new ReplayTelemetrySource(() => new MemoryStream(bytes), time) { HoldAtEnd = false };
         source.Pause();
         var consumer = new Consumer(source);
 
@@ -249,10 +249,83 @@ public class ReplayTelemetrySourceTests
     }
 
     [Fact]
+    public async Task ReachingTheEnd_HoldsTheEnumerationOpen_AndSeekRestartsInTheSameEnumeration()
+    {
+        var bytes = await RecordingAsync((Packet(1), 0), (Packet(2), 100));
+        var source = new ReplayTelemetrySource(() => new MemoryStream(bytes)) { Speed = ReplaySpeed.Max };
+        var consumer = new Consumer(source);
+
+        await consumer.WaitForPacketAsync();
+        await consumer.WaitForPacketAsync();
+        await WaitUntilAsync(() => source.IsFinished);
+        Assert.False(consumer.Completion.IsCompleted, "a player stays open at the end");
+        Assert.Equal(source.Duration, source.Position);
+
+        source.SeekToStart(); // the "replay" button after the end
+        Assert.False(source.IsFinished);
+        Assert.Equal(TimeSpan.Zero, source.Position);
+
+        await consumer.WaitForPacketAsync();
+        await consumer.WaitForPacketAsync();
+        Assert.Equal([1, 2, 1, 2], consumer.Ordinals);
+        await WaitUntilAsync(() => source.IsFinished);
+
+        await consumer.StopAsync(); // cancelling while finished ends cleanly
+        Assert.False(source.IsFinished);
+    }
+
+    [Fact]
+    public async Task Cancellation_DuringTheInitialScan_EndsCleanly()
+    {
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+        var source = new ReplayTelemetrySource(() => new MemoryStream(ThreePacketsAsync().Result));
+
+        var count = 0;
+        await foreach (var _ in source.ReadPacketsAsync(cts.Token))
+        {
+            count++;
+        }
+
+        Assert.Equal(0, count);
+    }
+
+    [Fact]
+    public async Task SeekToStart_FromAnotherThread_DoesNotRunCancellationCallbacksInsideTheLock()
+    {
+        // Regression: Cancel() used to run under the gate; a callback touching the source would deadlock.
+        var time = new ObservableTimeProvider();
+        var source = new ReplayTelemetrySource(() => new MemoryStream(ThreePacketsAsync().Result), time);
+        var consumer = new Consumer(source);
+        await consumer.WaitForPacketAsync();
+        await time.WaitForTimerAsync();
+
+        var seek = Task.Run(() =>
+        {
+            source.SeekToStart();
+            _ = source.IsPaused; // takes the same gate
+            _ = source.IsFinished;
+        });
+
+        Assert.Same(seek, await Task.WhenAny(seek, Task.Delay(TimeSpan.FromSeconds(5))));
+        await consumer.StopAsync();
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (!condition())
+        {
+            Assert.True(DateTime.UtcNow < deadline, "condition not met in time");
+            await Task.Delay(5);
+        }
+    }
+
+    [Fact]
     public async Task NonPacketDatagrams_AreSkippedAndCounted()
     {
         var bytes = await RecordingAsync((Packet(1), 0), (new byte[10], 10), (Packet(2), 20));
-        var source = new ReplayTelemetrySource(() => new MemoryStream(bytes)) { Speed = ReplaySpeed.Max };
+        var source = new ReplayTelemetrySource(() => new MemoryStream(bytes)) { Speed = ReplaySpeed.Max, HoldAtEnd = false };
 
         var ordinals = new List<int>();
         await foreach (var packet in source.ReadPacketsAsync())

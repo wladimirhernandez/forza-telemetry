@@ -32,7 +32,23 @@ public sealed record RecordingFileInfo(
     public static async Task<RecordingFileInfo> ScanAsync(
         Stream source, bool leaveOpen = false, CancellationToken ct = default)
     {
-        var size = source.CanSeek ? source.Length : 0;
+        ArgumentNullException.ThrowIfNull(source);
+
+        long size;
+        try
+        {
+            size = source.CanSeek ? source.Length : 0;
+        }
+        catch
+        {
+            // We own the stream unless told otherwise; do not leak it when even asking its size fails.
+            if (!leaveOpen)
+            {
+                await source.DisposeAsync().ConfigureAwait(false);
+            }
+
+            throw;
+        }
 
         await using var reader = await SessionRecordingReader.OpenAsync(source, leaveOpen, ct).ConfigureAwait(false);
 

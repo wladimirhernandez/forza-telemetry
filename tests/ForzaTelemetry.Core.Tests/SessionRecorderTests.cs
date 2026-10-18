@@ -154,6 +154,58 @@ public class SessionRecorderTests
         Assert.True(recorder.DroppedCount >= 1);
         await Assert.ThrowsAsync<IOException>(recorder.StopAsync);
         Assert.False(recorder.IsRecording);
+
+        // The reason survives the stop so the UI can still explain what went wrong.
+        Assert.IsType<IOException>(recorder.Fault);
+    }
+
+    [Fact]
+    public async Task StartToFile_RefusesToOverwriteAnExistingRecording_UnlessAskedTo()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"fh6-{Guid.NewGuid():N}.fh6rec");
+        try
+        {
+            await File.WriteAllBytesAsync(path, [1, 2, 3]);
+            await using var recorder = new SessionRecorder();
+
+            await Assert.ThrowsAsync<IOException>(async () => await recorder.StartAsync(path));
+            Assert.Equal([1, 2, 3], await File.ReadAllBytesAsync(path)); // untouched
+            Assert.False(recorder.IsRecording);
+
+            await recorder.StartAsync(path, overwrite: true);
+            recorder.OnDatagram(Datagram(5));
+            await recorder.StopAsync();
+            var info = await RecordingFileInfo.ScanFileAsync(path);
+            Assert.Equal(1, info.PacketCount);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task StartToFile_WhileRecording_ThrowsBeforeTouchingTheFile()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"fh6-{Guid.NewGuid():N}.fh6rec");
+        try
+        {
+            await using var recorder = new SessionRecorder();
+            await recorder.StartAsync(path);
+            recorder.OnDatagram(Datagram(1));
+            await recorder.StopAsync();
+            await recorder.StartAsync(new MemoryStream());
+            var sizeBefore = new FileInfo(path).Length;
+
+            // Even with overwrite: true the "already recording" check must come first.
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await recorder.StartAsync(path, overwrite: true));
+
+            Assert.Equal(sizeBefore, new FileInfo(path).Length);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     private static async Task WaitUntilAsync(Func<bool> condition)

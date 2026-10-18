@@ -99,4 +99,33 @@ public class RecordingFileInfoTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public async Task Scan_WithANullStream_ThrowsArgumentNull()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(async () => await RecordingFileInfo.ScanAsync(null!));
+    }
+
+    [Fact]
+    public async Task Scan_DisposesTheStream_EvenWhenAskingItsLengthThrows()
+    {
+        var stream = new LengthThrowingStream();
+
+        await Assert.ThrowsAsync<NotSupportedException>(async () => await RecordingFileInfo.ScanAsync(stream));
+
+        Assert.True(stream.Disposed);
+    }
+
+    private sealed class LengthThrowingStream : MemoryStream
+    {
+        public bool Disposed { get; private set; }
+
+        public override long Length => throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            Disposed = true;
+            base.Dispose(disposing);
+        }
+    }
 }
