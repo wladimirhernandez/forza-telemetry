@@ -14,6 +14,7 @@
   </resheader>
   <data name="AppTitle" xml:space="preserve">
     <value>Forza Telemetry</value>
+    <comment>WORKING TITLE: the single place the product name is defined (see AppInfo.Name). Rename the app here, in both resx files.</comment>
   </data>
   <data name="MinimizeTooltip" xml:space="preserve">
     <value>Minimizar</value>
@@ -227,5 +228,101 @@
   </data>
   <data name="SettingsPlaceholder" xml:space="preserve">
     <value>Aquí estarán el puerto, las unidades, el idioma y la guía paso a paso de Data Out.</value>
+  </data>
+  <data name="SpeedUnitMph" xml:space="preserve">
+    <value>mph</value>
+  </data>
+  <data name="TemperatureUnitFahrenheit" xml:space="preserve">
+    <value>°F</value>
+  </data>
+  <data name="ConnectionTitle" xml:space="preserve">
+    <value>Conexión</value>
+  </data>
+  <data name="PortLabel" xml:space="preserve">
+    <value>Puerto UDP</value>
+  </data>
+  <data name="PortHint" xml:space="preserve">
+    <value>El puerto al que el juego envía la telemetría. Predeterminado: {0}. Si la app está escuchando, se reinicia con el puerto nuevo.</value>
+  </data>
+  <data name="PortInvalid" xml:space="preserve">
+    <value>Escribe un número entero del 1 al 65535.</value>
+  </data>
+  <data name="PortApplyButton" xml:space="preserve">
+    <value>Aplicar</value>
+  </data>
+  <data name="GuideTitle" xml:space="preserve">
+    <value>Configura Data Out en el juego</value>
+  </data>
+  <data name="GuideStep1" xml:space="preserve">
+    <value>En el juego, abre Ajustes y luego HUD y jugabilidad.</value>
+  </data>
+  <data name="GuideStep2" xml:space="preserve">
+    <value>Baja hasta Data Out y actívalo.</value>
+  </data>
+  <data name="GuideStep3" xml:space="preserve">
+    <value>Pon la dirección IP de Data Out en {0} y el puerto de Data Out en {1}.</value>
+  </data>
+  <data name="GuideCopyButton" xml:space="preserve">
+    <value>Copiar IP</value>
+  </data>
+  <data name="GuideNoteDriving" xml:space="preserve">
+    <value>La telemetría solo llega mientras conduces: con el juego en pausa y en los menús llega poco o nada.</value>
+  </data>
+  <data name="GuideNoteFirewall" xml:space="preserve">
+    <value>Si no llega nada, permite esta app en el Firewall de Windows para redes privadas (UDP {0}).</value>
+  </data>
+  <data name="UnitsTitle" xml:space="preserve">
+    <value>Unidades</value>
+  </data>
+  <data name="UnitsTemperatureLabel" xml:space="preserve">
+    <value>Temperatura de los neumáticos</value>
+  </data>
+  <data name="LanguageTitle" xml:space="preserve">
+    <value>Idioma</value>
+  </data>
+  <data name="LanguageSystem" xml:space="preserve">
+    <value>Predeterminado del sistema</value>
+  </data>
+  <data name="LanguageEnglish" xml:space="preserve">
+    <value>English</value>
+  </data>
+  <data name="LanguageSpanish" xml:space="preserve">
+    <value>Español</value>
+  </data>
+  <data name="LanguageRestartNote" xml:space="preserve">
+    <value>El idioma nuevo se aplica la próxima vez que abras la app.</value>
+  </data>
+  <data name="RestartButton" xml:space="preserve">
+    <value>Reiniciar ahora</value>
+  </data>
+  <data name="StartupTitle" xml:space="preserve">
+    <value>Inicio</value>
+  </data>
+  <data name="StartListeningOnLaunchLabel" xml:space="preserve">
+    <value>Empezar a escuchar al abrir la app</value>
+  </data>
+  <data name="StartListeningOnLaunchHint" xml:space="preserve">
+    <value>Te ahorra pulsar Iniciar cada vez que abres la app.</value>
+  </data>
+  <data name="DiagnosticsTitle" xml:space="preserve">
+    <value>Diagnóstico</value>
+  </data>
+  <data name="DiagnosticsHint" xml:space="preserve">
+    <value>Los archivos de registro ayudan a descubrir por qué algo no funciona. Se quedan en este equipo.</value>
+  </data>
+  <data name="OpenLogsButton" xml:space="preserve">
+    <value>Abrir carpeta de registros</value>
+  </data>
+  <data name="AboutTitle" xml:space="preserve">
+    <value>Acerca de</value>
+  </data>
+  <data name="AboutVersion" xml:space="preserve">
+    <value>Versión {0}</value>
+  </data>
+  <data name="AboutLicense" xml:space="preserve">
+    <value>Código disponible bajo {0}</value>
+  </data>
+  <data name="AboutDisclaimer" xml:space="preserve">
+    <value>No oficial. Sin afiliación con Microsoft, Playground Games ni Turn 10.</value>
   </data>
 </root>

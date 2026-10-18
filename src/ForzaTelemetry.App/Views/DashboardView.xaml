@@ -163,9 +163,9 @@
                     </StackPanel>
                     <StackPanel Grid.Column="1" VerticalAlignment="Bottom" Margin="0,0,0,10">
                         <TextBlock Text="{x:Static res:Strings.SpeedLabel}" Style="{StaticResource MutedLabel}" />
-                        <TextBlock Text="{Binding SpeedKmh, StringFormat={}{0:F0}}" Style="{StaticResource NumeralText}"
+                        <TextBlock Text="{Binding SpeedReadout}" Style="{StaticResource NumeralText}"
                                    FontSize="64" />
-                        <TextBlock Text="{x:Static res:Strings.SpeedUnit}" Style="{StaticResource MutedLabel}" />
+                        <TextBlock Text="{Binding SpeedUnitLabel}" Style="{StaticResource MutedLabel}" />
                     </StackPanel>
                 </Grid>
             </Border>

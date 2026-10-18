@@ -14,6 +14,7 @@
   </resheader>
   <data name="AppTitle" xml:space="preserve">
     <value>Forza Telemetry</value>
+    <comment>WORKING TITLE: the single place the product name is defined (see AppInfo.Name). Rename the app here, in both resx files.</comment>
   </data>
   <data name="MinimizeTooltip" xml:space="preserve">
     <value>Minimize</value>
@@ -227,5 +228,101 @@
   </data>
   <data name="SettingsPlaceholder" xml:space="preserve">
     <value>Port, units, language and the step-by-step Data Out guide will live here.</value>
+  </data>
+  <data name="SpeedUnitMph" xml:space="preserve">
+    <value>mph</value>
+  </data>
+  <data name="TemperatureUnitFahrenheit" xml:space="preserve">
+    <value>°F</value>
+  </data>
+  <data name="ConnectionTitle" xml:space="preserve">
+    <value>Connection</value>
+  </data>
+  <data name="PortLabel" xml:space="preserve">
+    <value>UDP port</value>
+  </data>
+  <data name="PortHint" xml:space="preserve">
+    <value>The port the game sends telemetry to. Default: {0}. If the app is listening, it restarts on the new port.</value>
+  </data>
+  <data name="PortInvalid" xml:space="preserve">
+    <value>Enter a whole number from 1 to 65535.</value>
+  </data>
+  <data name="PortApplyButton" xml:space="preserve">
+    <value>Apply</value>
+  </data>
+  <data name="GuideTitle" xml:space="preserve">
+    <value>Set up Data Out in the game</value>
+  </data>
+  <data name="GuideStep1" xml:space="preserve">
+    <value>In the game, open Settings, then HUD and Gameplay.</value>
+  </data>
+  <data name="GuideStep2" xml:space="preserve">
+    <value>Scroll down to Data Out and turn it On.</value>
+  </data>
+  <data name="GuideStep3" xml:space="preserve">
+    <value>Set the Data Out IP address to {0} and the Data Out port to {1}.</value>
+  </data>
+  <data name="GuideCopyButton" xml:space="preserve">
+    <value>Copy IP</value>
+  </data>
+  <data name="GuideNoteDriving" xml:space="preserve">
+    <value>Telemetry arrives only while you are driving: a paused game and the menus send little or nothing.</value>
+  </data>
+  <data name="GuideNoteFirewall" xml:space="preserve">
+    <value>If nothing arrives, allow this app through Windows Firewall on private networks (UDP {0}).</value>
+  </data>
+  <data name="UnitsTitle" xml:space="preserve">
+    <value>Units</value>
+  </data>
+  <data name="UnitsTemperatureLabel" xml:space="preserve">
+    <value>Tire temperature</value>
+  </data>
+  <data name="LanguageTitle" xml:space="preserve">
+    <value>Language</value>
+  </data>
+  <data name="LanguageSystem" xml:space="preserve">
+    <value>System default</value>
+  </data>
+  <data name="LanguageEnglish" xml:space="preserve">
+    <value>English</value>
+  </data>
+  <data name="LanguageSpanish" xml:space="preserve">
+    <value>Español</value>
+  </data>
+  <data name="LanguageRestartNote" xml:space="preserve">
+    <value>The new language applies the next time the app opens.</value>
+  </data>
+  <data name="RestartButton" xml:space="preserve">
+    <value>Restart now</value>
+  </data>
+  <data name="StartupTitle" xml:space="preserve">
+    <value>Startup</value>
+  </data>
+  <data name="StartListeningOnLaunchLabel" xml:space="preserve">
+    <value>Start listening when the app opens</value>
+  </data>
+  <data name="StartListeningOnLaunchHint" xml:space="preserve">
+    <value>Saves pressing Start every time you open the app.</value>
+  </data>
+  <data name="DiagnosticsTitle" xml:space="preserve">
+    <value>Diagnostics</value>
+  </data>
+  <data name="DiagnosticsHint" xml:space="preserve">
+    <value>Log files help find out why something does not work. They stay on this PC.</value>
+  </data>
+  <data name="OpenLogsButton" xml:space="preserve">
+    <value>Open logs folder</value>
+  </data>
+  <data name="AboutTitle" xml:space="preserve">
+    <value>About</value>
+  </data>
+  <data name="AboutVersion" xml:space="preserve">
+    <value>Version {0}</value>
+  </data>
+  <data name="AboutLicense" xml:space="preserve">
+    <value>Source-available under {0}</value>
+  </data>
+  <data name="AboutDisclaimer" xml:space="preserve">
+    <value>Unofficial. Not affiliated with Microsoft, Playground Games or Turn 10.</value>
   </data>
 </root>

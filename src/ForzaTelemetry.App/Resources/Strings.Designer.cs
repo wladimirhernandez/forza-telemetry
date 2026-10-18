@@ -705,5 +705,293 @@ namespace ForzaTelemetry.App.Resources {
             }
         }
         
+        /// <summary>
+        ///   Looks up a localized string similar to mph.
+        /// </summary>
+        public static string SpeedUnitMph {
+            get {
+                return ResourceManager.GetString("SpeedUnitMph", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to °F.
+        /// </summary>
+        public static string TemperatureUnitFahrenheit {
+            get {
+                return ResourceManager.GetString("TemperatureUnitFahrenheit", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Connection.
+        /// </summary>
+        public static string ConnectionTitle {
+            get {
+                return ResourceManager.GetString("ConnectionTitle", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to UDP port.
+        /// </summary>
+        public static string PortLabel {
+            get {
+                return ResourceManager.GetString("PortLabel", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The port the game sends telemetry to. Default: {0}. If the app is listening, it restarts on the new port..
+        /// </summary>
+        public static string PortHint {
+            get {
+                return ResourceManager.GetString("PortHint", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Enter a whole number from 1 to 65535..
+        /// </summary>
+        public static string PortInvalid {
+            get {
+                return ResourceManager.GetString("PortInvalid", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Apply.
+        /// </summary>
+        public static string PortApplyButton {
+            get {
+                return ResourceManager.GetString("PortApplyButton", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Set up Data Out in the game.
+        /// </summary>
+        public static string GuideTitle {
+            get {
+                return ResourceManager.GetString("GuideTitle", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to In the game, open Settings, then HUD and Gameplay..
+        /// </summary>
+        public static string GuideStep1 {
+            get {
+                return ResourceManager.GetString("GuideStep1", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Scroll down to Data Out and turn it On..
+        /// </summary>
+        public static string GuideStep2 {
+            get {
+                return ResourceManager.GetString("GuideStep2", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Set the Data Out IP address to {0} and the Data Out port to {1}..
+        /// </summary>
+        public static string GuideStep3 {
+            get {
+                return ResourceManager.GetString("GuideStep3", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Copy IP.
+        /// </summary>
+        public static string GuideCopyButton {
+            get {
+                return ResourceManager.GetString("GuideCopyButton", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Telemetry arrives only while you are driving: a paused game and the menus send little or nothing..
+        /// </summary>
+        public static string GuideNoteDriving {
+            get {
+                return ResourceManager.GetString("GuideNoteDriving", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to If nothing arrives, allow this app through Windows Firewall on private networks (UDP {0})..
+        /// </summary>
+        public static string GuideNoteFirewall {
+            get {
+                return ResourceManager.GetString("GuideNoteFirewall", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Units.
+        /// </summary>
+        public static string UnitsTitle {
+            get {
+                return ResourceManager.GetString("UnitsTitle", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Tire temperature.
+        /// </summary>
+        public static string UnitsTemperatureLabel {
+            get {
+                return ResourceManager.GetString("UnitsTemperatureLabel", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Language.
+        /// </summary>
+        public static string LanguageTitle {
+            get {
+                return ResourceManager.GetString("LanguageTitle", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to System default.
+        /// </summary>
+        public static string LanguageSystem {
+            get {
+                return ResourceManager.GetString("LanguageSystem", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to English.
+        /// </summary>
+        public static string LanguageEnglish {
+            get {
+                return ResourceManager.GetString("LanguageEnglish", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Español.
+        /// </summary>
+        public static string LanguageSpanish {
+            get {
+                return ResourceManager.GetString("LanguageSpanish", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The new language applies the next time the app opens..
+        /// </summary>
+        public static string LanguageRestartNote {
+            get {
+                return ResourceManager.GetString("LanguageRestartNote", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Restart now.
+        /// </summary>
+        public static string RestartButton {
+            get {
+                return ResourceManager.GetString("RestartButton", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Startup.
+        /// </summary>
+        public static string StartupTitle {
+            get {
+                return ResourceManager.GetString("StartupTitle", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Start listening when the app opens.
+        /// </summary>
+        public static string StartListeningOnLaunchLabel {
+            get {
+                return ResourceManager.GetString("StartListeningOnLaunchLabel", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Saves pressing Start every time you open the app..
+        /// </summary>
+        public static string StartListeningOnLaunchHint {
+            get {
+                return ResourceManager.GetString("StartListeningOnLaunchHint", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Diagnostics.
+        /// </summary>
+        public static string DiagnosticsTitle {
+            get {
+                return ResourceManager.GetString("DiagnosticsTitle", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Log files help find out why something does not work. They stay on this PC..
+        /// </summary>
+        public static string DiagnosticsHint {
+            get {
+                return ResourceManager.GetString("DiagnosticsHint", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Open logs folder.
+        /// </summary>
+        public static string OpenLogsButton {
+            get {
+                return ResourceManager.GetString("OpenLogsButton", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to About.
+        /// </summary>
+        public static string AboutTitle {
+            get {
+                return ResourceManager.GetString("AboutTitle", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Version {0}.
+        /// </summary>
+        public static string AboutVersion {
+            get {
+                return ResourceManager.GetString("AboutVersion", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Source-available under {0}.
+        /// </summary>
+        public static string AboutLicense {
+            get {
+                return ResourceManager.GetString("AboutLicense", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Unofficial. Not affiliated with Microsoft, Playground Games or Turn 10..
+        /// </summary>
+        public static string AboutDisclaimer {
+            get {
+                return ResourceManager.GetString("AboutDisclaimer", resourceCulture)!;
+            }
+        }
+        
     }
 }

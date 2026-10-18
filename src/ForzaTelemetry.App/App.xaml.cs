@@ -1,4 +1,4 @@
-using System.Reflection;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace ForzaTelemetry.App;
 
 /// <summary>Composition root: builds the services by hand (no DI container), then the shell view model and the window.</summary>
-public partial class App : Application
+public partial class App : Application, IAppRestarter
 {
     // How often the UI samples the latest packet (~20 Hz); see DispatcherTimerTicker for why sampling.
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromMilliseconds(50);
@@ -20,8 +20,12 @@ public partial class App : Application
     private ILogger<App> _logger = NullLogger<App>.Instance;
 
     private TelemetryService? _telemetryService;
+    private SettingsService? _settings;
     private DispatcherTimerTicker? _ticker;
     private Action? _refresh;
+
+    // Set by Restart(): OnExit relaunches the app AFTER the listener is stopped, so the new instance finds the UDP port free.
+    private bool _restartRequested;
 
     // True once the main window is on screen. Before that a dispatcher exception cannot be "shown and survived":
     // there is no window to keep running for.
@@ -38,7 +42,8 @@ public partial class App : Application
         _logger = _logging.Factory.CreateLogger<App>();
         AppLog.Starting(
             _logger,
-            Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown",
+            AppInfo.Name,
+            AppInfo.Version,
             RuntimeInformation.OSDescription,
             RuntimeInformation.FrameworkDescription);
 
@@ -60,24 +65,51 @@ public partial class App : Application
 
     private void ComposeAndShowMainWindow()
     {
-        // The factory (not an instance) lets Stop/Start rebuild the UDP listener and rebind the port.
+        var loggerFactory = _logging!.Factory;
+
+        // Settings first: the language must be applied BEFORE anything reads a localized string (see LanguageService).
+        // A missing or corrupt file is not an error here: the store logs it and hands back the defaults.
+        var store = new JsonSettingsStore(JsonSettingsStore.DefaultPath, loggerFactory.CreateLogger<JsonSettingsStore>());
+        _settings = new SettingsService(store, store.Load());
+        var culture = LanguageService.Apply(_settings.Current.Language);
+        AppLog.LanguageApplied(_logger, _settings.Current.Language.ToString(), culture.Name);
+
+        // The factory (not an instance) lets Stop/Start rebuild the UDP listener and rebind the port. It reads the port
+        // from the settings each time it builds one, so a port change only needs a Stop + Start (the shell does that).
         // The same ILoggerFactory feeds both the service and every listener the factory builds, so bind, first
         // datagram per sender and discarded-datagram messages land in the same file as the app's own events.
-        var loggerFactory = _logging!.Factory;
         var listenerLogger = loggerFactory.CreateLogger<UdpTelemetryListener>();
+        var settings = _settings;
         _telemetryService = new TelemetryService(
-            () => new UdpTelemetryListener(UdpTelemetryListener.DefaultPort, logger: listenerLogger),
+            () => new UdpTelemetryListener(settings.Current.UdpPort, logger: listenerLogger),
             loggerFactory.CreateLogger<TelemetryService>());
         _ticker = new DispatcherTimerTicker();
 
-        // The view model reads the adapters once (and logs what it read, now and on every later Start), so this
+        // Manual composition (no DI container): each object is built here with exactly what it needs. The units service
+        // follows the settings; the dashboard and tires read it; the Data Out object is shared by the top bar and the
+        // Settings guide, so both always show the same address and port.
+        var units = new UnitsService(_settings);
+        var clipboard = new WpfClipboardService();
+
+        // The data-out object reads the adapters once (and logs what it read, now and on every later Start), so this
         // root does not enumerate them a second time.
+        var dataOut = new DataOutViewModel(
+            _settings.Current.UdpPort, new NetworkInfo(), clipboard, loggerFactory.CreateLogger<DataOutViewModel>());
+        var settingsPage = new SettingsViewModel(
+            _settings,
+            dataOut,
+            _logging.LogDirectory ?? AppLogging.DefaultLogDirectory,
+            new ExplorerFolderOpener(loggerFactory.CreateLogger<ExplorerFolderOpener>()),
+            this);
         var viewModel = new ShellViewModel(
             _telemetryService,
             TimeProvider.System,
-            new NetworkInfo(),
-            loggerFactory.CreateLogger<ShellViewModel>(),
-            new WpfClipboardService());
+            logger: loggerFactory.CreateLogger<ShellViewModel>(),
+            clipboard: clipboard,
+            dashboard: new DashboardViewModel(units),
+            dataOut: dataOut,
+            settings: _settings,
+            settingsPage: settingsPage);
 
         // The ticker runs on the UI thread and calls Refresh, which pulls the latest packet into the bound properties.
         _refresh = viewModel.Refresh;
@@ -87,6 +119,24 @@ public partial class App : Application
         MainWindow = window;
         window.Show();
         _mainWindowShown = true;
+
+        // "Start listening when the app opens": run the same command as the Start button, after the window is up so a
+        // failure (port in use) shows as the normal red status instead of blocking startup.
+        if (_settings.Current.StartListeningOnLaunch)
+        {
+            viewModel.StartCommand.Execute(null);
+        }
+    }
+
+    /// <summary>
+    /// Restart request from Settings (language change). Shutdown() runs the normal exit path (OnExit), which stops the
+    /// listener and then, because of the flag, launches the new instance, so the two never fight over the UDP port.
+    /// </summary>
+    public void Restart()
+    {
+        AppLog.Restarting(_logger);
+        _restartRequested = true;
+        Shutdown();
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -108,11 +158,31 @@ public partial class App : Application
             AppLog.ShutdownStopFailed(_logger, ex);
         }
 
+        if (_restartRequested)
+        {
+            RelaunchSelf();
+        }
+
         // Last log call, then flush and close the file so the final lines are not lost with the process.
-        AppLog.Exiting(_logger);
+        AppLog.Exiting(_logger, AppInfo.Name);
         _logging?.Dispose();
 
         base.OnExit(e);
+    }
+
+    private void RelaunchSelf()
+    {
+        try
+        {
+            if (Environment.ProcessPath is { } path)
+            {
+                Process.Start(new ProcessStartInfo(path) { UseShellExecute = true })?.Dispose();
+            }
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            AppLog.RestartFailed(_logger, ex);
+        }
     }
 
     private void RegisterGlobalExceptionHandlers()

@@ -1,5 +1,7 @@
+using System.ComponentModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
+using ForzaTelemetry.App.Services;
 using ForzaTelemetry.Core;
 
 namespace ForzaTelemetry.App;
@@ -36,6 +38,8 @@ public sealed partial class DashboardViewModel : ObservableObject
     private double _peakTorqueNm = PeakTorqueFloorNm;
     private double _peakBoostPsi = PeakBoostFloorPsi;
     private int? _currentCarOrdinal;
+
+    private readonly UnitsService _units;
 
     // Telemetry numbers read best with a space as thousands separator ("7 439"), regardless of the user's culture.
     private static readonly NumberFormatInfo SpacedNumbers = new() { NumberGroupSeparator = " ", NumberDecimalDigits = 0 };
@@ -85,7 +89,9 @@ public sealed partial class DashboardViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(RpmReadout))]
     private float _maxRpm = DefaultMaxRpm;
 
+    // The speed is kept in km/h (what the packet carries and what the tests assert); SpeedReadout is what the screen shows.
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SpeedReadout))]
     private float _speedKmh;
 
     [ObservableProperty]
@@ -183,13 +189,38 @@ public sealed partial class DashboardViewModel : ObservableObject
     [ObservableProperty]
     private string _drivetrainLabel = "";
 
-    public TireViewModel FrontLeft { get; } = new();
+    /// <param name="units">Converts and labels speed and tire temperature; optional (metric) for tests and the designer.</param>
+    public DashboardViewModel(UnitsService? units = null)
+    {
+        _units = units ?? new UnitsService();
+        FrontLeft = new TireViewModel(_units);
+        FrontRight = new TireViewModel(_units);
+        RearLeft = new TireViewModel(_units);
+        RearRight = new TireViewModel(_units);
 
-    public TireViewModel FrontRight { get; } = new();
+        // The unit can change while the dashboard is on screen: re-announce the two properties that depend on it.
+        _units.PropertyChanged += OnUnitsChanged;
+    }
 
-    public TireViewModel RearLeft { get; } = new();
+    private void OnUnitsChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(SpeedReadout));
+        OnPropertyChanged(nameof(SpeedUnitLabel));
+    }
 
-    public TireViewModel RearRight { get; } = new();
+    public TireViewModel FrontLeft { get; }
+
+    public TireViewModel FrontRight { get; }
+
+    public TireViewModel RearLeft { get; }
+
+    public TireViewModel RearRight { get; }
+
+    /// <summary>The speed as whole-number text in the chosen unit (km/h or mph).</summary>
+    public string SpeedReadout => _units.FormatSpeed(SpeedKmh);
+
+    /// <summary>The unit label under the speed: <c>km/h</c> or <c>mph</c>.</summary>
+    public string SpeedUnitLabel => _units.SpeedLabel;
 
     /// <summary>Current and maximum RPM as one readout, for example <c>7 439 / 9 000</c>.</summary>
     public string RpmReadout => string.Create(SpacedNumbers, $"{Rpm:N0} / {MaxRpm:N0}");

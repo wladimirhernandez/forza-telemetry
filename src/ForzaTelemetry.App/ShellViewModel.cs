@@ -44,6 +44,7 @@ public sealed partial class ShellViewModel : ObservableObject
 
     private readonly TelemetryService _telemetryService;
     private readonly TimeProvider _timeProvider;
+    private readonly ILogger? _logger;
 
     // Used by Refresh to turn "packets received since last time" into a per-second rate.
     private long _receivedCountAtLastRefresh;
@@ -87,21 +88,40 @@ public sealed partial class ShellViewModel : ObservableObject
     /// <param name="logger">Receives the address list on every read (so the log shows what the user was told); optional.</param>
     /// <param name="clipboard">Target of the "copy IP" command; optional.</param>
     /// <param name="dashboard">The dashboard screen's view model; optional so only a test or the designer has to pass one.</param>
+    /// <param name="dataOut">
+    /// The address/port object shared with the Settings screen. Optional: when omitted the shell builds its own from
+    /// <paramref name="networkInfo"/>, <paramref name="clipboard"/> and <paramref name="logger"/>.
+    /// </param>
+    /// <param name="settings">
+    /// The live settings. When given, the shell restarts the listener if the UDP port changes; without it the port stays
+    /// the default.
+    /// </param>
+    /// <param name="settingsPage">The Settings screen's view model; when omitted that tab shows the "coming soon" placeholder.</param>
     public ShellViewModel(
         TelemetryService telemetryService,
         TimeProvider timeProvider,
         INetworkInfo? networkInfo = null,
         ILogger? logger = null,
         IClipboardService? clipboard = null,
-        DashboardViewModel? dashboard = null)
+        DashboardViewModel? dashboard = null,
+        DataOutViewModel? dataOut = null,
+        SettingsService? settings = null,
+        SettingsViewModel? settingsPage = null)
     {
         _telemetryService = telemetryService;
         _timeProvider = timeProvider;
+        _logger = logger;
         Dashboard = dashboard ?? new DashboardViewModel();
-        DataOut = new DataOutViewModel(UdpTelemetryListener.DefaultPort, networkInfo, clipboard, logger);
+        DataOut = dataOut
+            ?? new DataOutViewModel(settings?.Current.UdpPort ?? UdpTelemetryListener.DefaultPort, networkInfo, clipboard, logger);
 
-        Tabs = BuildTabs(Dashboard);
+        Tabs = BuildTabs(Dashboard, settingsPage);
         _selectedTab = Tabs[0];
+
+        if (settings is not null)
+        {
+            settings.Changed += OnSettingsChanged;
+        }
 
         _lastRefreshAt = timeProvider.GetUtcNow();
         _lastPacketArrivalAt = _lastRefreshAt;
@@ -159,7 +179,7 @@ public sealed partial class ShellViewModel : ObservableObject
         }
     }
 
-    private static List<NavigationItem> BuildTabs(DashboardViewModel dashboard)
+    private static List<NavigationItem> BuildTabs(DashboardViewModel dashboard, SettingsViewModel? settingsPage)
     {
         // The order here is the order on screen and the Ctrl+N numbering. Placeholders are replaced by the real
         // screen's view model as each screen ships; nothing else (template, strip, shortcuts) needs to change.
@@ -172,7 +192,9 @@ public sealed partial class ShellViewModel : ObservableObject
             Placeholder(PageId.Analysis, Strings.TabAnalysis, Strings.AnalysisPlaceholder, PageIcons.Analysis),
             Placeholder(PageId.Map, Strings.TabMap, Strings.MapPlaceholder, PageIcons.Map),
             Placeholder(PageId.Tuning, Strings.TabTuning, Strings.TuningPlaceholder, PageIcons.Tuning),
-            Placeholder(PageId.Settings, Strings.TabSettings, Strings.SettingsPlaceholder, PageIcons.Settings)
+            settingsPage is not null
+                ? (PageId.Settings, Strings.TabSettings, settingsPage)
+                : Placeholder(PageId.Settings, Strings.TabSettings, Strings.SettingsPlaceholder, PageIcons.Settings)
         ];
 
         return pages
@@ -285,18 +307,18 @@ public sealed partial class ShellViewModel : ObservableObject
         return silenceSoFar > NoDataThreshold ? ConnectionState.NoData : ConnectionState.Receiving;
     }
 
-    private static string DescribeStatus(ConnectionState state, TimeSpan silenceSoFar) => state switch
+    private string DescribeStatus(ConnectionState state, TimeSpan silenceSoFar) => state switch
     {
-        ConnectionState.Listening => string.Format(CultureInfo.CurrentCulture, Strings.StatusListening, UdpTelemetryListener.DefaultPort),
+        ConnectionState.Listening => string.Format(CultureInfo.CurrentCulture, Strings.StatusListening, DataOut.Port),
         ConnectionState.NoData => string.Format(CultureInfo.CurrentCulture, Strings.StatusNoData, silenceSoFar.TotalSeconds),
         ConnectionState.Receiving => Strings.StatusReceiving,
         _ => Strings.StatusStopped
     };
 
-    private static string DescribeFault(Exception fault) => fault switch
+    private string DescribeFault(Exception fault) => fault switch
     {
         SocketException { SocketErrorCode: SocketError.AddressAlreadyInUse } =>
-            string.Format(CultureInfo.CurrentCulture, Strings.ErrorPortInUse, UdpTelemetryListener.DefaultPort),
+            string.Format(CultureInfo.CurrentCulture, Strings.ErrorPortInUse, DataOut.Port),
         SocketException socketEx =>
             string.Format(CultureInfo.CurrentCulture, Strings.ErrorSocket, socketEx.SocketErrorCode, socketEx.Message),
         _ => string.Format(CultureInfo.CurrentCulture, Strings.ErrorGeneric, fault.Message)
@@ -343,6 +365,75 @@ public sealed partial class ShellViewModel : ObservableObject
             StartCommand.NotifyCanExecuteChanged();
             StopCommand.NotifyCanExecuteChanged();
         }
+
+        // A port change that arrived while this command was in flight was parked (see RestartListenerAsync): run it now.
+        if (_portRestartPending)
+        {
+            _portRestartPending = false;
+            await RestartListenerAsync();
+        }
+    }
+
+    // ---- Settings changes ---------------------------------------------------------------------------
+
+    // True when the port changed while another command was running, so the restart waits its turn.
+    private bool _portRestartPending;
+
+    /// <summary>
+    /// Reacts to a settings change. Only the UDP port matters here (units are applied by <see cref="UnitsService"/>, language
+    /// at startup): the pills must quote the new port, and a listener that is running must move to it.
+    /// </summary>
+    // async void is normally a smell (nobody can await it or observe its exception), but an event handler has to return
+    // void. Everything awaited inside is wrapped in a try/catch that logs, so nothing can escape unobserved.
+    private async void OnSettingsChanged(object? sender, SettingsChangedEventArgs e)
+    {
+        if (e.Previous.UdpPort == e.Current.UdpPort)
+        {
+            return;
+        }
+
+        if (_logger is not null)
+        {
+            AppLog.PortChanged(_logger, e.Previous.UdpPort, e.Current.UdpPort);
+        }
+
+        DataOut.Port = e.Current.UdpPort;
+
+        try
+        {
+            await RestartListenerAsync();
+        }
+        catch (Exception ex)
+        {
+            if (_logger is not null)
+            {
+                AppLog.PortRestartFailed(_logger, ex);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Moves a RUNNING listener to the port now in the settings by stopping and starting it through the same serialized
+    /// path as the Start/Stop buttons (so it cannot interleave with them). The listener factory reads the port when it
+    /// builds a new listener, so a plain Stop then Start is all it takes. If a command is already in flight, the restart is
+    /// parked and runs right after it. A stopped listener is left stopped: the next Start uses the new port.
+    /// </summary>
+    private async Task RestartListenerAsync()
+    {
+        if (IsBusy)
+        {
+            _portRestartPending = true;
+            return;
+        }
+
+        await RunExclusiveAsync(async () =>
+        {
+            if (_telemetryService.IsRunning)
+            {
+                await StopCoreAsync();
+                await StartCoreAsync();
+            }
+        });
     }
 
     // [RelayCommand]: CommunityToolkit.Mvvm's source generator turns this method into a public
