@@ -46,8 +46,15 @@ public sealed record BrakingSnapshot(
 /// WITHOUT the brake (coasting) disarms until the car speeds up again, otherwise a later tap of the pedal at
 /// 60 km/h would be reported as a 100-0 run.</para>
 ///
-/// <para><b>Aborts.</b> Throttle above 10% during the stop, reverse gear, IsRaceOn false, a game-clock rewind or
-/// speed climbing back above 100 km/h discard the run; the previous completed result stays on screen.</para>
+/// <para><b>Aborts.</b> Throttle above 10% during the stop, reverse gear, IsRaceOn false, a game-clock rewind,
+/// speed climbing back above 100 km/h, or the brake staying under 30% for 0.3 s of game time (coasting or
+/// engine braking is not a braking test) discard the run; the previous completed result stays on screen.
+/// While a run is in progress <see cref="Current"/> shows THAT run's partials (no results yet, live elapsed
+/// time), like <see cref="AccelerationTimer"/>, never the previous run's numbers.</para>
+///
+/// <para><b>Menus.</b> A packet with IsRaceOn false never flips a completed result to Idle: results stay
+/// visible, and a state that is already settled is not republished, so a menu streaming packets allocates
+/// nothing.</para>
 ///
 /// <para><b>Both variants from one stop.</b> 60 mph (96.56 km/h) is just a second line on the same deceleration,
 /// crossed a moment after 100 km/h. The run records the time and distance at each crossing and subtracts them
@@ -67,10 +74,16 @@ public sealed record BrakingSnapshot(
 /// </remarks>
 public sealed class BrakingTest : IPacketObserver
 {
-    private const double StandstillMs = 1.0 / 3.6;
-    private const double ArmSpeedMs = 105.0 / 3.6;
-    private const double StartSpeedMs = 100.0 / 3.6;
-    private const double SixtyMphMs = 60.0 * AccelerationTimer.KmhPerMph / 3.6;
+    private const double StandstillMs = SpeedCrossing.StandstillMs;
+    private static readonly double ArmSpeedMs = SpeedCrossing.KmhToMs(105);
+    private static readonly double StartSpeedMs = SpeedCrossing.KmhToMs(100);
+    private static readonly double SixtyMphMs = SpeedCrossing.MphToMs(60);
+
+    /// <summary>Brake below this raw value (77 of 255, about 30%) counts as "released".</summary>
+    private const byte BrakeReleased = 77;
+
+    /// <summary>How long (game ms) the brake may stay released before the run is discarded.</summary>
+    private const double ReleaseHoldMs = 300;
 
     /// <summary>Brake at or above this raw value (128 of 255, about 50%) counts as hard braking.</summary>
     private const byte HardBrake = 128;
@@ -90,6 +103,7 @@ public sealed class BrakingTest : IPacketObserver
     private double _latestTimeMs;
     private double? _sixtyTimeMs;
     private double? _sixtyDistance;
+    private double? _brakeReleasedSinceMs;
 
     /// <summary>The current snapshot (built on read while braking); safe to read from any thread.</summary>
     public BrakingSnapshot Current
@@ -99,11 +113,13 @@ public sealed class BrakingTest : IPacketObserver
             lock (_gate)
             {
                 return _state == BrakingState.Braking
-                    ? _lastCompleted with
-                    {
-                        State = BrakingState.Braking,
-                        ElapsedSeconds = Math.Max(0, (_latestTimeMs - _startTimeMs) / 1000.0),
-                    }
+                    ? new BrakingSnapshot(
+                        BrakingState.Braking,
+                        Math.Max(0, (_latestTimeMs - _startTimeMs) / 1000.0),
+                        null,
+                        null,
+                        null,
+                        null)
                     : _published;
             }
         }
@@ -145,6 +161,11 @@ public sealed class BrakingTest : IPacketObserver
         {
             _previous = null; // no interpolation across a pause/menu gap
             Abort(packet);
+            if (_state == BrakingState.Armed)
+            {
+                Settle(BrakingState.Idle); // not racing: nothing to arm for (a Done result stays visible)
+            }
+
             return;
         }
 
@@ -186,6 +207,10 @@ public sealed class BrakingTest : IPacketObserver
                 {
                     Abort(packet);
                 }
+                else if (BrakeLetGo(packet))
+                {
+                    Abort(packet);
+                }
                 else if (previous is not null)
                 {
                     Advance(previous, packet);
@@ -193,6 +218,19 @@ public sealed class BrakingTest : IPacketObserver
 
                 break;
         }
+    }
+
+    /// <summary>True once the brake has stayed released for <see cref="ReleaseHoldMs"/> of game time.</summary>
+    private bool BrakeLetGo(TelemetryPacket packet)
+    {
+        if (packet.Brake >= BrakeReleased)
+        {
+            _brakeReleasedSinceMs = null;
+            return false;
+        }
+
+        _brakeReleasedSinceMs ??= packet.TimestampMS;
+        return packet.TimestampMS - _brakeReleasedSinceMs >= ReleaseHoldMs;
     }
 
     private void TryArm(TelemetryPacket packet)
@@ -209,9 +247,8 @@ public sealed class BrakingTest : IPacketObserver
         ClearRun();
         _state = BrakingState.Braking;
 
-        var fraction = Fraction(previous.Speed, current.Speed, StartSpeedMs);
-        _startTimeMs = Lerp(previous.TimestampMS, current.TimestampMS, fraction);
-        _startDistance = Lerp(previous.DistanceTraveled, current.DistanceTraveled, fraction);
+        _startTimeMs = SpeedCrossing.TimeMs(previous, current, StartSpeedMs);
+        _startDistance = SpeedCrossing.Distance(previous, current, StartSpeedMs);
         _latestTimeMs = current.TimestampMS;
     }
 
@@ -227,17 +264,15 @@ public sealed class BrakingTest : IPacketObserver
 
         if (_sixtyTimeMs is null && v0 >= SixtyMphMs && v1 < SixtyMphMs)
         {
-            var f = Fraction(v0, v1, SixtyMphMs);
-            _sixtyTimeMs = Lerp(previous.TimestampMS, current.TimestampMS, f);
-            _sixtyDistance = Lerp(previous.DistanceTraveled, current.DistanceTraveled, f);
+            _sixtyTimeMs = SpeedCrossing.TimeMs(previous, current, SixtyMphMs);
+            _sixtyDistance = SpeedCrossing.Distance(previous, current, SixtyMphMs);
         }
 
         if (v1 < StandstillMs)
         {
-            var f = Fraction(v0, v1, StandstillMs);
-            var stopTimeMs = Lerp(previous.TimestampMS, current.TimestampMS, f);
-            var stopDistance = Lerp(previous.DistanceTraveled, current.DistanceTraveled, f);
-            Finish(stopTimeMs, stopDistance);
+            Finish(
+                SpeedCrossing.TimeMs(previous, current, StandstillMs),
+                SpeedCrossing.Distance(previous, current, StandstillMs));
             return;
         }
 
@@ -262,6 +297,11 @@ public sealed class BrakingTest : IPacketObserver
     /// <summary>Drops a run in progress (the previous completed result stays) and re-evaluates arming on this packet.</summary>
     private void Abort(TelemetryPacket packet)
     {
+        if (_state == BrakingState.Done)
+        {
+            return; // a finished result is never flipped back by a menu packet or a rewind
+        }
+
         ClearRun();
         var armed = packet.IsRaceOn && packet.Speed >= ArmSpeedMs && packet.Gear != 0;
         Settle(armed ? BrakingState.Armed : BrakingState.Idle);
@@ -269,6 +309,11 @@ public sealed class BrakingTest : IPacketObserver
 
     private void Settle(BrakingState state)
     {
+        if (_state == state && _published.State == state)
+        {
+            return; // already settled: no allocation, no republish
+        }
+
         _state = state;
         _published = _lastCompleted with { State = state };
     }
@@ -277,11 +322,6 @@ public sealed class BrakingTest : IPacketObserver
     {
         _sixtyTimeMs = null;
         _sixtyDistance = null;
+        _brakeReleasedSinceMs = null;
     }
-
-    /// <summary>Fraction of the interval (0..1) at which a falling speed crossed <paramref name="target"/>.</summary>
-    private static double Fraction(double v0, double v1, double target) =>
-        v0 > v1 ? Math.Clamp((v0 - target) / (v0 - v1), 0, 1) : 1;
-
-    private static double Lerp(double a, double b, double fraction) => a + (fraction * (b - a));
 }

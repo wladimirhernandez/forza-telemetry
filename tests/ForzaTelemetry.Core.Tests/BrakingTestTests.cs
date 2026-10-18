@@ -22,7 +22,8 @@ public class BrakingTestTests
         uint stepMs = 20,
         byte brake = HardBrake,
         byte accel = 0,
-        byte gear = 3)
+        byte gear = 3,
+        Func<double, byte>? brakeAt = null)
     {
         var v0 = cruiseKmh / 3.6;
         const uint cruiseMs = 1000;
@@ -42,7 +43,7 @@ public class BrakingTestTests
             var tt = Math.Min(t, stopT);
             var speed = Math.Max(0, v0 - (Decel * t));
             var d = cruiseDistance + (v0 * tt) - (0.5 * Decel * tt * tt);
-            test.OnPacket(TestPackets.Drive(ms, (float)speed, (float)d, gear) with { Brake = brake, Accel = accel });
+            test.OnPacket(TestPackets.Drive(ms, (float)speed, (float)d, gear) with { Brake = brakeAt?.Invoke(t) ?? brake, Accel = accel });
         }
 
         return ms;
@@ -292,5 +293,84 @@ public class BrakingTestTests
         Run(test);
 
         Assert.Equal(test.Current, test.Current);
+    }
+
+    [Fact]
+    public void Releasing_the_brake_for_over_300_ms_aborts_the_run()
+    {
+        var test = new BrakingTest();
+
+        Run(test, brakeAt: t => t is >= 1.0 and < 1.5 ? (byte)0 : HardBrake);
+
+        Assert.NotEqual(BrakingState.Done, test.Current.State);
+        Assert.Null(test.Current.HundredToZeroSeconds);
+    }
+
+    [Fact]
+    public void A_brief_brake_release_under_300_ms_does_not_abort()
+    {
+        var test = new BrakingTest();
+
+        Run(test, brakeAt: t => t is >= 1.0 and < 1.2 ? (byte)0 : HardBrake);
+
+        Assert.Equal(BrakingState.Done, test.Current.State);
+    }
+
+    [Fact]
+    public void Brake_at_30_percent_counts_as_applied()
+    {
+        var test = new BrakingTest();
+
+        Run(test, brakeAt: t => t >= 1.0 ? (byte)77 : HardBrake);
+
+        Assert.Equal(BrakingState.Done, test.Current.State);
+    }
+
+    [Fact]
+    public void While_braking_Current_shows_this_runs_partials_not_the_previous_result()
+    {
+        var test = new BrakingTest();
+        Run(test);
+        Assert.NotNull(test.Current.HundredToZeroMeters);
+
+        Run(test, brakeSeconds: 2); // second stop, still in progress (timestamps rewind: re-arms, then runs)
+
+        var snap = test.Current;
+        if (snap.State == BrakingState.Braking)
+        {
+            Assert.Null(snap.HundredToZeroMeters);
+            Assert.Null(snap.HundredToZeroSeconds);
+            Assert.True(snap.ElapsedSeconds > 0);
+        }
+        else
+        {
+            Assert.Fail($"expected Braking, got {snap.State}");
+        }
+    }
+
+    [Fact]
+    public void A_menu_packet_does_not_flip_or_republish_a_done_result()
+    {
+        var test = new BrakingTest();
+        var ms = Run(test);
+        var done = test.Current;
+
+        test.OnPacket(TestPackets.Drive(ms + 20, 0f, 500f) with { IsRaceOn = false });
+        test.OnPacket(TestPackets.Drive(ms + 40, 0f, 500f) with { IsRaceOn = false });
+
+        Assert.Equal(BrakingState.Done, test.Current.State);
+        Assert.Same(done, test.Current);
+    }
+
+    [Fact]
+    public void Repeated_menu_packets_republish_nothing_when_idle()
+    {
+        var test = new BrakingTest();
+        test.OnPacket(TestPackets.Drive(0, 0f, 0f) with { IsRaceOn = false });
+        var before = test.Current;
+
+        test.OnPacket(TestPackets.Drive(20, 0f, 0f) with { IsRaceOn = false });
+
+        Assert.Same(before, test.Current);
     }
 }

@@ -29,8 +29,10 @@ public enum AccelerationState
 /// <param name="ZeroTo60MphSeconds">0-60 mph time (96.56 km/h).</param>
 /// <param name="SixtyTo130MphSeconds">60-130 mph time, from the same run.</param>
 /// <remarks>
-/// The last three parameters were added after the first release and DEFAULT to null so existing callers of the
-/// positional constructor (and <c>with</c> expressions) keep compiling and behaving the same.
+/// The last three parameters were added after the first release and DEFAULT to null, so positional and named
+/// construction and <c>with</c> expressions within this solution keep compiling and behaving the same. It is NOT
+/// fully compatible: <c>Deconstruct</c> gained three outputs and the constructor's binary signature changed,
+/// which is acceptable because the whole app is one set of projects built together.
 /// </remarks>
 public sealed record AccelerationSnapshot(
     AccelerationState State,
