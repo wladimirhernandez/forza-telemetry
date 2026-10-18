@@ -37,10 +37,17 @@ public enum PerformanceSortColumn
     /// <summary>Most recently improved first (the default).</summary>
     Recent,
     Car,
+
+    /// <summary>The first acceleration column: 0-100 km/h, or 0-60 mph while the speed unit is mph.</summary>
     ZeroTo100,
+
+    /// <summary>The second acceleration column: 0-200 km/h, or 60-130 mph while the speed unit is mph.</summary>
     ZeroTo200,
     QuarterMile,
-    TopSpeed
+    TopSpeed,
+
+    /// <summary>Shortest braking distance first (100-0 km/h, or 60-0 mph while the speed unit is mph).</summary>
+    Braking
 }
 
 /// <summary>
@@ -48,31 +55,45 @@ public enum PerformanceSortColumn
 /// quarter mile is two values (the time and the speed at the line), kept apart so the table can stack them in two lines
 /// instead of joining them with a separator character.
 /// </summary>
+/// <remarks>
+/// The table shows the acceleration windows of the SELECTED unit (<see cref="WindowAText"/>, <see cref="WindowBText"/>) and one
+/// braking column; every other stored best (the rolling 100-200 km/h, the other unit's windows, the second braking distance) is in
+/// <see cref="Details"/>, the row's tooltip and its screen-reader sentence, so the table stays readable without hiding anything.
+/// </remarks>
 public sealed record CarPerformanceRow(
     string CarLabel,
     string ClassLabel,
     string PerformanceIndexText,
     string DrivetrainLabel,
-    string ZeroTo100Text,
-    string ZeroTo200Text,
+    string WindowAText,
+    string WindowBText,
     string QuarterMileText,
     string QuarterMileTrapText,
     string TopSpeedText,
+    string BrakingText,
     string UpdatedText,
     bool IsCurrentCar,
-    int CarOrdinal = 0)
+    int CarOrdinal = 0,
+    IReadOnlyList<string>? Details = null)
 {
+    /// <summary>Every stored best of this car, one "title: value" line each (empty when nothing was measured).</summary>
+    public IReadOnlyList<string> DetailLines { get; } = Details ?? [];
+
+    /// <summary>The detail lines as a multi-line tooltip.</summary>
+    public string DetailsTooltip => string.Join(Environment.NewLine, DetailLines);
+
     /// <summary>What a screen reader announces for the row's rename button: "Rename Daily GT".</summary>
     public string RenameName => string.Format(System.Globalization.CultureInfo.CurrentCulture, CarNameStrings.CarRenameRowName, CarLabel);
 
-    /// <summary>The whole row as one sentence for screen readers (a row of five numbers means little read cell by cell).</summary>
+    /// <summary>The whole row as one sentence for screen readers (a row of numbers means little read cell by cell): every stored best, with its name.</summary>
     public string Summary =>
-        $"{CarLabel}, {ClassLabel} {PerformanceIndexText}, {DrivetrainLabel}. 0-100: {ZeroTo100Text}. 0-200: {ZeroTo200Text}. "
-        + $"{(QuarterMileTrapText.Length > 0 ? QuarterMileText + ", " + QuarterMileTrapText : QuarterMileText)}. {TopSpeedText}. {UpdatedText}";
+        $"{CarLabel}, {ClassLabel} {PerformanceIndexText}, {DrivetrainLabel}. "
+        + (DetailLines.Count > 0 ? string.Join(". ", DetailLines) + ". " : "")
+        + UpdatedText;
 }
 
 /// <summary>
-/// The Performance screen: the live 0-100 / 0-200 / quarter-mile / top-speed cards, the run state, and the best results per car.
+/// The Performance screen: the live acceleration, quarter-mile, top-speed and braking cards, the run state, and the best results per car.
 /// </summary>
 /// <remarks>
 /// <b>Where the numbers come from.</b> The timing is done by <see cref="AccelerationTimer"/> and
@@ -87,10 +108,16 @@ public sealed record CarPerformanceRow(
 /// the session ends; <see cref="PerformanceHistoryStore.Flush"/> then writes the file.
 /// </para>
 /// <para>
-/// <b>Units.</b> The runs are defined in metric (0-100 and 0-200 km/h): that is what the engine measures and what the
-/// car community quotes worldwide. The SPEEDS shown (line speed, top speed) follow the unit setting. In mph the cards keep
-/// their km/h titles, and a note says the thresholds are about 62 and 124 mph, rather than silently changing what is timed
-/// (a "0-60 mph" card would be a different, shorter run, and would need its own line in the engine).
+/// <b>Units.</b> One run measures every window at once (0-100, 0-200, 100-200 km/h; 0-60, 60-130 mph; see
+/// <see cref="AccelerationTimer"/>), so the unit setting only chooses WHICH ones the page leads with: in km/h the cards are 0-100 and
+/// 0-200 km/h and the extra tile is the rolling 100-200 km/h; in mph they are 0-60 and 60-130 mph and the extra tile keeps the
+/// 0-100 km/h reference. Speeds and the braking distance (meters, or feet with mph) follow the unit as well, and nothing is
+/// re-measured when it changes. The table and the saved history hold every window whichever unit is showing.
+/// </para>
+/// <para>
+/// <b>Braking</b> is a second, independent test (<see cref="BrakingTest"/>: armed above 105 km/h, measured from the 100 km/h line
+/// to a stop). It has its own run edge here, like the acceleration one: when a stop finishes with a result, its distances are saved
+/// under the car that started it.
 /// </para>
 /// </remarks>
 public sealed partial class PerformanceViewModel : ObservableObject
@@ -101,6 +128,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
     private const string NoValue = "--";
 
     private readonly AccelerationTimer _acceleration;
+    private readonly BrakingTest? _braking;
     private readonly TopSpeedTracker _topSpeed;
     private readonly CarChangeDetector _carChanges;
     private readonly PerformanceHistoryStore _history;
@@ -119,6 +147,12 @@ public sealed partial class PerformanceViewModel : ObservableObject
     private CarKey? _runCar;
     private bool _aborted;
 
+    // The same edge detection for the braking test: a stop that finished with a distance is saved under the car that began it.
+    private bool _wasBraking;
+    private BrakeResults _restingBrake;
+    private BrakeResults _brakeBeforeRun;
+    private CarKey? _brakeCar;
+
     // The last top speed folded into the history for the current car.
     private double _mergedTopSpeedKmh;
 
@@ -126,10 +160,20 @@ public sealed partial class PerformanceViewModel : ObservableObject
     private readonly CarRenameViewModel? _carRename;
 
     private AccelerationSnapshot _snapshot = AccelerationSnapshot.Empty;
+    private BrakingSnapshot _brakingSnapshot = BrakingSnapshot.Empty;
     private double _topSpeedKmh;
     private bool _live;
 
-    private readonly record struct Results(double? ZeroTo100, double? ZeroTo200, double? Quarter, double? Trap);
+    private readonly record struct Results(
+        double? ZeroTo100,
+        double? ZeroTo200,
+        double? Quarter,
+        double? Trap,
+        double? HundredTo200,
+        double? ZeroTo60Mph,
+        double? SixtyTo130Mph);
+
+    private readonly record struct BrakeResults(double? Meters100, double? Seconds100, double? MetersSixtyMph, double? SecondsSixtyMph);
 
     /// <param name="acceleration">The engine that times the runs (fed by the receive loop).</param>
     /// <param name="topSpeed">The engine that tracks the session top speed (fed by the receive loop).</param>
@@ -139,6 +183,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
     /// <param name="confirmation">Asks before the history is cleared; optional (clearing then needs no confirmation, for tests).</param>
     /// <param name="carNames">The player's car nicknames, shown wherever a car is named; optional (cars then show as "Car #1234").</param>
     /// <param name="carRename">The shared rename box the rename buttons open; optional (the buttons then do nothing).</param>
+    /// <param name="braking">The engine that measures the braking distance (fed by the receive loop); optional (the braking tile then stays empty).</param>
     public PerformanceViewModel(
         AccelerationTimer acceleration,
         TopSpeedTracker topSpeed,
@@ -147,8 +192,10 @@ public sealed partial class PerformanceViewModel : ObservableObject
         UnitsService? units = null,
         IConfirmationService? confirmation = null,
         CarNameStore? carNames = null,
-        CarRenameViewModel? carRename = null)
+        CarRenameViewModel? carRename = null,
+        BrakingTest? braking = null)
     {
+        _braking = braking;
         _carNames = carNames;
         _carRename = carRename;
         _acceleration = acceleration;
@@ -205,16 +252,36 @@ public sealed partial class PerformanceViewModel : ObservableObject
 
     // ---- Result cards -------------------------------------------------------------------------------------
 
-    // [NotifyPropertyChangedFor]: each card's screen-reader name is derived from its value text. Declaring that here means the
-    // name is announced as changed exactly when the value changed, instead of the 20 Hz refresh raising four notifications
-    // (and four binding updates) whether or not anything moved.
+    // The page shows its acceleration windows through three SLOTS (window A, window B, the extra tile) whose text, title, name and
+    // "new best" flag come from whichever measured value the unit setting selects. [NotifyPropertyChangedFor] on each measured value
+    // announces exactly the slot properties derived from it, so the 20 Hz refresh raises a notification only when something moved
+    // (and a name is announced as changed exactly when its value changed).
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ZeroTo100Name))]
+    [NotifyPropertyChangedFor(nameof(WindowAText))]
+    [NotifyPropertyChangedFor(nameof(WindowAName))]
+    [NotifyPropertyChangedFor(nameof(ExtraWindowText))]
+    [NotifyPropertyChangedFor(nameof(ExtraWindowName))]
     private string _zeroTo100Text = NoValue;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ZeroTo200Name))]
+    [NotifyPropertyChangedFor(nameof(WindowBText))]
+    [NotifyPropertyChangedFor(nameof(WindowBName))]
     private string _zeroTo200Text = NoValue;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ExtraWindowText))]
+    [NotifyPropertyChangedFor(nameof(ExtraWindowName))]
+    private string _hundredTo200Text = NoValue;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WindowAText))]
+    [NotifyPropertyChangedFor(nameof(WindowAName))]
+    private string _zeroTo60MphText = NoValue;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WindowBText))]
+    [NotifyPropertyChangedFor(nameof(WindowBName))]
+    private string _sixtyTo130MphText = NoValue;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(QuarterMileName))]
@@ -234,10 +301,25 @@ public sealed partial class PerformanceViewModel : ObservableObject
 
     // "New best": the value of the run that just ended beat an earlier best of this car. Cleared when the next run starts.
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WindowAIsNewBest))]
+    [NotifyPropertyChangedFor(nameof(ExtraWindowIsNewBest))]
     private bool _zeroTo100IsNewBest;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WindowBIsNewBest))]
     private bool _zeroTo200IsNewBest;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ExtraWindowIsNewBest))]
+    private bool _hundredTo200IsNewBest;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WindowAIsNewBest))]
+    private bool _zeroTo60MphIsNewBest;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WindowBIsNewBest))]
+    private bool _sixtyTo130MphIsNewBest;
 
     [ObservableProperty]
     private bool _quarterMileIsNewBest;
@@ -245,13 +327,81 @@ public sealed partial class PerformanceViewModel : ObservableObject
     [ObservableProperty]
     private bool _topSpeedIsNewBest;
 
-    /// <summary>True in mph: the note that the runs are still timed to 100 and 200 km/h is shown (see the class remarks).</summary>
-    public bool ShowThresholdNote => _units.SpeedUnit == SpeedUnit.Mph;
+    private bool IsMph => _units.SpeedUnit == SpeedUnit.Mph;
 
-    // Card names for screen readers, with the value spoken, e.g. "0-100 km/h: 2.84 seconds".
-    public string ZeroTo100Name => $"{Strings.PerfTitle100}: {ZeroTo100Text}";
+    // ---- The three acceleration slots (see the class remarks, "Units") ------------------------------------
 
-    public string ZeroTo200Name => $"{Strings.PerfTitle200}: {ZeroTo200Text}";
+    /// <summary>First card: 0-100 km/h, or 0-60 mph with mph.</summary>
+    public string WindowATitle => IsMph ? Strings.PerfTitle60Mph : Strings.PerfTitle100;
+
+    public string WindowAText => IsMph ? ZeroTo60MphText : ZeroTo100Text;
+
+    public bool WindowAIsNewBest => IsMph ? ZeroTo60MphIsNewBest : ZeroTo100IsNewBest;
+
+    // Card names for screen readers, with the value spoken, e.g. "0-100 km/h: 2.84".
+    public string WindowAName => $"{WindowATitle}: {WindowAText}";
+
+    /// <summary>Second card: 0-200 km/h, or 60-130 mph with mph.</summary>
+    public string WindowBTitle => IsMph ? Strings.PerfTitle60To130Mph : Strings.PerfTitle200;
+
+    public string WindowBText => IsMph ? SixtyTo130MphText : ZeroTo200Text;
+
+    public bool WindowBIsNewBest => IsMph ? SixtyTo130MphIsNewBest : ZeroTo200IsNewBest;
+
+    public string WindowBName => $"{WindowBTitle}: {WindowBText}";
+
+    /// <summary>The compact tile: the rolling 100-200 km/h, or with mph the 0-100 km/h reference the cards no longer lead with.</summary>
+    public string ExtraWindowTitle => IsMph ? Strings.PerfTitle100 : Strings.PerfTitle100To200;
+
+    public string ExtraWindowText => IsMph ? ZeroTo100Text : HundredTo200Text;
+
+    public bool ExtraWindowIsNewBest => IsMph ? ZeroTo100IsNewBest : HundredTo200IsNewBest;
+
+    public string ExtraWindowName => $"{ExtraWindowTitle}: {ExtraWindowText}";
+
+    // ---- Braking tile ---------------------------------------------------------------------------------------------
+
+    /// <summary>The braking distance without its unit (<c>38.4</c>, or whole feet), <c>--</c> until a stop was measured.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BrakingName))]
+    private string _brakingDistanceText = NoValue;
+
+    /// <summary>Seconds the stop took (the live elapsed time while braking), <c>--</c> until measured; the view adds the unit.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BrakingName))]
+    private string _brakingTimeText = NoValue;
+
+    /// <summary>The braking test's own state line: how to arm it, that it is armed, braking, or done.</summary>
+    [ObservableProperty]
+    private string _brakingStateText = Strings.PerfStateWaiting;
+
+    /// <summary>The dot colour of the braking state line (the same closed set as the run state: Braking reads as <see cref="PerformanceRunState.Running"/>).</summary>
+    [ObservableProperty]
+    private PerformanceRunState _brakingRunState = PerformanceRunState.WaitingForData;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BrakingIsNewBest))]
+    private bool _brakeHundredIsNewBest;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BrakingIsNewBest))]
+    private bool _brakeSixtyMphIsNewBest;
+
+    /// <summary>Title of the tile: <c>Braking 100-0 km/h</c>, or <c>Braking 60-0 mph</c> with mph.</summary>
+    public string BrakingTitle => IsMph ? Strings.PerfTitleBrake60Mph : Strings.PerfTitleBrake100;
+
+    /// <summary>The unit under the distance: <c>m</c>, or <c>ft</c> with mph.</summary>
+    public string DistanceUnitLabel => _units.DistanceLabel;
+
+    public bool BrakingIsNewBest => IsMph ? BrakeSixtyMphIsNewBest : BrakeHundredIsNewBest;
+
+    public string BrakingName => $"{BrakingTitle}: {BrakingDistanceText} {DistanceUnitLabel}, {BrakingTimeText}";
+
+    // ---- Table column titles (they follow the unit like the cards) -----------------------------------------------
+
+    public string WindowAColumnTitle => IsMph ? Strings.PerfColZeroTo60Mph : Strings.PerfColZeroTo100;
+
+    public string WindowBColumnTitle => IsMph ? Strings.PerfColSixtyTo130Mph : Strings.PerfColZeroTo200;
 
     public string QuarterMileName => $"{Strings.PerfTitleQuarter}: {QuarterMileText} {QuarterMileTrapText}".TrimEnd();
 
@@ -304,6 +454,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsSortedByZeroTo200))]
     [NotifyPropertyChangedFor(nameof(IsSortedByQuarterMile))]
     [NotifyPropertyChangedFor(nameof(IsSortedByTopSpeed))]
+    [NotifyPropertyChangedFor(nameof(IsSortedByBraking))]
     private PerformanceSortColumn _sortColumn = PerformanceSortColumn.Recent;
 
     public bool IsSortedByRecent => SortColumn == PerformanceSortColumn.Recent;
@@ -317,6 +468,8 @@ public sealed partial class PerformanceViewModel : ObservableObject
     public bool IsSortedByQuarterMile => SortColumn == PerformanceSortColumn.QuarterMile;
 
     public bool IsSortedByTopSpeed => SortColumn == PerformanceSortColumn.TopSpeed;
+
+    public bool IsSortedByBraking => SortColumn == PerformanceSortColumn.Braking;
 
     partial void OnSortColumnChanged(PerformanceSortColumn value) => RebuildRows();
 
@@ -355,6 +508,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
         _carChanges.RequestEngineReset();
         ForgetRun();
         _snapshot = AccelerationSnapshot.Empty;
+        _brakingSnapshot = BrakingSnapshot.Empty;
         _topSpeedKmh = 0;
         Show();
     }
@@ -395,6 +549,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
         _live = false;
         ForgetRun();
         _snapshot = AccelerationSnapshot.Empty;
+        _brakingSnapshot = BrakingSnapshot.Empty;
         _topSpeedKmh = 0;
         SetCar(null);
         Show();
@@ -425,6 +580,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
         if (ReadEngines())
         {
             TrackRun(_snapshot);
+            TrackBraking(_brakingSnapshot);
             SaveTopSpeedWhenSettled(latest);
         }
 
@@ -457,6 +613,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
         // A reset the receive loop has not carried out yet (see ResetRun) means the engines are, for the user, already empty.
         var resetPending = _carChanges.HasPendingEngineReset;
         var snapshot = resetPending ? AccelerationSnapshot.Empty : _acceleration.Current;
+        var braking = resetPending || _braking is null ? BrakingSnapshot.Empty : _braking.Current;
         var topSpeedKmh = resetPending ? 0 : _topSpeed.TopSpeedKmh;
         if (_carChanges.Generation != generation)
         {
@@ -464,6 +621,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
         }
 
         _snapshot = snapshot;
+        _brakingSnapshot = braking;
         _topSpeedKmh = topSpeedKmh;
         return true;
     }
@@ -500,6 +658,7 @@ public sealed partial class PerformanceViewModel : ObservableObject
 
             // What the screen last read belongs to the previous car; the engines were reset for this one.
             _snapshot = AccelerationSnapshot.Empty;
+            _brakingSnapshot = BrakingSnapshot.Empty;
             _topSpeedKmh = 0;
             SetCar(change.Car);
         }
@@ -568,7 +727,17 @@ public sealed partial class PerformanceViewModel : ObservableObject
     // ---- Runs and saving --------------------------------------------------------------------------------
 
     private static Results ResultsOf(AccelerationSnapshot s) =>
-        new(s.ZeroTo100KmhSeconds, s.ZeroTo200KmhSeconds, s.QuarterMileSeconds, s.QuarterMileTrapSpeedKmh);
+        new(
+            s.ZeroTo100KmhSeconds,
+            s.ZeroTo200KmhSeconds,
+            s.QuarterMileSeconds,
+            s.QuarterMileTrapSpeedKmh,
+            s.HundredTo200KmhSeconds,
+            s.ZeroTo60MphSeconds,
+            s.SixtyTo130MphSeconds);
+
+    private static BrakeResults BrakeResultsOf(BrakingSnapshot s) =>
+        new(s.HundredToZeroMeters, s.HundredToZeroSeconds, s.SixtyToZeroMphMeters, s.SixtyToZeroMphSeconds);
 
     private void TrackRun(AccelerationSnapshot snapshot)
     {
@@ -614,7 +783,14 @@ public sealed partial class PerformanceViewModel : ObservableObject
                 _carClass,
                 _drivetrain,
                 new PerformanceResult(
-                    results.ZeroTo100, results.ZeroTo200, results.Quarter, results.Trap, PositiveOrNull(_topSpeedKmh)));
+                    results.ZeroTo100,
+                    results.ZeroTo200,
+                    results.Quarter,
+                    results.Trap,
+                    PositiveOrNull(_topSpeedKmh),
+                    results.HundredTo200,
+                    results.ZeroTo60Mph,
+                    results.SixtyTo130Mph));
             _mergedTopSpeedKmh = Math.Max(_mergedTopSpeedKmh, _topSpeedKmh);
             FlushIfLive();
 
@@ -622,7 +798,59 @@ public sealed partial class PerformanceViewModel : ObservableObject
             ZeroTo200IsNewBest = improved.ZeroTo200;
             QuarterMileIsNewBest = improved.QuarterMile;
             TopSpeedIsNewBest = improved.TopSpeed;
+            HundredTo200IsNewBest = improved.HundredTo200;
+            ZeroTo60MphIsNewBest = improved.ZeroTo60Mph;
+            SixtyTo130MphIsNewBest = improved.SixtyTo130Mph;
         }
+    }
+
+    /// <summary>
+    /// The braking counterpart of <see cref="TrackRun"/>: a stop that is measured becomes a saved result when it ENDS, under the car
+    /// that was driven when it began. A stop the engine dropped (the brake was released, the throttle came back) leaves the previous
+    /// result on screen and saves nothing.
+    /// </summary>
+    private void TrackBraking(BrakingSnapshot snapshot)
+    {
+        var braking = snapshot.State == BrakingState.Braking;
+
+        if (braking && !_wasBraking)
+        {
+            _brakeCar = _car;
+            _brakeBeforeRun = _restingBrake;
+            BrakeHundredIsNewBest = false;
+            BrakeSixtyMphIsNewBest = false;
+        }
+        else if (!braking && _wasBraking)
+        {
+            FinishBraking(snapshot);
+        }
+
+        if (!braking)
+        {
+            _restingBrake = BrakeResultsOf(snapshot);
+        }
+
+        _wasBraking = braking;
+    }
+
+    private void FinishBraking(BrakingSnapshot snapshot)
+    {
+        var results = BrakeResultsOf(snapshot);
+        if (results == _brakeBeforeRun || _brakeCar is not { } car)
+        {
+            return; // dropped (nothing new was measured): the old result is still showing and nothing is saved
+        }
+
+        var improved = MergeIfLive(
+            car,
+            _carClass,
+            _drivetrain,
+            new PerformanceResult(
+                null, null, null, null, null, BrakeHundredMeters: results.Meters100, BrakeSixtyMphMeters: results.MetersSixtyMph));
+        FlushIfLive();
+
+        BrakeHundredIsNewBest = improved.BrakeHundred;
+        BrakeSixtyMphIsNewBest = improved.BrakeSixtyMph;
     }
 
     /// <summary>
@@ -678,6 +906,12 @@ public sealed partial class PerformanceViewModel : ObservableObject
         _runCar = null;
         _aborted = false;
         _mergedTopSpeedKmh = 0;
+        _wasBraking = false;
+        _restingBrake = default;
+        _brakeBeforeRun = default;
+        _brakeCar = null;
+        BrakeHundredIsNewBest = false;
+        BrakeSixtyMphIsNewBest = false;
         ClearNewBest();
     }
 
@@ -687,6 +921,9 @@ public sealed partial class PerformanceViewModel : ObservableObject
         ZeroTo200IsNewBest = false;
         QuarterMileIsNewBest = false;
         TopSpeedIsNewBest = false;
+        HundredTo200IsNewBest = false;
+        ZeroTo60MphIsNewBest = false;
+        SixtyTo130MphIsNewBest = false;
     }
 
     // ---- Display ----------------------------------------------------------------------------------------
@@ -712,13 +949,53 @@ public sealed partial class PerformanceViewModel : ObservableObject
 
         ZeroTo100Text = FormatSeconds(snapshot.ZeroTo100KmhSeconds);
         ZeroTo200Text = FormatSeconds(snapshot.ZeroTo200KmhSeconds);
+        HundredTo200Text = FormatSeconds(snapshot.HundredTo200KmhSeconds);
+        ZeroTo60MphText = FormatSeconds(snapshot.ZeroTo60MphSeconds);
+        SixtyTo130MphText = FormatSeconds(snapshot.SixtyTo130MphSeconds);
         QuarterMileText = FormatSeconds(snapshot.QuarterMileSeconds);
         QuarterMileTrapText = snapshot.QuarterMileTrapSpeedKmh is { } trap
             ? string.Format(CultureInfo.CurrentCulture, Strings.PerfTrapFormat, _units.FormatSpeed(trap), _units.SpeedLabel)
             : "";
         TopSpeedText = _topSpeedKmh > 0 ? _units.FormatSpeed(_topSpeedKmh) : NoValue;
 
+        ShowBraking(_brakingSnapshot);
     }
+
+    /// <summary>The braking tile: the distance and time of the unit's variant, and the state line that says what to do next.</summary>
+    private void ShowBraking(BrakingSnapshot snapshot)
+    {
+        var meters = IsMph ? snapshot.SixtyToZeroMphMeters : snapshot.HundredToZeroMeters;
+        var seconds = IsMph ? snapshot.SixtyToZeroMphSeconds : snapshot.HundredToZeroSeconds;
+        BrakingDistanceText = meters is { } m ? _units.FormatDistance(m) : NoValue;
+        BrakingTimeText = snapshot.State == BrakingState.Braking
+            ? snapshot.ElapsedSeconds.ToString("F1", CultureInfo.CurrentCulture) // the live stop, until it has a result
+            : FormatSeconds(seconds);
+
+        // Like the run line: braking is shown whatever else is true, everything else needs live data (after Stop the engine may still
+        // say "Armed", but nothing is armed any more).
+        if (snapshot.State != BrakingState.Braking && !_live)
+        {
+            BrakingRunState = PerformanceRunState.WaitingForData;
+            BrakingStateText = Strings.PerfStateWaiting;
+            return;
+        }
+
+        (BrakingRunState, BrakingStateText) = snapshot.State switch
+        {
+            BrakingState.Armed => (PerformanceRunState.Armed, ArmingText(Strings.PerfBrakeStateArmed, BrakeStartKmh)),
+            BrakingState.Braking => (PerformanceRunState.Running, Strings.PerfBrakeStateBraking),
+            BrakingState.Done => (PerformanceRunState.Done, Strings.PerfBrakeStateDone),
+            _ => (PerformanceRunState.Idle, ArmingText(Strings.PerfBrakeStateIdle, BrakeArmKmh))
+        };
+    }
+
+    // The braking engine arms above 105 km/h and starts timing at the 100 km/h line (see BrakingTest). The sentences quote those
+    // speeds in the player's unit.
+    private const double BrakeArmKmh = 105;
+    private const double BrakeStartKmh = 100;
+
+    private string ArmingText(string format, double kmh) =>
+        string.Format(CultureInfo.CurrentCulture, format, _units.FormatSpeed(kmh), _units.SpeedLabel);
 
     private PerformanceRunState DescribeState(AccelerationState engineState)
     {
@@ -754,9 +1031,25 @@ public sealed partial class PerformanceViewModel : ObservableObject
 
         OnPropertyChanged(nameof(SpeedUnitLabel));
         OnPropertyChanged(nameof(TopSpeedName)); // the name speaks the unit, which is not a stored property
-        OnPropertyChanged(nameof(ShowThresholdNote));
+        RaiseUnitDependentProperties();
         RebuildRows();
         Show();
+    }
+
+    /// <summary>Everything the unit setting chooses between: which windows lead, the braking variant, and the table's column titles.</summary>
+    private void RaiseUnitDependentProperties()
+    {
+        foreach (var name in (ReadOnlySpan<string>)
+        [
+            nameof(WindowATitle), nameof(WindowAText), nameof(WindowAIsNewBest), nameof(WindowAName),
+            nameof(WindowBTitle), nameof(WindowBText), nameof(WindowBIsNewBest), nameof(WindowBName),
+            nameof(ExtraWindowTitle), nameof(ExtraWindowText), nameof(ExtraWindowIsNewBest), nameof(ExtraWindowName),
+            nameof(BrakingTitle), nameof(DistanceUnitLabel), nameof(BrakingIsNewBest), nameof(BrakingName),
+            nameof(WindowAColumnTitle), nameof(WindowBColumnTitle)
+        ])
+        {
+            OnPropertyChanged(name);
+        }
     }
 
     // ---- Table ------------------------------------------------------------------------------------------
@@ -767,10 +1060,11 @@ public sealed partial class PerformanceViewModel : ObservableObject
         IOrderedEnumerable<CarPerformanceRecord> ordered = SortColumn switch
         {
             PerformanceSortColumn.Car => records.OrderBy(r => r.Car.CarOrdinal).ThenBy(r => r.Car.PerformanceIndex),
-            PerformanceSortColumn.ZeroTo100 => records.OrderBy(r => r.ZeroTo100Seconds ?? double.MaxValue),
-            PerformanceSortColumn.ZeroTo200 => records.OrderBy(r => r.ZeroTo200Seconds ?? double.MaxValue),
+            PerformanceSortColumn.ZeroTo100 => records.OrderBy(r => (IsMph ? r.ZeroTo60MphSeconds : r.ZeroTo100Seconds) ?? double.MaxValue),
+            PerformanceSortColumn.ZeroTo200 => records.OrderBy(r => (IsMph ? r.SixtyTo130MphSeconds : r.ZeroTo200Seconds) ?? double.MaxValue),
             PerformanceSortColumn.QuarterMile => records.OrderBy(r => r.QuarterMileSeconds ?? double.MaxValue),
             PerformanceSortColumn.TopSpeed => records.OrderByDescending(r => r.TopSpeedKmh ?? 0),
+            PerformanceSortColumn.Braking => records.OrderBy(r => (IsMph ? r.BrakeSixtyMphMeters : r.BrakeHundredMeters) ?? double.MaxValue),
             _ => records.OrderByDescending(r => r.UpdatedAt)
         };
 
@@ -785,20 +1079,70 @@ public sealed partial class PerformanceViewModel : ObservableObject
             ? $"{_units.FormatSpeed(trap)} {_units.SpeedLabel}"
             : "";
 
+        var windowA = IsMph ? record.ZeroTo60MphSeconds : record.ZeroTo100Seconds;
+        var windowB = IsMph ? record.SixtyTo130MphSeconds : record.ZeroTo200Seconds;
+        var brakeMeters = IsMph ? record.BrakeSixtyMphMeters : record.BrakeHundredMeters;
+
         return new CarPerformanceRow(
             CarLabel(record.Car),
             CarInfoFormatter.ClassLabel(record.CarClass),
             record.Car.PerformanceIndex.ToString(CultureInfo.CurrentCulture),
             CarInfoFormatter.DrivetrainLabel(record.DrivetrainType),
-            record.ZeroTo100Seconds is { } t100 ? $"{FormatSeconds(t100)} s" : NoValue,
-            record.ZeroTo200Seconds is { } t200 ? $"{FormatSeconds(t200)} s" : NoValue,
+            windowA is { } a ? $"{FormatSeconds(a)} s" : NoValue,
+            windowB is { } b ? $"{FormatSeconds(b)} s" : NoValue,
             quarter,
             trapSpeed,
             record.TopSpeedKmh is { } top ? $"{_units.FormatSpeed(top)} {_units.SpeedLabel}" : NoValue,
+            brakeMeters is { } meters ? $"{_units.FormatDistance(meters)} {_units.DistanceLabel}" : NoValue,
             record.UpdatedAt == DateTimeOffset.UnixEpoch
                 ? NoValue
                 : record.UpdatedAt.ToLocalTime().ToString("g", CultureInfo.CurrentCulture),
             record.Car == _car,
-            record.Car.CarOrdinal);
+            record.Car.CarOrdinal,
+            DetailsOf(record, quarter, trapSpeed));
+    }
+
+    /// <summary>One "title: value" line for every best the car has, in a fixed order, whichever unit the table is showing.</summary>
+    private List<string> DetailsOf(CarPerformanceRecord record, string quarter, string trapSpeed)
+    {
+        var lines = new List<string>();
+
+        void AddSeconds(string title, double? seconds)
+        {
+            if (seconds is { } value)
+            {
+                lines.Add($"{title}: {FormatSeconds(value)} s");
+            }
+        }
+
+        AddSeconds(Strings.PerfTitle100, record.ZeroTo100Seconds);
+        AddSeconds(Strings.PerfTitle200, record.ZeroTo200Seconds);
+        AddSeconds(Strings.PerfTitle100To200, record.HundredTo200Seconds);
+        AddSeconds(Strings.PerfTitle60Mph, record.ZeroTo60MphSeconds);
+        AddSeconds(Strings.PerfTitle60To130Mph, record.SixtyTo130MphSeconds);
+
+        if (record.QuarterMileSeconds is not null)
+        {
+            lines.Add(trapSpeed.Length > 0
+                ? $"{Strings.PerfTitleQuarter}: {quarter}, {trapSpeed}"
+                : $"{Strings.PerfTitleQuarter}: {quarter}");
+        }
+
+        if (record.TopSpeedKmh is { } top)
+        {
+            lines.Add($"{Strings.PerfTitleTopSpeed}: {_units.FormatSpeed(top)} {_units.SpeedLabel}");
+        }
+
+        if (record.BrakeHundredMeters is { } brake100)
+        {
+            lines.Add($"{Strings.PerfTitleBrake100}: {_units.FormatDistance(brake100)} {_units.DistanceLabel}");
+        }
+
+        if (record.BrakeSixtyMphMeters is { } brake60)
+        {
+            lines.Add($"{Strings.PerfTitleBrake60Mph}: {_units.FormatDistance(brake60)} {_units.DistanceLabel}");
+        }
+
+        return lines;
     }
 }

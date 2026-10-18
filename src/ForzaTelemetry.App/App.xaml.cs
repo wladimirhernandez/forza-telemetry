@@ -170,7 +170,8 @@ public partial class App : Application, IAppRestarter
             PerformanceHistoryStore.DefaultPath, TimeProvider.System, loggerFactory.CreateLogger<PerformanceHistoryStore>());
         StartupGuard.Run(_logger, "load performance history", history.Load);
         _performance = new PerformanceViewModel(
-            engines.Acceleration, engines.TopSpeed, engines.CarChanges, history, units, new WpfConfirmationService(), carNames, carRename);
+            engines.Acceleration, engines.TopSpeed, engines.CarChanges, history, units, new WpfConfirmationService(), carNames, carRename,
+            engines.Braking);
 
         var lapsPage = new LapsViewModel(engines.Laps);
 

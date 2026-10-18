@@ -1183,15 +1183,6 @@ namespace ForzaTelemetry.App.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Runs are timed to 100 and 200 km/h (about 62 and 124 mph) in either unit. Speeds are shown in your unit..
-        /// </summary>
-        public static string PerfThresholdNote {
-            get {
-                return ResourceManager.GetString("PerfThresholdNote", resourceCulture)!;
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to No car detected yet.
         /// </summary>
         public static string PerfNoCar {
@@ -1354,6 +1345,132 @@ namespace ForzaTelemetry.App.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to 0–60 mph.
+        /// </summary>
+        public static string PerfTitle60Mph {
+            get {
+                return ResourceManager.GetString("PerfTitle60Mph", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 60–130 mph.
+        /// </summary>
+        public static string PerfTitle60To130Mph {
+            get {
+                return ResourceManager.GetString("PerfTitle60To130Mph", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 100–200 km/h.
+        /// </summary>
+        public static string PerfTitle100To200 {
+            get {
+                return ResourceManager.GetString("PerfTitle100To200", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Braking 100–0 km/h.
+        /// </summary>
+        public static string PerfTitleBrake100 {
+            get {
+                return ResourceManager.GetString("PerfTitleBrake100", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Braking 60–0 mph.
+        /// </summary>
+        public static string PerfTitleBrake60Mph {
+            get {
+                return ResourceManager.GetString("PerfTitleBrake60Mph", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Reach {0} {1} to arm the braking test.
+        /// </summary>
+        public static string PerfBrakeStateIdle {
+            get {
+                return ResourceManager.GetString("PerfBrakeStateIdle", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Armed: brake hard from above {0} {1}.
+        /// </summary>
+        public static string PerfBrakeStateArmed {
+            get {
+                return ResourceManager.GetString("PerfBrakeStateArmed", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Braking: keep the brake down until you stop.
+        /// </summary>
+        public static string PerfBrakeStateBraking {
+            get {
+                return ResourceManager.GetString("PerfBrakeStateBraking", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Done.
+        /// </summary>
+        public static string PerfBrakeStateDone {
+            get {
+                return ResourceManager.GetString("PerfBrakeStateDone", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 0–60.
+        /// </summary>
+        public static string PerfColZeroTo60Mph {
+            get {
+                return ResourceManager.GetString("PerfColZeroTo60Mph", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 60–130.
+        /// </summary>
+        public static string PerfColSixtyTo130Mph {
+            get {
+                return ResourceManager.GetString("PerfColSixtyTo130Mph", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Braking.
+        /// </summary>
+        public static string PerfColBraking {
+            get {
+                return ResourceManager.GetString("PerfColBraking", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to m.
+        /// </summary>
+        public static string DistanceUnit {
+            get {
+                return ResourceManager.GetString("DistanceUnit", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to ft.
+        /// </summary>
+        public static string DistanceUnitFeet {
+            get {
+                return ResourceManager.GetString("DistanceUnitFeet", resourceCulture)!;
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Lap {0}.
         /// </summary>
         public static string LapsLapFormat {
@@ -1487,33 +1604,42 @@ namespace ForzaTelemetry.App.Resources {
                 return ResourceManager.GetString("LapsNoLapInProgress", resourceCulture)!;
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Replaying {0}.
+        /// </summary>
         public static string StatusReplaying {
             get {
                 return ResourceManager.GetString("StatusReplaying", resourceCulture)!;
             }
         }
         
+        /// <summary>
+        ///   Looks up a localized string similar to Stop replay.
+        /// </summary>
         public static string StopReplayButton {
             get {
                 return ResourceManager.GetString("StopReplayButton", resourceCulture)!;
             }
         }
         
+        /// <summary>
+        ///   Looks up a localized string similar to Could not play the recording: {0}.
+        /// </summary>
         public static string ErrorReplayFailed {
             get {
                 return ResourceManager.GetString("ErrorReplayFailed", resourceCulture)!;
             }
         }
-
         
         /// <summary>
-        ///   Looks up a localized string similar to The app cannot start because this machine runs .NET without culture data.
+        ///   Looks up a localized string similar to The app cannot start because this machine runs .NET without culture data (invariant globalization). Remove the DOTNET_SYSTEM_GLOBALIZATION_INVARIANT environment variable, or set InvariantGlobalization to false, and open the app again..
         /// </summary>
         public static string StartupInvariantGlobalization {
             get {
                 return ResourceManager.GetString("StartupInvariantGlobalization", resourceCulture)!;
             }
         }
+        
     }
 }

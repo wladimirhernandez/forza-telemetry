@@ -25,6 +25,11 @@
             </Style.Triggers>
         </Style>
 
+        <!-- The same card, tighter: the secondary row's tiles. It keeps the green "new best" edge of its parent style. -->
+        <Style x:Key="CompactResultCard" TargetType="Border" BasedOn="{StaticResource ResultCard}">
+            <Setter Property="Padding" Value="22,12,22,10" />
+        </Style>
+
         <!-- The small green "New best" tag in a card's corner. -->
         <Style x:Key="NewBestTag" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource ThrottleBrush}" />
@@ -89,6 +94,7 @@
 
     <Grid Margin="28,6,28,28">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -171,7 +177,7 @@
             </Grid>
         </Border>
 
-        <!-- ===== The four result cards ===== -->
+        <!-- ===== The four result cards (the two acceleration windows follow the speed unit) ===== -->
         <Grid Grid.Row="1" Margin="0,14,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
@@ -183,40 +189,40 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- 0-100 km/h -->
-            <Border Grid.Column="0" Style="{StaticResource ResultCard}" Tag="{Binding ZeroTo100IsNewBest}"
-                    AutomationProperties.Name="{Binding ZeroTo100Name}">
+            <!-- First window: 0-100 km/h, or 0-60 mph with mph -->
+            <Border Grid.Column="0" Style="{StaticResource ResultCard}" Tag="{Binding WindowAIsNewBest}"
+                    AutomationProperties.Name="{Binding WindowAName}">
                 <StackPanel>
                     <Grid>
-                        <TextBlock Text="{x:Static res:Strings.PerfTitle100}" Style="{StaticResource ResultTitle}" />
+                        <TextBlock Text="{Binding WindowATitle}" Style="{StaticResource ResultTitle}" />
                         <Border Style="{StaticResource NewBestTag}"
-                                Visibility="{Binding ZeroTo100IsNewBest, Converter={StaticResource BoolToVisibility}}">
+                                Visibility="{Binding WindowAIsNewBest, Converter={StaticResource BoolToVisibility}}">
                             <TextBlock Text="{x:Static res:Strings.PerfNewBest}" Foreground="{StaticResource CanvasBrush}"
                                        FontSize="11" FontWeight="SemiBold" />
                         </Border>
                     </Grid>
                     <TextBlock Margin="0,8,0,0" Style="{StaticResource NumeralText}" FontSize="64">
-                        <Run Text="{Binding ZeroTo100Text, Mode=OneWay}" /><Run Text=" s" FontFamily="{StaticResource LabelFont}"
+                        <Run Text="{Binding WindowAText, Mode=OneWay}" /><Run Text=" s" FontFamily="{StaticResource LabelFont}"
                              FontSize="20" FontWeight="Normal" Foreground="{StaticResource MutedBrush}" />
                     </TextBlock>
                     <TextBlock Style="{StaticResource ResultCaption}" />
                 </StackPanel>
             </Border>
 
-            <!-- 0-200 km/h -->
-            <Border Grid.Column="2" Style="{StaticResource ResultCard}" Tag="{Binding ZeroTo200IsNewBest}"
-                    AutomationProperties.Name="{Binding ZeroTo200Name}">
+            <!-- Second window: 0-200 km/h, or 60-130 mph with mph -->
+            <Border Grid.Column="2" Style="{StaticResource ResultCard}" Tag="{Binding WindowBIsNewBest}"
+                    AutomationProperties.Name="{Binding WindowBName}">
                 <StackPanel>
                     <Grid>
-                        <TextBlock Text="{x:Static res:Strings.PerfTitle200}" Style="{StaticResource ResultTitle}" />
+                        <TextBlock Text="{Binding WindowBTitle}" Style="{StaticResource ResultTitle}" />
                         <Border Style="{StaticResource NewBestTag}"
-                                Visibility="{Binding ZeroTo200IsNewBest, Converter={StaticResource BoolToVisibility}}">
+                                Visibility="{Binding WindowBIsNewBest, Converter={StaticResource BoolToVisibility}}">
                             <TextBlock Text="{x:Static res:Strings.PerfNewBest}" Foreground="{StaticResource CanvasBrush}"
                                        FontSize="11" FontWeight="SemiBold" />
                         </Border>
                     </Grid>
                     <TextBlock Margin="0,8,0,0" Style="{StaticResource NumeralText}" FontSize="64">
-                        <Run Text="{Binding ZeroTo200Text, Mode=OneWay}" /><Run Text=" s" FontFamily="{StaticResource LabelFont}"
+                        <Run Text="{Binding WindowBText, Mode=OneWay}" /><Run Text=" s" FontFamily="{StaticResource LabelFont}"
                              FontSize="20" FontWeight="Normal" Foreground="{StaticResource MutedBrush}" />
                     </TextBlock>
                     <TextBlock Style="{StaticResource ResultCaption}" />
@@ -265,18 +271,107 @@
             </Border>
         </Grid>
 
-        <StackPanel Grid.Row="2">
+        <!--
+          ===== Secondary row: one compact tile for the extra acceleration window and one for braking. =====
+          The columns repeat the primary row's, so the tiles' edges line up with the cards above: the extra window sits under the
+          first card and the braking tile runs under the other three. Compact on purpose: the big numerals stay the
+          acceleration cards', and this row adds information without competing with them.
+        -->
+        <Grid Grid.Row="2" Margin="0,14,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="14" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="14" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="14" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- The rolling 100-200 km/h, or with mph the 0-100 km/h reference -->
+            <Border Grid.Column="0" Style="{StaticResource CompactResultCard}" Tag="{Binding ExtraWindowIsNewBest}"
+                    AutomationProperties.Name="{Binding ExtraWindowName}">
+                <StackPanel>
+                    <Grid>
+                        <TextBlock Text="{Binding ExtraWindowTitle}" Style="{StaticResource ResultTitle}" />
+                        <Border Style="{StaticResource NewBestTag}"
+                                Visibility="{Binding ExtraWindowIsNewBest, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="{x:Static res:Strings.PerfNewBest}" Foreground="{StaticResource CanvasBrush}"
+                                       FontSize="11" FontWeight="SemiBold" />
+                        </Border>
+                    </Grid>
+                    <TextBlock Margin="0,4,0,0" Style="{StaticResource NumeralText}" FontSize="40">
+                        <Run Text="{Binding ExtraWindowText, Mode=OneWay}" /><Run Text=" s" FontFamily="{StaticResource LabelFont}"
+                             FontSize="16" FontWeight="Normal" Foreground="{StaticResource MutedBrush}" />
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource ResultCaption}" />
+                </StackPanel>
+            </Border>
+
+            <!-- Braking: the distance big, the time under it, and the test's own state line on the right -->
+            <Border Grid.Column="2" Grid.ColumnSpan="5" Style="{StaticResource CompactResultCard}" Tag="{Binding BrakingIsNewBest}"
+                    AutomationProperties.Name="{Binding BrakingName}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding BrakingTitle}" Style="{StaticResource ResultTitle}" />
+                            <Border Style="{StaticResource NewBestTag}" Margin="12,0,0,0"
+                                    Visibility="{Binding BrakingIsNewBest, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="{x:Static res:Strings.PerfNewBest}" Foreground="{StaticResource CanvasBrush}"
+                                           FontSize="11" FontWeight="SemiBold" />
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Margin="0,4,0,0" Style="{StaticResource NumeralText}" FontSize="40">
+                            <Run Text="{Binding BrakingDistanceText, Mode=OneWay}" /><Run Text=" " /><Run Text="{Binding DistanceUnitLabel, Mode=OneWay}"
+                                 FontFamily="{StaticResource LabelFont}" FontSize="16" FontWeight="Normal"
+                                 Foreground="{StaticResource MutedBrush}" />
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource ResultCaption}">
+                            <Run Text="{Binding BrakingTimeText, Mode=OneWay}" /><Run Text=" s" />
+                        </TextBlock>
+                    </StackPanel>
+
+                    <!-- The state line, like the one in the bar above: dot by state, sentence beside it (a live region for screen readers). -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                Margin="24,0,0,0">
+                        <Ellipse Width="10" Height="10" Margin="0,2,10,0" VerticalAlignment="Center">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="{StaticResource MutedBrush}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding BrakingRunState}" Value="Armed">
+                                            <Setter Property="Fill" Value="{StaticResource ThrottleBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding BrakingRunState}" Value="Done">
+                                            <Setter Property="Fill" Value="{StaticResource ThrottleBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding BrakingRunState}" Value="Running">
+                                            <Setter Property="Fill" Value="{StaticResource WarmBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
+                        <TextBlock Text="{Binding BrakingStateText}" Style="{StaticResource BodyText}" FontSize="14" MaxWidth="420"
+                                   VerticalAlignment="Center" AutomationProperties.LiveSetting="Polite" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <StackPanel Grid.Row="3">
             <!-- Shown while the numbers on screen come from a replay: they are measured and displayed, never saved. -->
             <TextBlock Text="{x:Static res:Strings.PerfReplayNote}" Style="{StaticResource SmallNote}" Margin="4,10,4,0"
                        Visibility="{Binding IsReplaySession, Converter={StaticResource BoolToVisibility}}" />
-
-            <!-- Shown only in mph: the runs are still timed to 100 and 200 km/h. -->
-            <TextBlock Text="{x:Static res:Strings.PerfThresholdNote}" Style="{StaticResource SmallNote}" Margin="4,10,4,0"
-                       Visibility="{Binding ShowThresholdNote, Converter={StaticResource BoolToVisibility}}" />
         </StackPanel>
 
         <!-- ===== Best per car ===== -->
-        <Border Grid.Row="3" Style="{StaticResource CardStyle}" Padding="22,16,22,8" Margin="0,14,0,0"
+        <Border Grid.Row="4" Style="{StaticResource CardStyle}" Padding="22,16,22,8" Margin="0,14,0,0"
                 AutomationProperties.Name="{x:Static res:Strings.PerfHistoryTitle}">
             <Grid>
                 <Grid.RowDefinitions>
@@ -298,7 +393,8 @@
                         <ColumnDefinition Width="2.3*" />
                         <ColumnDefinition Width="1*" />
                         <ColumnDefinition Width="1*" />
-                        <ColumnDefinition Width="2*" />
+                        <ColumnDefinition Width="1.8*" />
+                        <ColumnDefinition Width="1.3*" />
                         <ColumnDefinition Width="1.3*" />
                         <ColumnDefinition Width="1.5*" />
                     </Grid.ColumnDefinitions>
@@ -312,17 +408,17 @@
                     </Button>
                     <Button Grid.Column="1" Style="{StaticResource TableHeaderButton}"
                             Command="{Binding SortByCommand}" CommandParameter="{x:Static local:PerformanceSortColumn.ZeroTo100}"
-                            AutomationProperties.Name="{x:Static res:Strings.PerfColZeroTo100}">
+                            AutomationProperties.Name="{Binding WindowAColumnTitle}">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{x:Static res:Strings.PerfColZeroTo100}" />
+                            <TextBlock Text="{Binding WindowAColumnTitle}" />
                             <Path Style="{StaticResource SortMarker}" Visibility="{Binding IsSortedByZeroTo100, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
                     </Button>
                     <Button Grid.Column="2" Style="{StaticResource TableHeaderButton}"
                             Command="{Binding SortByCommand}" CommandParameter="{x:Static local:PerformanceSortColumn.ZeroTo200}"
-                            AutomationProperties.Name="{x:Static res:Strings.PerfColZeroTo200}">
+                            AutomationProperties.Name="{Binding WindowBColumnTitle}">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{x:Static res:Strings.PerfColZeroTo200}" />
+                            <TextBlock Text="{Binding WindowBColumnTitle}" />
                             <Path Style="{StaticResource SortMarker}" Visibility="{Binding IsSortedByZeroTo200, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
                     </Button>
@@ -343,6 +439,14 @@
                         </StackPanel>
                     </Button>
                     <Button Grid.Column="5" Style="{StaticResource TableHeaderButton}"
+                            Command="{Binding SortByCommand}" CommandParameter="{x:Static local:PerformanceSortColumn.Braking}"
+                            AutomationProperties.Name="{x:Static res:Strings.PerfColBraking}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{x:Static res:Strings.PerfColBraking}" />
+                            <Path Style="{StaticResource SortMarker}" Visibility="{Binding IsSortedByBraking, Converter={StaticResource BoolToVisibility}}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Grid.Column="6" Style="{StaticResource TableHeaderButton}"
                             Command="{Binding SortByCommand}" CommandParameter="{x:Static local:PerformanceSortColumn.Recent}"
                             AutomationProperties.Name="{x:Static res:Strings.PerfColUpdated}">
                         <StackPanel Orientation="Horizontal">
@@ -360,13 +464,14 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="{x:Type local:CarPerformanceRow}">
                                     <Border BorderBrush="{StaticResource HairlineBrush}" BorderThickness="0,1,0,0" Padding="0,10"
-                                            AutomationProperties.Name="{Binding Summary}">
+                                            AutomationProperties.Name="{Binding Summary}" ToolTip="{Binding DetailsTooltip}">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="2.3*" />
                                                 <ColumnDefinition Width="1*" />
                                                 <ColumnDefinition Width="1*" />
-                                                <ColumnDefinition Width="2*" />
+                                                <ColumnDefinition Width="1.8*" />
+                                                <ColumnDefinition Width="1.3*" />
                                                 <ColumnDefinition Width="1.3*" />
                                                 <ColumnDefinition Width="1.5*" />
                                             </Grid.ColumnDefinitions>
@@ -414,8 +519,8 @@
                                                     </StackPanel>
                                                 </StackPanel>
                                             </StackPanel>
-                                            <TextBlock Grid.Column="1" Text="{Binding ZeroTo100Text}" Style="{StaticResource ValueText}" FontSize="15" VerticalAlignment="Center" />
-                                            <TextBlock Grid.Column="2" Text="{Binding ZeroTo200Text}" Style="{StaticResource ValueText}" FontSize="15" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1" Text="{Binding WindowAText}" Style="{StaticResource ValueText}" FontSize="15" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="2" Text="{Binding WindowBText}" Style="{StaticResource ValueText}" FontSize="15" VerticalAlignment="Center" />
                                             <!-- Time on the first line, the speed at the line muted underneath (collapsed when there is none). -->
                                             <StackPanel Grid.Column="3" VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding QuarterMileText}" Style="{StaticResource ValueText}" FontSize="15" />
@@ -432,7 +537,8 @@
                                                 </TextBlock>
                                             </StackPanel>
                                             <TextBlock Grid.Column="4" Text="{Binding TopSpeedText}" Style="{StaticResource ValueText}" FontSize="15" VerticalAlignment="Center" />
-                                            <TextBlock Grid.Column="5" Text="{Binding UpdatedText}" Style="{StaticResource MutedLabel}" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="5" Text="{Binding BrakingText}" Style="{StaticResource ValueText}" FontSize="15" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="6" Text="{Binding UpdatedText}" Style="{StaticResource MutedLabel}" VerticalAlignment="Center" />
                                         </Grid>
                                     </Border>
                                 </DataTemplate>

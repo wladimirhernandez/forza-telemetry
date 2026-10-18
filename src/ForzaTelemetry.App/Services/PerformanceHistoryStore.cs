@@ -32,6 +32,15 @@ public readonly record struct CarKey(int CarOrdinal, int PerformanceIndex)
 /// <param name="QuarterMileTrapKmh">Speed at the line of THAT best quarter mile (it belongs to the run, not to the fastest line speed ever).</param>
 /// <param name="TopSpeedKmh">Highest speed ever reached.</param>
 /// <param name="UpdatedAt">When any of the values last improved.</param>
+/// <param name="HundredTo200Seconds">Best rolling 100-200 km/h time.</param>
+/// <param name="ZeroTo60MphSeconds">Best 0-60 mph time.</param>
+/// <param name="SixtyTo130MphSeconds">Best 60-130 mph time.</param>
+/// <param name="BrakeHundredMeters">Shortest 100-0 km/h braking distance, in meters.</param>
+/// <param name="BrakeSixtyMphMeters">Shortest 60-0 mph braking distance, in meters.</param>
+/// <remarks>
+/// The last five values were added after the first release: they default to null, and a file written before them simply has none
+/// (see <see cref="PerformanceHistoryStore"/>), so an old history loads unchanged and fills in as the car is driven.
+/// </remarks>
 public sealed record CarPerformanceRecord(
     CarKey Car,
     int CarClass,
@@ -41,26 +50,47 @@ public sealed record CarPerformanceRecord(
     double? QuarterMileSeconds,
     double? QuarterMileTrapKmh,
     double? TopSpeedKmh,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    double? HundredTo200Seconds = null,
+    double? ZeroTo60MphSeconds = null,
+    double? SixtyTo130MphSeconds = null,
+    double? BrakeHundredMeters = null,
+    double? BrakeSixtyMphMeters = null);
 
 /// <summary>One run's measurements to fold into the history; null means "not measured in this run".</summary>
+/// <remarks>The last five values default to null so a caller that only knows the original five keeps working.</remarks>
 public sealed record PerformanceResult(
     double? ZeroTo100Seconds,
     double? ZeroTo200Seconds,
     double? QuarterMileSeconds,
     double? QuarterMileTrapKmh,
-    double? TopSpeedKmh);
+    double? TopSpeedKmh,
+    double? HundredTo200Seconds = null,
+    double? ZeroTo60MphSeconds = null,
+    double? SixtyTo130MphSeconds = null,
+    double? BrakeHundredMeters = null,
+    double? BrakeSixtyMphMeters = null);
 
 /// <summary>Which values of a merge beat a PREVIOUS best (a first-ever value is a record but not an "improvement").</summary>
-public readonly record struct PerformanceImprovements(bool ZeroTo100, bool ZeroTo200, bool QuarterMile, bool TopSpeed)
+public readonly record struct PerformanceImprovements(
+    bool ZeroTo100,
+    bool ZeroTo200,
+    bool QuarterMile,
+    bool TopSpeed,
+    bool HundredTo200 = false,
+    bool ZeroTo60Mph = false,
+    bool SixtyTo130Mph = false,
+    bool BrakeHundred = false,
+    bool BrakeSixtyMph = false)
 {
     /// <summary>True when at least one value beat an earlier one.</summary>
-    public bool Any => ZeroTo100 || ZeroTo200 || QuarterMile || TopSpeed;
+    public bool Any =>
+        ZeroTo100 || ZeroTo200 || QuarterMile || TopSpeed || HundredTo200 || ZeroTo60Mph || SixtyTo130Mph || BrakeHundred || BrakeSixtyMph;
 }
 
 /// <summary>
-/// The best 0-100, 0-200, quarter-mile and top-speed results per car, kept in memory and in
-/// <c>%APPDATA%\ForzaTelemetry\performance.json</c>.
+/// The best acceleration windows (0-100, 0-200, 100-200 km/h, 0-60, 60-130 mph), quarter-mile, top-speed and braking
+/// (100-0 km/h, 60-0 mph) results per car, kept in memory and in <c>%APPDATA%\ForzaTelemetry\performance.json</c>.
 /// </summary>
 /// <remarks>
 /// <b>Why a file in Roaming AppData, written atomically.</b> Same reasoning as the settings file (see
@@ -71,7 +101,12 @@ public readonly record struct PerformanceImprovements(bool ZeroTo100, bool ZeroT
 /// <para>
 /// <b>Merging, not recording.</b> <see cref="Merge"/> folds one run into the stored bests value by value (lower time
 /// wins, higher speed wins), so calling it twice with the same numbers changes nothing. The quarter-mile TRAP speed travels
-/// with the quarter-mile time it was measured on.
+/// with the quarter-mile time it was measured on. A time or a braking DISTANCE is better when lower; a speed when higher.
+/// </para>
+/// <para>
+/// <b>Older files.</b> The newer values (the extra windows and the braking distances) are optional properties of each car entry
+/// and the layout version stays 1 because nothing that existed changed: a file written before them loads with those values empty,
+/// and each fills in the first time it is measured. Entries the file carries for fields this build does not know are not kept.
 /// </para>
 /// <para>
 /// <b>Writes are explicit.</b> <see cref="Merge"/> only updates memory and marks the history dirty; <see cref="Flush"/>
@@ -192,9 +227,16 @@ public sealed class PerformanceHistoryStore
         var improved200 = Beats(result.ZeroTo200Seconds, existing?.ZeroTo200Seconds, lowerIsBetter: true);
         var improvedQuarter = Beats(result.QuarterMileSeconds, existing?.QuarterMileSeconds, lowerIsBetter: true);
         var improvedTop = Beats(result.TopSpeedKmh, existing?.TopSpeedKmh, lowerIsBetter: false);
+        var improved100To200 = Beats(result.HundredTo200Seconds, existing?.HundredTo200Seconds, lowerIsBetter: true);
+        var improved60Mph = Beats(result.ZeroTo60MphSeconds, existing?.ZeroTo60MphSeconds, lowerIsBetter: true);
+        var improved60To130 = Beats(result.SixtyTo130MphSeconds, existing?.SixtyTo130MphSeconds, lowerIsBetter: true);
+        var improvedBrake100 = Beats(result.BrakeHundredMeters, existing?.BrakeHundredMeters, lowerIsBetter: true);
+        var improvedBrake60 = Beats(result.BrakeSixtyMphMeters, existing?.BrakeSixtyMphMeters, lowerIsBetter: true);
 
         // Nothing beat a stored value, or a first merge had nothing usable: no record, no write.
-        var anyBetter = improved100.Better || improved200.Better || improvedQuarter.Better || improvedTop.Better;
+        var anyBetter = improved100.Better || improved200.Better || improvedQuarter.Better || improvedTop.Better
+            || improved100To200.Better || improved60Mph.Better || improved60To130.Better
+            || improvedBrake100.Better || improvedBrake60.Better;
         if (!anyBetter)
         {
             return default;
@@ -209,7 +251,12 @@ public sealed class PerformanceHistoryStore
             improvedQuarter.Better ? result.QuarterMileSeconds : existing?.QuarterMileSeconds,
             improvedQuarter.Better ? result.QuarterMileTrapKmh : existing?.QuarterMileTrapKmh,
             improvedTop.Better ? result.TopSpeedKmh : existing?.TopSpeedKmh,
-            _time.GetUtcNow());
+            _time.GetUtcNow(),
+            improved100To200.Better ? result.HundredTo200Seconds : existing?.HundredTo200Seconds,
+            improved60Mph.Better ? result.ZeroTo60MphSeconds : existing?.ZeroTo60MphSeconds,
+            improved60To130.Better ? result.SixtyTo130MphSeconds : existing?.SixtyTo130MphSeconds,
+            improvedBrake100.Better ? result.BrakeHundredMeters : existing?.BrakeHundredMeters,
+            improvedBrake60.Better ? result.BrakeSixtyMphMeters : existing?.BrakeSixtyMphMeters);
 
         _dirty = true;
         Changed?.Invoke(this, EventArgs.Empty);
@@ -219,7 +266,12 @@ public sealed class PerformanceHistoryStore
             improved100.Better && improved100.HadPrevious,
             improved200.Better && improved200.HadPrevious,
             improvedQuarter.Better && improvedQuarter.HadPrevious,
-            improvedTop.Better && improvedTop.HadPrevious);
+            improvedTop.Better && improvedTop.HadPrevious,
+            improved100To200.Better && improved100To200.HadPrevious,
+            improved60Mph.Better && improved60Mph.HadPrevious,
+            improved60To130.Better && improved60To130.HadPrevious,
+            improvedBrake100.Better && improvedBrake100.HadPrevious,
+            improvedBrake60.Better && improvedBrake60.HadPrevious);
     }
 
     /// <summary>Writes the file if anything changed since the last write. A failed write is logged and retried by the next flush.</summary>
@@ -298,6 +350,11 @@ public sealed class PerformanceHistoryStore
                 ["quarterMileSeconds"] = record.QuarterMileSeconds,
                 ["quarterMileTrapKmh"] = record.QuarterMileTrapKmh,
                 ["topSpeedKmh"] = record.TopSpeedKmh,
+                ["hundredTo200Seconds"] = record.HundredTo200Seconds,
+                ["zeroTo60MphSeconds"] = record.ZeroTo60MphSeconds,
+                ["sixtyTo130MphSeconds"] = record.SixtyTo130MphSeconds,
+                ["brakeHundredMeters"] = record.BrakeHundredMeters,
+                ["brakeSixtyMphMeters"] = record.BrakeSixtyMphMeters,
                 ["updatedAt"] = record.UpdatedAt.ToString("O", CultureInfo.InvariantCulture)
             });
         }
@@ -346,7 +403,12 @@ public sealed class PerformanceHistoryStore
                 ReadValue(entry, "quarterMileSeconds"),
                 ReadValue(entry, "quarterMileTrapKmh"),
                 ReadValue(entry, "topSpeedKmh"),
-                ReadDate(entry, "updatedAt"));
+                ReadDate(entry, "updatedAt"),
+                ReadValue(entry, "hundredTo200Seconds"),
+                ReadValue(entry, "zeroTo60MphSeconds"),
+                ReadValue(entry, "sixtyTo130MphSeconds"),
+                ReadValue(entry, "brakeHundredMeters"),
+                ReadValue(entry, "brakeSixtyMphMeters"));
 
             // Two entries for the same car (a hand-edited file): the later one wins, like a JSON object with a repeated key.
             records[car] = record;

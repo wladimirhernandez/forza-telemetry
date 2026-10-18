@@ -92,6 +92,7 @@ public sealed class ServiceHelperTests : IDisposable
 
         Assert.Same(engines.CarChanges, engines.Observers[0]);
         Assert.Contains(engines.Acceleration, engines.Observers);
+        Assert.Contains(engines.Braking, engines.Observers);
         Assert.Contains(engines.TopSpeed, engines.Observers);
         Assert.Contains(engines.Laps, engines.Observers);
         Assert.Equal(engines.Observers.Count, engines.Observers.Distinct().Count());
@@ -113,5 +114,91 @@ public sealed class ServiceHelperTests : IDisposable
         Assert.True(engines.CarChanges.TryTake(out var change));
         Assert.Equal(new CarKey(5, 600), change!.Car);
         await service.StopAsync();
+    }
+
+    // A hard stop from 40 m/s at 10 m/s^2, as packets: 100 km/h to a standstill is 38.58 m.
+    private static IEnumerable<TelemetryPacket> HardStop(int carOrdinal)
+    {
+        uint ms = 1_000;
+        double distance = 0;
+        TelemetryPacket At(double speed, double d, byte brake) =>
+            TestPackets.Sample(speedMetersPerSecond: (float)speed, gear: 5, carOrdinal: carOrdinal, performanceIndex: 700, brake: brake)
+            with
+            {
+                TimestampMS = ms,
+                DistanceTraveled = (float)d
+            };
+
+        for (var i = 0; i < 5; i++)
+        {
+            yield return At(40, distance, 0);
+            ms += 20;
+            distance += 0.8;
+        }
+
+        for (var t = 0.02; 40 - (10 * t) > 0; t += 0.02)
+        {
+            yield return At(40 - (10 * t), distance + (40 * t) - (5 * t * t), 255);
+            ms += 20;
+        }
+
+        yield return At(0, distance + 80, 255);
+    }
+
+    [Fact]
+    public void The_braking_test_sees_every_packet_and_follows_the_session_and_car_resets()
+    {
+        var engines = new TelemetryEngines();
+        foreach (var packet in HardStop(5))
+        {
+            foreach (var observer in engines.Observers)
+            {
+                observer.OnPacket(packet);
+            }
+        }
+
+        Assert.Equal(38.58, engines.Braking.Current.HundredToZeroMeters!.Value, precision: 2);
+
+        engines.BeginSession(); // a fresh session forgets the stop
+        Assert.Null(engines.Braking.Current.HundredToZeroMeters);
+
+        foreach (var packet in HardStop(5))
+        {
+            foreach (var observer in engines.Observers)
+            {
+                observer.OnPacket(packet);
+            }
+        }
+
+        Assert.NotNull(engines.Braking.Current.HundredToZeroMeters);
+
+        // Another car: the detector resets the braking test on the first packet of the new car, like the other engines.
+        foreach (var observer in engines.Observers)
+        {
+            observer.OnPacket(TestPackets.Sample(speedMetersPerSecond: 10, gear: 3, carOrdinal: 6, performanceIndex: 650));
+        }
+
+        Assert.Null(engines.Braking.Current.HundredToZeroMeters);
+    }
+
+    [Fact]
+    public void A_requested_engine_reset_also_clears_the_braking_test()
+    {
+        var engines = new TelemetryEngines();
+        foreach (var packet in HardStop(5))
+        {
+            foreach (var observer in engines.Observers)
+            {
+                observer.OnPacket(packet);
+            }
+        }
+
+        engines.CarChanges.RequestEngineReset();
+        foreach (var observer in engines.Observers)
+        {
+            observer.OnPacket(TestPackets.Sample(speedMetersPerSecond: 0, gear: 1, carOrdinal: 5, performanceIndex: 700));
+        }
+
+        Assert.Null(engines.Braking.Current.HundredToZeroMeters);
     }
 }

@@ -26,9 +26,10 @@ public sealed class TelemetryEngines
     public TelemetryEngines()
     {
         Acceleration = new AccelerationTimer();
+        Braking = new BrakingTest();
         TopSpeed = new TopSpeedTracker();
         Laps = new LapTracker();
-        CarChanges = new CarChangeDetector(TopSpeed, Acceleration);
+        CarChanges = new CarChangeDetector(TopSpeed, Acceleration, Braking);
 
         // The engines behind the Analysis, Map and Tuning pages. They are plain observers (nothing resets anything else),
         // but they live here for the same reason as the rest: one place that creates them and one list that registers them.
@@ -38,12 +39,12 @@ public sealed class TelemetryEngines
         Bottoming = new SuspensionBottomingCounter();
 
         // CarChanges first: it freezes and resets the engines that follow it (see its remarks).
-        Observers = [CarChanges, Acceleration, TopSpeed, Laps, History, Path, Dyno, Bottoming];
+        Observers = [CarChanges, Acceleration, Braking, TopSpeed, Laps, History, Path, Dyno, Bottoming];
     }
 
     /// <summary>
     /// Gives every per-session engine a clean slate: the detector forgets the current car, and the top speed, the 0-100 timer, the
-    /// laps, the history, the driven path and the bottoming tallies restart empty. The dyno is NOT reset (see <see cref="Dyno"/>).
+    /// braking test, the laps, the history, the driven path and the bottoming tallies restart empty. The dyno is NOT reset (see <see cref="Dyno"/>).
     /// </summary>
     /// <remarks>
     /// <b>Call it BEFORE the telemetry service starts a fresh session, never after.</b> The engines are written by the receive
@@ -58,6 +59,7 @@ public sealed class TelemetryEngines
         CarChanges.Reset();
         TopSpeed.Reset();
         Acceleration.Reset();
+        Braking.Reset();
         Laps.Reset();
         History.Clear();
         Path.Clear();
@@ -66,6 +68,9 @@ public sealed class TelemetryEngines
 
     /// <summary>The 0-100 / 0-200 / quarter-mile timer.</summary>
     public AccelerationTimer Acceleration { get; }
+
+    /// <summary>The 100-0 km/h and 60-0 mph braking test.</summary>
+    public BrakingTest Braking { get; }
 
     /// <summary>The session top speed.</summary>
     public TopSpeedTracker TopSpeed { get; }

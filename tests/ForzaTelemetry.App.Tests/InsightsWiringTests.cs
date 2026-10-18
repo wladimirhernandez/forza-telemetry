@@ -125,7 +125,7 @@ public class InsightsWiringTests
     {
         var engines = new TelemetryEngines();
 
-        Assert.Equal(8, engines.Observers.Count);
+        Assert.Equal(9, engines.Observers.Count);
         Assert.Contains(engines.History, engines.Observers);
         Assert.Contains(engines.Path, engines.Observers);
         Assert.Contains(engines.Dyno, engines.Observers);

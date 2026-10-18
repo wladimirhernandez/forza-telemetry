@@ -388,9 +388,6 @@
   <data name="PerfReplayNote" xml:space="preserve">
     <value>Replay: these results are not saved to your history.</value>
   </data>
-  <data name="PerfThresholdNote" xml:space="preserve">
-    <value>Runs are timed to 100 and 200 km/h (about 62 and 124 mph) in either unit. Speeds are shown in your unit.</value>
-  </data>
   <data name="PerfNoCar" xml:space="preserve">
     <value>No car detected yet</value>
   </data>
@@ -444,6 +441,48 @@
   </data>
   <data name="PerfSortByFormat" xml:space="preserve">
     <value>Sort by {0}</value>
+  </data>
+  <data name="PerfTitle60Mph" xml:space="preserve">
+    <value>0–60 mph</value>
+  </data>
+  <data name="PerfTitle60To130Mph" xml:space="preserve">
+    <value>60–130 mph</value>
+  </data>
+  <data name="PerfTitle100To200" xml:space="preserve">
+    <value>100–200 km/h</value>
+  </data>
+  <data name="PerfTitleBrake100" xml:space="preserve">
+    <value>Braking 100–0 km/h</value>
+  </data>
+  <data name="PerfTitleBrake60Mph" xml:space="preserve">
+    <value>Braking 60–0 mph</value>
+  </data>
+  <data name="PerfBrakeStateIdle" xml:space="preserve">
+    <value>Reach {0} {1} to arm the braking test</value>
+  </data>
+  <data name="PerfBrakeStateArmed" xml:space="preserve">
+    <value>Armed: brake hard from above {0} {1}</value>
+  </data>
+  <data name="PerfBrakeStateBraking" xml:space="preserve">
+    <value>Braking: keep the brake down until you stop</value>
+  </data>
+  <data name="PerfBrakeStateDone" xml:space="preserve">
+    <value>Done</value>
+  </data>
+  <data name="PerfColZeroTo60Mph" xml:space="preserve">
+    <value>0–60</value>
+  </data>
+  <data name="PerfColSixtyTo130Mph" xml:space="preserve">
+    <value>60–130</value>
+  </data>
+  <data name="PerfColBraking" xml:space="preserve">
+    <value>Braking</value>
+  </data>
+  <data name="DistanceUnit" xml:space="preserve">
+    <value>m</value>
+  </data>
+  <data name="DistanceUnitFeet" xml:space="preserve">
+    <value>ft</value>
   </data>
   <data name="LapsLapFormat" xml:space="preserve">
     <value>Lap {0}</value>

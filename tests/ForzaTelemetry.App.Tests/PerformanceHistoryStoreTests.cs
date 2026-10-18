@@ -355,4 +355,124 @@ public sealed class PerformanceHistoryStoreTests : IDisposable
 
         Assert.Equal(expected, PerformanceHistoryStore.DefaultPath);
     }
+
+    // ---- The extra windows and the braking distances ---------------------------------------------------------
+
+    private static PerformanceResult Extra(
+        double? hundredTo200 = null, double? zeroTo60 = null, double? sixtyTo130 = null, double? brake100 = null, double? brake60 = null) =>
+        new(null, null, null, null, null, hundredTo200, zeroTo60, sixtyTo130, brake100, brake60);
+
+    [Fact]
+    public void The_new_values_are_stored_per_car_and_survive_a_restart()
+    {
+        var store = NewStore();
+        store.Merge(Gt, 3, 2, Extra(hundredTo200: 6.1, zeroTo60: 2.7, sixtyTo130: 7.9, brake100: 38.6, brake60: 35.9));
+        store.Flush();
+
+        var reloaded = NewStore();
+        reloaded.Load();
+
+        var record = reloaded.Find(Gt)!;
+        Assert.Equal(6.1, record.HundredTo200Seconds);
+        Assert.Equal(2.7, record.ZeroTo60MphSeconds);
+        Assert.Equal(7.9, record.SixtyTo130MphSeconds);
+        Assert.Equal(38.6, record.BrakeHundredMeters);
+        Assert.Equal(35.9, record.BrakeSixtyMphMeters);
+    }
+
+    [Fact]
+    public void Times_and_braking_distances_are_better_when_lower_and_a_first_value_is_not_an_improvement()
+    {
+        var store = NewStore();
+        var first = store.Merge(Gt, 3, 2, Extra(hundredTo200: 6.0, zeroTo60: 2.8, sixtyTo130: 8.0, brake100: 40, brake60: 37));
+        Assert.False(first.Any); // records, not improvements
+
+        var slower = store.Merge(Gt, 3, 2, Extra(hundredTo200: 6.5, zeroTo60: 2.9, sixtyTo130: 8.5, brake100: 42, brake60: 39));
+        Assert.False(slower.Any);
+        Assert.Equal(40, store.Find(Gt)!.BrakeHundredMeters);
+
+        var better = store.Merge(Gt, 3, 2, Extra(hundredTo200: 5.9, zeroTo60: 2.7, sixtyTo130: 7.9, brake100: 38, brake60: 35));
+        Assert.True(better.HundredTo200);
+        Assert.True(better.ZeroTo60Mph);
+        Assert.True(better.SixtyTo130Mph);
+        Assert.True(better.BrakeHundred);
+        Assert.True(better.BrakeSixtyMph);
+        Assert.Equal(38, store.Find(Gt)!.BrakeHundredMeters);
+    }
+
+    [Fact]
+    public void Only_the_values_that_improved_are_replaced_and_the_others_are_kept()
+    {
+        var store = NewStore();
+        store.Merge(Gt, 3, 2, Extra(hundredTo200: 6.0, brake100: 40));
+
+        var improved = store.Merge(Gt, 3, 2, Extra(hundredTo200: 7.0, brake100: 39, zeroTo60: 2.8));
+
+        Assert.False(improved.HundredTo200);
+        Assert.True(improved.BrakeHundred);
+        var record = store.Find(Gt)!;
+        Assert.Equal(6.0, record.HundredTo200Seconds); // the slower rolling time did not replace the best
+        Assert.Equal(39, record.BrakeHundredMeters);
+        Assert.Equal(2.8, record.ZeroTo60MphSeconds); // a first value is simply stored
+    }
+
+    [Fact]
+    public void A_non_positive_or_non_finite_distance_is_not_a_result()
+    {
+        var store = NewStore();
+
+        store.Merge(Gt, 3, 2, Extra(brake100: 0, brake60: double.NaN));
+
+        Assert.Null(store.Find(Gt));
+    }
+
+    [Fact]
+    public void A_file_written_before_the_new_values_loads_unchanged_with_them_empty_and_fills_in_later()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(HistoryPath, """
+            { "schemaVersion": 1, "cars": [
+              { "carOrdinal": 1234, "performanceIndex": 780, "carClass": 3, "drivetrainType": 2,
+                "zeroTo100Seconds": 3.1, "zeroTo200Seconds": 9.4, "quarterMileSeconds": 11.2, "quarterMileTrapKmh": 201,
+                "topSpeedKmh": 280, "updatedAt": "2026-10-01T10:00:00+00:00" } ] }
+            """);
+        var store = NewStore();
+
+        store.Load();
+
+        var old = store.Find(Gt)!;
+        Assert.Equal(3.1, old.ZeroTo100Seconds);
+        Assert.Equal(280, old.TopSpeedKmh);
+        Assert.Null(old.HundredTo200Seconds);
+        Assert.Null(old.ZeroTo60MphSeconds);
+        Assert.Null(old.SixtyTo130MphSeconds);
+        Assert.Null(old.BrakeHundredMeters);
+        Assert.Null(old.BrakeSixtyMphMeters);
+
+        store.Merge(Gt, 3, 2, Extra(brake100: 41));
+
+        var record = store.Find(Gt)!;
+        Assert.Equal(41, record.BrakeHundredMeters);
+        Assert.Equal(3.1, record.ZeroTo100Seconds); // nothing that existed was touched
+        Assert.Equal(11.2, record.QuarterMileSeconds);
+    }
+
+    [Fact]
+    public void Unusable_values_for_the_new_fields_in_a_file_are_simply_no_value()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(HistoryPath, """
+            { "schemaVersion": 1, "cars": [
+              { "carOrdinal": 1234, "performanceIndex": 780, "zeroTo100Seconds": 3.1,
+                "brakeHundredMeters": "far", "brakeSixtyMphMeters": -4, "hundredTo200Seconds": 6.2 } ] }
+            """);
+        var store = NewStore();
+
+        store.Load();
+
+        var record = store.Find(Gt)!;
+        Assert.Null(record.BrakeHundredMeters);
+        Assert.Null(record.BrakeSixtyMphMeters);
+        Assert.Equal(6.2, record.HundredTo200Seconds);
+    }
 }

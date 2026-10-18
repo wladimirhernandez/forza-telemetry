@@ -388,9 +388,6 @@
   <data name="PerfReplayNote" xml:space="preserve">
     <value>Reproducción: estos resultados no se guardan en tu historial.</value>
   </data>
-  <data name="PerfThresholdNote" xml:space="preserve">
-    <value>Las pruebas se miden hasta 100 y 200 km/h (unas 62 y 124 mph) con cualquier unidad. Las velocidades se muestran en tu unidad.</value>
-  </data>
   <data name="PerfNoCar" xml:space="preserve">
     <value>Aún no se detecta ningún coche</value>
   </data>
@@ -444,6 +441,48 @@
   </data>
   <data name="PerfSortByFormat" xml:space="preserve">
     <value>Ordenar por {0}</value>
+  </data>
+  <data name="PerfTitle60Mph" xml:space="preserve">
+    <value>0–60 mph</value>
+  </data>
+  <data name="PerfTitle60To130Mph" xml:space="preserve">
+    <value>60–130 mph</value>
+  </data>
+  <data name="PerfTitle100To200" xml:space="preserve">
+    <value>100–200 km/h</value>
+  </data>
+  <data name="PerfTitleBrake100" xml:space="preserve">
+    <value>Frenada 100–0 km/h</value>
+  </data>
+  <data name="PerfTitleBrake60Mph" xml:space="preserve">
+    <value>Frenada 60–0 mph</value>
+  </data>
+  <data name="PerfBrakeStateIdle" xml:space="preserve">
+    <value>Alcanza {0} {1} para armar la prueba de frenada</value>
+  </data>
+  <data name="PerfBrakeStateArmed" xml:space="preserve">
+    <value>Armada: frena a fondo desde más de {0} {1}</value>
+  </data>
+  <data name="PerfBrakeStateBraking" xml:space="preserve">
+    <value>Frenando: mantén el freno hasta detenerte</value>
+  </data>
+  <data name="PerfBrakeStateDone" xml:space="preserve">
+    <value>Completada</value>
+  </data>
+  <data name="PerfColZeroTo60Mph" xml:space="preserve">
+    <value>0–60</value>
+  </data>
+  <data name="PerfColSixtyTo130Mph" xml:space="preserve">
+    <value>60–130</value>
+  </data>
+  <data name="PerfColBraking" xml:space="preserve">
+    <value>Frenada</value>
+  </data>
+  <data name="DistanceUnit" xml:space="preserve">
+    <value>m</value>
+  </data>
+  <data name="DistanceUnitFeet" xml:space="preserve">
+    <value>ft</value>
   </data>
   <data name="LapsLapFormat" xml:space="preserve">
     <value>Vuelta {0}</value>

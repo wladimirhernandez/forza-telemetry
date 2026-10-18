@@ -48,11 +48,13 @@ public sealed class PerformanceViewModelTests : IDisposable
             History = new PerformanceHistoryStore(HistoryPath, time);
             Units = new UnitsService();
             Confirmation = new FakeConfirmation(confirm);
-            CarChanges = new CarChangeDetector(TopSpeed, Acceleration);
-            Vm = new PerformanceViewModel(Acceleration, TopSpeed, CarChanges, History, Units, Confirmation);
+            CarChanges = new CarChangeDetector(TopSpeed, Acceleration, Braking);
+            Vm = new PerformanceViewModel(Acceleration, TopSpeed, CarChanges, History, Units, Confirmation, braking: Braking);
         }
 
         public AccelerationTimer Acceleration { get; } = new();
+
+        public BrakingTest Braking { get; } = new();
 
         public TopSpeedTracker TopSpeed { get; } = new();
 
@@ -78,6 +80,7 @@ public sealed class PerformanceViewModelTests : IDisposable
             CarChanges.Reset();
             TopSpeed.Reset();
             Acceleration.Reset();
+            Braking.Reset();
             Vm.BeginSession();
         }
 
@@ -87,7 +90,7 @@ public sealed class PerformanceViewModelTests : IDisposable
 
         public int CarClass { get; set; } = 3;
 
-        private TelemetryPacket Packet(double speed, double distance, byte gear, bool raceOn) =>
+        private TelemetryPacket Packet(double speed, double distance, byte gear, bool raceOn, byte throttle, byte brake) =>
             TestPackets.Sample(
                 speedMetersPerSecond: (float)speed,
                 gear: gear,
@@ -95,18 +98,22 @@ public sealed class PerformanceViewModelTests : IDisposable
                 carClass: CarClass,
                 performanceIndex: Pi,
                 drivetrain: 2,
-                isRaceOn: raceOn) with
+                isRaceOn: raceOn,
+                accel: throttle,
+                brake: brake) with
             {
                 TimestampMS = _ms,
                 DistanceTraveled = (float)distance
             };
 
         /// <summary>One packet through the engines (as the receive loop does) and one UI refresh from it (as the tick does).</summary>
-        public TelemetryPacket Feed(double speed, double distance = 0, byte gear = 1, bool raceOn = true, uint stepMs = 20)
+        public TelemetryPacket Feed(
+            double speed, double distance = 0, byte gear = 1, bool raceOn = true, uint stepMs = 20, byte throttle = 0, byte brake = 0)
         {
-            var packet = Packet(speed, distance, gear, raceOn);
+            var packet = Packet(speed, distance, gear, raceOn, throttle, brake);
             CarChanges.OnPacket(packet); // first, like the app: it must see a new car before the engines do
             Acceleration.OnPacket(packet);
+            Braking.OnPacket(packet);
             TopSpeed.OnPacket(packet);
             Vm.Refresh(packet);
             _ms += stepMs;
@@ -121,13 +128,38 @@ public sealed class PerformanceViewModelTests : IDisposable
             }
         }
 
-        /// <summary>A constant-acceleration launch from the line for <paramref name="seconds"/>.</summary>
+        /// <summary>
+        /// A constant-acceleration launch from the line for <paramref name="seconds"/>, with the throttle floored: the engine ends a run
+        /// when the driver lifts, so a launch without throttle is not a launch.
+        /// </summary>
         public void Launch(double seconds, double accel = Accel)
         {
             for (var t = 0.0; t <= seconds + 1e-9; t += 0.02)
             {
-                Feed(accel * t, 0.5 * accel * t * t, gear: 1);
+                Feed(accel * t, 0.5 * accel * t * t, gear: 1, throttle: 255);
             }
+        }
+
+        /// <summary>
+        /// Cruises, then brakes hard to a standstill at a constant <paramref name="decel"/>, brake floored, throttle off. With the defaults
+        /// (40 m/s, 10 m/s^2) the closed forms are exact: 100 km/h to the 1 km/h standstill is 38.58 m in 2.75 s, and 60 mph is 35.97 m in
+        /// 2.65 s. The distance grows with the speed, so the engines get a real stopping distance.
+        /// </summary>
+        public void BrakeHard(double fromSpeed = 40, double decel = 10)
+        {
+            double distance = 0;
+            for (var i = 0; i < 5; i++)
+            {
+                Feed(fromSpeed, distance, gear: 5);
+                distance += fromSpeed * 0.02;
+            }
+
+            for (var t = 0.02; fromSpeed - (decel * t) > 0; t += 0.02)
+            {
+                Feed(fromSpeed - (decel * t), distance + (fromSpeed * t) - (decel * t * t / 2), gear: 5, brake: 255);
+            }
+
+            Feed(0, distance + (fromSpeed * fromSpeed / (2 * decel)), gear: 5, brake: 255);
         }
 
         /// <summary>Brakes from the given speed to a standstill (the timer arms again).</summary>
@@ -717,24 +749,21 @@ public sealed class PerformanceViewModelTests : IDisposable
     // ---- Units ------------------------------------------------------------------------------------------------
 
     [Fact]
-    public void Speeds_follow_the_unit_but_the_run_titles_stay_metric_and_a_note_explains_it()
+    public void Speeds_follow_the_unit_and_the_times_never_convert()
     {
         var rig = NewRig();
         rig.Stand();
         rig.Launch(10.0);
-        Assert.False(rig.Vm.ShowThresholdNote);
         Assert.Equal("km/h", rig.Vm.SpeedUnitLabel);
         var topKmh = Parse(rig.Vm.TopSpeedText);
 
         rig.Units.SpeedUnit = SpeedUnit.Mph;
 
-        Assert.True(rig.Vm.ShowThresholdNote);
         Assert.Equal("mph", rig.Vm.SpeedUnitLabel);
         Assert.Equal(topKmh / 1.609344, Parse(rig.Vm.TopSpeedText), precision: 0);
         Assert.Contains("mph", rig.Vm.QuarterMileTrapText);
         Assert.Contains("mph", Assert.Single(rig.Vm.Rows).TopSpeedText);
         Assert.Equal("2.75", rig.Vm.ZeroTo100Text.Replace(',', '.')); // times never convert
-        Assert.Contains("100", Strings.PerfThresholdNote);
     }
 
     [Fact]
@@ -815,8 +844,8 @@ public sealed class PerformanceViewModelTests : IDisposable
         Assert.Equal("A", row.ClassLabel); // CarClass 3
         Assert.Equal("700", row.PerformanceIndexText);
         Assert.Equal("RWD", row.DrivetrainLabel);
-        Assert.Equal(4.0, Parse(row.ZeroTo100Text.Replace(" s", "")));
-        Assert.Equal("--", row.ZeroTo200Text);
+        Assert.Equal(4.0, Parse(row.WindowAText.Replace(" s", "")));
+        Assert.Equal("--", row.WindowBText);
         Assert.Contains("12", row.QuarterMileText);
         Assert.DoesNotContain("km/h", row.QuarterMileText); // the time and the speed at the line are two lines, not one joined string
         Assert.Equal("180 km/h", row.QuarterMileTrapText); // the trap speed of THAT quarter mile
@@ -929,5 +958,353 @@ public sealed class PerformanceViewModelTests : IDisposable
 
         await shell.StopCommand.ExecuteAsync(null);
         Assert.Equal(PerformanceRunState.WaitingForData, rig.Vm.State); // stopping ends the session
+    }
+
+    // ---- The extra acceleration windows ---------------------------------------------------------------------
+
+    [Fact]
+    public void One_launch_measures_every_window_and_saves_them_all()
+    {
+        var rig = NewRig();
+        rig.Stand();
+
+        rig.Launch(10.0);
+
+        // Closed forms for a = 10 m/s^2 (the timer starts at the 1 km/h standstill line, which is why 0.28 m/s is taken off).
+        Assert.Equal(2.78, Parse(rig.Vm.HundredTo200Text), precision: 2); // (55.56 - 27.78) / 10
+        Assert.Equal(2.65, Parse(rig.Vm.ZeroTo60MphText), precision: 2); // (26.82 - 0.28) / 10
+        Assert.Equal(3.13, Parse(rig.Vm.SixtyTo130MphText), precision: 2); // (58.12 - 26.82) / 10
+        var record = Assert.Single(rig.History.Records);
+        Assert.Equal(2.78, record.HundredTo200Seconds!.Value, precision: 2);
+        Assert.Equal(2.65, record.ZeroTo60MphSeconds!.Value, precision: 2);
+        Assert.Equal(3.13, record.SixtyTo130MphSeconds!.Value, precision: 2);
+    }
+
+    [Fact]
+    public void The_acceleration_slots_show_the_metric_windows_and_switch_to_mph_with_the_unit()
+    {
+        var rig = NewRig();
+        rig.Stand();
+        rig.Launch(10.0);
+
+        Assert.Equal(Strings.PerfTitle100, rig.Vm.WindowATitle);
+        Assert.Equal(rig.Vm.ZeroTo100Text, rig.Vm.WindowAText);
+        Assert.Equal(Strings.PerfTitle200, rig.Vm.WindowBTitle);
+        Assert.Equal(rig.Vm.ZeroTo200Text, rig.Vm.WindowBText);
+        Assert.Equal(Strings.PerfTitle100To200, rig.Vm.ExtraWindowTitle);
+        Assert.Equal(rig.Vm.HundredTo200Text, rig.Vm.ExtraWindowText);
+        Assert.Equal(Strings.PerfColZeroTo100, rig.Vm.WindowAColumnTitle);
+        Assert.Equal($"{Strings.PerfTitle100}: {rig.Vm.ZeroTo100Text}", rig.Vm.WindowAName);
+
+        var changed = new List<string?>();
+        rig.Vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+        rig.Units.SpeedUnit = SpeedUnit.Mph;
+
+        Assert.Equal(Strings.PerfTitle60Mph, rig.Vm.WindowATitle);
+        Assert.Equal(rig.Vm.ZeroTo60MphText, rig.Vm.WindowAText);
+        Assert.Equal(Strings.PerfTitle60To130Mph, rig.Vm.WindowBTitle);
+        Assert.Equal(rig.Vm.SixtyTo130MphText, rig.Vm.WindowBText);
+        Assert.Equal(Strings.PerfTitle100, rig.Vm.ExtraWindowTitle); // the metric reference stays on screen as the extra tile
+        Assert.Equal(rig.Vm.ZeroTo100Text, rig.Vm.ExtraWindowText);
+        Assert.Equal(Strings.PerfColZeroTo60Mph, rig.Vm.WindowAColumnTitle);
+        Assert.Equal(Strings.PerfColSixtyTo130Mph, rig.Vm.WindowBColumnTitle);
+        Assert.Contains(nameof(PerformanceViewModel.WindowAText), changed);
+        Assert.Contains(nameof(PerformanceViewModel.WindowBTitle), changed);
+        Assert.Contains(nameof(PerformanceViewModel.ExtraWindowName), changed);
+        Assert.Contains(nameof(PerformanceViewModel.BrakingTitle), changed);
+        Assert.Contains(nameof(PerformanceViewModel.DistanceUnitLabel), changed);
+    }
+
+    [Fact]
+    public void A_temperature_change_does_not_touch_the_window_slots()
+    {
+        var rig = NewRig();
+        var changed = new List<string?>();
+        rig.Vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        rig.Units.TemperatureUnit = TemperatureUnit.Fahrenheit;
+
+        Assert.DoesNotContain(nameof(PerformanceViewModel.WindowAText), changed);
+        Assert.DoesNotContain(nameof(PerformanceViewModel.BrakingTitle), changed);
+    }
+
+    [Fact]
+    public void A_quicker_run_flags_the_new_windows_as_new_bests_in_the_slots_of_the_current_unit()
+    {
+        var rig = NewRig();
+        rig.Stand();
+        rig.Launch(10.0);
+        rig.BrakeToStop(100, 800);
+
+        rig.Launch(10.0, accel: 11);
+
+        Assert.True(rig.Vm.HundredTo200IsNewBest);
+        Assert.True(rig.Vm.ZeroTo60MphIsNewBest);
+        Assert.True(rig.Vm.SixtyTo130MphIsNewBest);
+        Assert.True(rig.Vm.WindowAIsNewBest); // km/h: follows 0-100
+        Assert.True(rig.Vm.ExtraWindowIsNewBest); // follows 100-200
+        rig.Units.SpeedUnit = SpeedUnit.Mph;
+        Assert.True(rig.Vm.WindowAIsNewBest); // mph: follows 0-60
+        Assert.True(rig.Vm.WindowBIsNewBest); // and 60-130
+        Assert.True(rig.Vm.ExtraWindowIsNewBest); // 0-100 improved too
+    }
+
+    // ---- Braking ------------------------------------------------------------------------------------------------
+
+    [Fact]
+    public void Before_any_data_the_braking_tile_is_empty_and_says_waiting()
+    {
+        var rig = NewRig();
+
+        Assert.Equal("--", rig.Vm.BrakingDistanceText);
+        Assert.Equal("--", rig.Vm.BrakingTimeText);
+        Assert.Equal(PerformanceRunState.WaitingForData, rig.Vm.BrakingRunState);
+        Assert.Equal(Strings.PerfStateWaiting, rig.Vm.BrakingStateText);
+        Assert.Equal(Strings.PerfTitleBrake100, rig.Vm.BrakingTitle);
+        Assert.Equal("m", rig.Vm.DistanceUnitLabel);
+    }
+
+    [Fact]
+    public void The_braking_state_line_walks_idle_armed_braking_done_and_quotes_the_speeds_in_the_unit()
+    {
+        var rig = NewRig();
+
+        rig.Feed(20, gear: 4); // 72 km/h: below the arming speed
+        Assert.Equal(PerformanceRunState.Idle, rig.Vm.BrakingRunState);
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture, Strings.PerfBrakeStateIdle, "105", "km/h"), rig.Vm.BrakingStateText);
+
+        rig.Feed(40, 0.8, gear: 4);
+        Assert.Equal(PerformanceRunState.Armed, rig.Vm.BrakingRunState);
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture, Strings.PerfBrakeStateArmed, "100", "km/h"), rig.Vm.BrakingStateText);
+
+        rig.Units.SpeedUnit = SpeedUnit.Mph;
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture, Strings.PerfBrakeStateArmed, "62", "mph"), rig.Vm.BrakingStateText);
+        rig.Feed(20, 1.2, gear: 4);
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture, Strings.PerfBrakeStateIdle, "65", "mph"), rig.Vm.BrakingStateText);
+        rig.Units.SpeedUnit = SpeedUnit.Kmh;
+
+        var rig2 = NewRig();
+        rig2.BrakeHard();
+        Assert.Equal(PerformanceRunState.Done, rig2.Vm.BrakingRunState);
+        Assert.Equal(Strings.PerfBrakeStateDone, rig2.Vm.BrakingStateText);
+    }
+
+    [Fact]
+    public void While_a_stop_is_being_measured_the_tile_says_braking_and_counts_the_time()
+    {
+        var rig = NewRig();
+        for (var i = 0; i < 5; i++)
+        {
+            rig.Feed(40, i * 0.8, gear: 5);
+        }
+
+        // Just past the 100 km/h line (27.78 m/s), brake floored: measuring.
+        for (var t = 0.02; t < 1.5; t += 0.02)
+        {
+            rig.Feed(40 - (10 * t), 4 + (40 * t) - (5 * t * t), gear: 5, brake: 255);
+        }
+
+        Assert.Equal(PerformanceRunState.Running, rig.Vm.BrakingRunState);
+        Assert.Equal(Strings.PerfBrakeStateBraking, rig.Vm.BrakingStateText);
+        Assert.Equal("--", rig.Vm.BrakingDistanceText); // no result until the stop is complete
+        Assert.NotEqual("--", rig.Vm.BrakingTimeText);
+    }
+
+    [Fact]
+    public void A_finished_stop_shows_the_distance_and_time_saves_them_under_the_car_and_fills_the_table()
+    {
+        var rig = NewRig();
+
+        rig.BrakeHard();
+
+        Assert.Equal(38.58, Parse(rig.Vm.BrakingDistanceText), precision: 1);
+        Assert.Equal(2.75, Parse(rig.Vm.BrakingTimeText), precision: 2);
+        var record = Assert.Single(rig.History.Records);
+        Assert.Equal(new CarKey(1234, 780), record.Car);
+        Assert.Equal(38.58, record.BrakeHundredMeters!.Value, precision: 2);
+        Assert.Equal(35.97, record.BrakeSixtyMphMeters!.Value, precision: 2);
+        Assert.True(File.Exists(rig.HistoryPath));
+        var row = Assert.Single(rig.Vm.Rows);
+        Assert.Equal($"{rig.Vm.BrakingDistanceText} m", row.BrakingText);
+        Assert.False(rig.Vm.BrakingIsNewBest); // the first stop of a car is a record, not an improvement
+    }
+
+    [Fact]
+    public void With_mph_the_tile_and_the_table_show_the_60_to_0_distance_in_feet()
+    {
+        var rig = NewRig();
+        rig.Units.SpeedUnit = SpeedUnit.Mph;
+
+        rig.BrakeHard();
+
+        Assert.Equal(Strings.PerfTitleBrake60Mph, rig.Vm.BrakingTitle);
+        Assert.Equal("ft", rig.Vm.DistanceUnitLabel);
+        Assert.Equal(35.97 * 3.280839895, Parse(rig.Vm.BrakingDistanceText), precision: 0); // whole feet
+        Assert.Equal(2.65, Parse(rig.Vm.BrakingTimeText), precision: 2);
+        Assert.Equal($"{rig.Vm.BrakingDistanceText} ft", Assert.Single(rig.Vm.Rows).BrakingText);
+    }
+
+    [Fact]
+    public void A_shorter_stop_is_flagged_as_a_new_best_and_the_flag_clears_when_the_next_stop_begins()
+    {
+        var rig = NewRig();
+        rig.BrakeHard(decel: 10);
+        rig.BrakeHard(decel: 11);
+
+        Assert.True(rig.Vm.BrakingIsNewBest);
+        Assert.Equal(35.07, rig.History.Find(new CarKey(1234, 780))!.BrakeHundredMeters!.Value, precision: 2);
+
+        rig.BrakeHard(decel: 9); // longer than the best: nothing new
+
+        Assert.False(rig.Vm.BrakingIsNewBest);
+        Assert.Equal(35.07, rig.History.Find(new CarKey(1234, 780))!.BrakeHundredMeters!.Value, precision: 2);
+    }
+
+    [Fact]
+    public void A_stop_the_engine_dropped_saves_nothing_and_keeps_the_previous_result_on_screen()
+    {
+        var rig = NewRig();
+        rig.BrakeHard();
+        var shown = rig.Vm.BrakingDistanceText;
+        var best = rig.History.Find(new CarKey(1234, 780))!.BrakeHundredMeters;
+
+        // A second stop in which the driver gets back on the throttle halfway: the engine discards it.
+        for (var i = 0; i < 5; i++)
+        {
+            rig.Feed(40, i * 0.8, gear: 5);
+        }
+
+        for (var t = 0.02; t < 1.0; t += 0.02)
+        {
+            rig.Feed(40 - (10 * t), 4 + (40 * t) - (5 * t * t), gear: 5, brake: 255);
+        }
+
+        rig.Feed(15, 30, gear: 5, throttle: 255);
+
+        Assert.Equal(shown, rig.Vm.BrakingDistanceText);
+        Assert.Equal(best, rig.History.Find(new CarKey(1234, 780))!.BrakeHundredMeters);
+    }
+
+    [Fact]
+    public void A_replay_measures_and_shows_a_stop_but_saves_nothing()
+    {
+        var rig = NewRig();
+        rig.Vm.BeginSession(isReplay: true);
+
+        rig.BrakeHard();
+        rig.Vm.EndSession();
+
+        Assert.NotEqual("--", rig.Vm.BrakingDistanceText); // measured and shown...
+        Assert.Empty(rig.History.Records); // ...never saved
+        Assert.False(File.Exists(rig.HistoryPath));
+    }
+
+    [Fact]
+    public void A_change_of_car_clears_the_braking_tile_and_credits_nothing_to_the_new_car()
+    {
+        var rig = NewRig();
+        rig.BrakeHard();
+        Assert.NotEqual("--", rig.Vm.BrakingDistanceText);
+
+        rig.Car = 77;
+        rig.Pi = 450;
+        rig.Feed(5, gear: 2);
+
+        Assert.Equal("--", rig.Vm.BrakingDistanceText);
+        Assert.Equal(38.58, rig.History.Find(new CarKey(1234, 780))!.BrakeHundredMeters!.Value, precision: 2); // the first car keeps it
+        Assert.Null(rig.History.Find(new CarKey(77, 450))?.BrakeHundredMeters);
+    }
+
+    [Fact]
+    public void A_fresh_session_and_the_reset_button_clear_the_braking_tile()
+    {
+        var rig = NewRig();
+        rig.BrakeHard();
+
+        rig.Vm.ResetRunCommand.Execute(null);
+        Assert.Equal("--", rig.Vm.BrakingDistanceText);
+
+        rig.BrakeHard();
+        Assert.NotEqual("--", rig.Vm.BrakingDistanceText);
+
+        rig.StartNewSession();
+        Assert.Equal("--", rig.Vm.BrakingDistanceText);
+        Assert.Equal(PerformanceRunState.WaitingForData, rig.Vm.BrakingRunState);
+    }
+
+    [Fact]
+    public void Without_a_braking_engine_the_tile_simply_stays_empty()
+    {
+        var acceleration = new AccelerationTimer();
+        var topSpeed = new TopSpeedTracker();
+        var vm = new PerformanceViewModel(
+            acceleration, topSpeed, new CarChangeDetector(topSpeed, acceleration), new PerformanceHistoryStore(Path.Combine(_directory, "p.json"), _time));
+
+        vm.Refresh(TestPackets.Sample(speedMetersPerSecond: 40, gear: 4, carOrdinal: 1, performanceIndex: 500));
+
+        Assert.Equal("--", vm.BrakingDistanceText);
+    }
+
+    // ---- Table: braking column, details ----------------------------------------------------------------------
+
+    private static void SeedBraking(PerformanceHistoryStore store)
+    {
+        store.Merge(new CarKey(300, 600), 2, 0, new PerformanceResult(5.0, 15.0, 14.0, 160, 200, BrakeHundredMeters: 44.4, BrakeSixtyMphMeters: 40.1));
+        store.Merge(new CarKey(100, 800), 4, 2, new PerformanceResult(3.0, 8.0, 11.0, 210, 300, 5.5, 2.6, 7.4, 36.2, 33.0));
+        store.Merge(new CarKey(200, 700), 3, 2, new PerformanceResult(4.0, null, 12.0, 180, 260));
+    }
+
+    [Fact]
+    public void The_braking_column_sorts_shortest_first_with_cars_that_never_stopped_last()
+    {
+        var rig = NewRig();
+        SeedBraking(rig.History);
+
+        rig.Vm.SortByCommand.Execute(PerformanceSortColumn.Braking);
+
+        Assert.True(rig.Vm.IsSortedByBraking);
+        Assert.Equal([CarLabel(100), CarLabel(300), CarLabel(200)], rig.Vm.Rows.Select(r => r.CarLabel).ToArray());
+        Assert.Equal($"{36.2.ToString("F1", CultureInfo.CurrentCulture)} m", rig.Vm.Rows[0].BrakingText);
+        Assert.Equal("--", rig.Vm.Rows[2].BrakingText);
+    }
+
+    [Fact]
+    public void The_acceleration_columns_and_their_sort_follow_the_unit()
+    {
+        var rig = NewRig();
+        SeedBraking(rig.History);
+        rig.Units.SpeedUnit = SpeedUnit.Mph;
+
+        var row = rig.Vm.Rows.Single(r => r.CarLabel == CarLabel(100));
+        Assert.Equal(2.6, Parse(row.WindowAText.Replace(" s", "")), precision: 2);
+        Assert.Equal(7.4, Parse(row.WindowBText.Replace(" s", "")), precision: 2);
+        Assert.Equal("108 ft", row.BrakingText); // 33.0 m, whole feet
+        Assert.Equal("--", rig.Vm.Rows.Single(r => r.CarLabel == CarLabel(200)).WindowAText); // never measured: a dash
+
+        rig.Vm.SortByCommand.Execute(PerformanceSortColumn.ZeroTo100);
+
+        Assert.Equal(CarLabel(100), rig.Vm.Rows[0].CarLabel); // the only car with a 0-60 mph time leads
+    }
+
+    [Fact]
+    public void A_rows_details_list_every_stored_best_in_both_unit_families_for_the_tooltip_and_screen_readers()
+    {
+        var rig = NewRig();
+        SeedBraking(rig.History);
+
+        var row = rig.Vm.Rows.Single(r => r.CarLabel == CarLabel(100));
+
+        Assert.Contains(row.DetailLines, l => l.StartsWith($"{Strings.PerfTitle100}: ", StringComparison.Ordinal));
+        Assert.Contains(row.DetailLines, l => l.StartsWith($"{Strings.PerfTitle100To200}: ", StringComparison.Ordinal));
+        Assert.Contains(row.DetailLines, l => l.StartsWith($"{Strings.PerfTitle60Mph}: ", StringComparison.Ordinal));
+        Assert.Contains(row.DetailLines, l => l.StartsWith($"{Strings.PerfTitle60To130Mph}: ", StringComparison.Ordinal));
+        Assert.Contains(row.DetailLines, l => l.StartsWith($"{Strings.PerfTitleBrake100}: ", StringComparison.Ordinal));
+        Assert.Contains(row.DetailLines, l => l.StartsWith($"{Strings.PerfTitleBrake60Mph}: ", StringComparison.Ordinal));
+        Assert.Equal(row.DetailLines.Count, row.DetailsTooltip.Split(Environment.NewLine).Length);
+        Assert.Contains(Strings.PerfTitle100To200, row.Summary);
+        Assert.DoesNotContain('·', row.Summary);
+
+        var oldCar = rig.Vm.Rows.Single(r => r.CarLabel == CarLabel(200));
+        Assert.DoesNotContain(oldCar.DetailLines, l => l.StartsWith(Strings.PerfTitleBrake100, StringComparison.Ordinal)); // nothing invented for a car without it
     }
 }

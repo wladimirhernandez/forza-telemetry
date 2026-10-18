@@ -51,6 +51,7 @@ public sealed class CarChangeDetector : IPacketObserver
 {
     private readonly TopSpeedTracker? _topSpeed;
     private readonly AccelerationTimer? _acceleration;
+    private readonly BrakingTest? _braking;
     private readonly Queue<CarChange> _changes = new();
     private readonly object _gate = new();
 
@@ -62,10 +63,12 @@ public sealed class CarChangeDetector : IPacketObserver
 
     /// <param name="topSpeed">The top-speed engine to freeze and reset on a change; optional (tests, or nothing to own).</param>
     /// <param name="acceleration">The 0-100 engine to reset on a change; optional.</param>
-    public CarChangeDetector(TopSpeedTracker? topSpeed = null, AccelerationTimer? acceleration = null)
+    /// <param name="braking">The braking test to reset on a change (its stop belongs to one car too); optional.</param>
+    public CarChangeDetector(TopSpeedTracker? topSpeed = null, AccelerationTimer? acceleration = null, BrakingTest? braking = null)
     {
         _topSpeed = topSpeed;
         _acceleration = acceleration;
+        _braking = braking;
     }
 
     /// <summary>
@@ -162,6 +165,7 @@ public sealed class CarChangeDetector : IPacketObserver
                 previousTopSpeed = _topSpeed?.TopSpeedKmh ?? 0;
                 _topSpeed?.Reset();
                 _acceleration?.Reset();
+                _braking?.Reset();
             }
 
             _car = key;
@@ -187,6 +191,7 @@ public sealed class CarChangeDetector : IPacketObserver
 
             _topSpeed?.Reset();
             _acceleration?.Reset();
+            _braking?.Reset();
 
             // Same publication order as a change of car: generation first, flag last. A reader that sees the flag cleared
             // therefore also sees the reset engines, and a reader that straddled the reset sees the generation move.
