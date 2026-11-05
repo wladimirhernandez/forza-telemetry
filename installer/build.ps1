@@ -3,8 +3,8 @@
     Builds the Forza Telemetry installer.
 
 .DESCRIPTION
-    Pipeline: dotnet test, self-contained publish of the WPF app into artifacts\stage, Inno Setup compile into dist\,
-    then SHA-256 and size report. It writes only artifacts\ and dist\ (both git-ignored) and never installs anything.
+    Pipeline: dotnet test, self-contained publish of the WPF app into artifacts\ForzaTelemetry, Inno Setup compile into
+    dist\, a portable zip of the same folder into dist\, then SHA-256 and size report for both. It writes only artifacts\ and dist\ (both git-ignored) and never installs anything.
 
     Publish choice: -p:PublishSingleFile=false on purpose. A single-file WPF app has to extract native libraries
     (PresentationNative, wpfgfx, D3DCompiler) to a temp folder at start-up, which slows launch and trips some
@@ -69,7 +69,8 @@ try {
     Write-Host "Version: $Version"
 
     $artifacts = Join-Path $root 'artifacts'
-    $stage = Join-Path $artifacts 'stage'
+    # The folder name becomes the top-level folder inside the portable zip.
+    $stage = Join-Path $artifacts 'ForzaTelemetry'
     $dist = Join-Path $root 'dist'
 
     if (-not $SkipTests) {
@@ -94,15 +95,25 @@ try {
     & $iscc /Qp "/DStageDir=$stage" "/DAppVersion=$Version" "/DOutputDir=$dist" $iss
     if ($LASTEXITCODE -ne 0) { throw "ISCC failed ($LASTEXITCODE)." }
 
+    Write-Step 'Portable zip'
+    $zipPath = Join-Path $dist "ForzaTelemetry-$Version-win-x64-portable.zip"
+    if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
+    Compress-Archive -Path $stage -DestinationPath $zipPath -CompressionLevel Optimal
+
     Write-Step 'Result'
-    $installer = Get-Item -LiteralPath (Join-Path $dist "ForzaTelemetry-Setup-$Version.exe")
-    $sha256 = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-    $checksumPath = "$($installer.FullName).sha256"
-    [IO.File]::WriteAllText($checksumPath, "$sha256 *$($installer.Name)`n")
-    Write-Host ("  {0}" -f $installer.FullName)
-    Write-Host ("  size:    {0:N1} MB ({1} bytes)" -f ($installer.Length / 1MB), $installer.Length)
-    Write-Host "  SHA-256: $sha256"
-    Write-Host "  checksum file: $checksumPath"
+    $outputs = @(
+        (Get-Item -LiteralPath (Join-Path $dist "ForzaTelemetry-Setup-$Version.exe")),
+        (Get-Item -LiteralPath $zipPath)
+    )
+    foreach ($file in $outputs) {
+        $sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        $checksumPath = "$($file.FullName).sha256"
+        [IO.File]::WriteAllText($checksumPath, "$sha256 *$($file.Name)`n")
+        Write-Host ("  {0}" -f $file.FullName)
+        Write-Host ("  size:    {0:N1} MB ({1} bytes)" -f ($file.Length / 1MB), $file.Length)
+        Write-Host "  SHA-256: $sha256"
+        Write-Host "  checksum file: $checksumPath"
+    }
 }
 catch {
     Write-Host ''

@@ -1,6 +1,6 @@
 name: Release
 
-# Runs when a version tag such as v1.0.0 is pushed. Builds the installer and attaches it to a GitHub Release.
+# Runs when a version tag such as v1.0.0 is pushed. Builds the installer and the portable zip and attaches both to a GitHub Release.
 on:
   push:
     tags: ['v*.*.*'] # v1.0.0, v1.1.0-rc.1, ... (build.ps1 validates the exact version format)
@@ -52,4 +52,6 @@ jobs:
           files: |
             dist/ForzaTelemetry-Setup-*.exe
             dist/ForzaTelemetry-Setup-*.exe.sha256
+            dist/ForzaTelemetry-*-win-x64-portable.zip
+            dist/ForzaTelemetry-*-win-x64-portable.zip.sha256
           generate_release_notes: true

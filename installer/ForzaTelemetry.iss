@@ -19,9 +19,9 @@
 
 ; ---- single place to rename the product ----
 #define AppName      "Forza Telemetry"
-#define AppPublisher "<COPYRIGHT HOLDER>"
+#define AppPublisher "Wladimir Hernandez"
 #define AppExe       "ForzaTelemetry.App.exe"
-#define AppUrl       "https://github.com/<OWNER>/<REPO>"
+#define AppUrl       "https://github.com/wladimirhernandez/forza-telemetry"
 #define FirewallRule "Forza Telemetry (UDP)"
 ; The name earlier versions used (it quoted a port the rule no longer pins). Removed on install and uninstall so no orphan stays.
 #define LegacyFirewallRule "Forza Telemetry (UDP 5300)"

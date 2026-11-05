@@ -38,8 +38,8 @@
       Placeholders on purpose, matching the LICENSE and the installer: the owner fills in the real name once, and the release
       workflow's placeholder guard refuses to publish while any of these remain. Angle brackets are escaped for XML.
     -->
-    <Company>&lt;COPYRIGHT HOLDER&gt;</Company>
-    <Copyright>Copyright (c) 2026 &lt;COPYRIGHT HOLDER&gt;</Copyright>
+    <Company>Wladimir Hernandez</Company>
+    <Copyright>Copyright (c) 2026 Wladimir Hernandez</Copyright>
   </PropertyGroup>
 
   <ItemGroup>
